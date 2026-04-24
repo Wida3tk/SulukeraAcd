@@ -164,6 +164,8 @@ tr:hover td{background:#f8faff;}
 </style>
 </head>
 <body>
+
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -338,7 +340,6 @@ tr:hover td{background:#f8faff;}
             <div id="batchesList"></div>
           </div>
         </div>
-      </div>
 
         <!-- PACKAGES PANEL -->
         <div id="mgmt-packages" class="mgmt-panel" style="display:none;">
@@ -353,6 +354,7 @@ tr:hover td{background:#f8faff;}
             <div id="packagesList"></div>
           </div>
         </div>
+      </div>
 
       <!-- ALERTS -->
       <div class="page" id="page-alerts">
@@ -438,11 +440,9 @@ tr:hover td{background:#f8faff;}
     <div class="form-row">
       <div class="form-group"><label>الدفعة</label>
         <select id="stdBatchSelect"><option value="">-- اختر --</option></select></div>
-      <div class="form-group"><label>نوع التسجيل</label>
+      <div class="form-group"><label>الباقة</label>
         <select id="studentPackage" onchange="updateSubjectsForPackage()">
-          <option value="full">📦 باقة كاملة (QBA)</option>
-          <option value="partial">📂 باقة جزئية (QASP-S)</option>
-          <option value="single">📄 مادة واحدة</option>
+          <option value="">-- اختر الباقة --</option>
         </select>
       </div>
     </div>
@@ -513,7 +513,11 @@ tr:hover td{background:#f8faff;}
   </div>
 </div></div>
 <div class="toast" id="toast"></div>
+
+
 <script>
+
+
 
 // ══════════════════════════════════════════════
 //  📚 PACKAGE SUBJECTS CONSTANTS
@@ -1250,7 +1254,13 @@ function openStudentModal(si=-1) {
   document.getElementById('stdEmail').value=st?.email||'';
   document.getElementById('stdRegDate').value=st?.regDate||new Date().toISOString().split('T')[0];
   document.getElementById('studentPass').value='';
-  document.getElementById('studentPackage').value=st?.pkg||'full';
+  // Populate packages dropdown dynamically
+  const pkgSel = document.getElementById('studentPackage');
+  if(pkgSel){
+    pkgSel.innerHTML = '<option value="">-- اختر الباقة --</option>' +
+      packagesData.map(p=>`<option value="${p._fbKey||p.name}" ${st?.pkg===p._fbKey||st?.pkg===p.name?'selected':''}>${p.name}${p.price?' ('+p.price.toLocaleString()+' ر.س)':''}</option>`).join('');
+    if(st?.pkg) pkgSel.value = st.pkg;
+  }
   document.getElementById('stdNotes').value=st?.notes||'';
   document.getElementById('stdTotalAmount').value=st?.totalAmount||'';
   // Program → Track → Batch (cascading)
@@ -2345,6 +2355,10 @@ async function changeStudentPassword(stdIdx){
     showToast('⚠️ لم يتم العثور على حساب الطالب');
   }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
 }
+
+window.addEventListener('load', function(){ initFirebase(); });
+
+window.addEventListener('load', function(){ initFirebase(); });
 
 window.addEventListener('load', function(){ initFirebase(); });
 
