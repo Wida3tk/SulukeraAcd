@@ -461,6 +461,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 // ══════════════════════════════════════════════
 //  🔥 FIREBASE CONFIG & HELPERS
 // ══════════════════════════════════════════════
@@ -506,7 +507,7 @@ function showLoader(show){
 async function loadAllFromFirebase(){
   showLoader(true);
   try{
-    const rootSnap = await firebase.database().ref('').get();
+    const rootSnap = await firebase.database().ref('/').get();
     if(!rootSnap.exists()){ showLoader(false); showToast('✅ قاعدة البيانات جاهزة — أضف بياناتك'); return; }
     const root = rootSnap.val();
 
@@ -656,7 +657,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     Object.entries(snap.val()).forEach(([k,e])=>{
       if(e.studentKey===st._fbKey) updates[`enrollments/${k}`]=null;
     });
-    if(Object.keys(updates).length>0) await firebase.database().ref('').update(updates);
+    if(Object.keys(updates).length>0) await firebase.database().ref('/').update(updates);
   }
   // Add new enrollments
   const enrollUpdates={};
@@ -665,7 +666,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     const enrKey = `enr_${st._fbKey}_${subj._fbKey}`;
     enrollUpdates[`enrollments/${enrKey}`] = {studentKey:st._fbKey, subjectKey:subj._fbKey};
   });
-  if(Object.keys(enrollUpdates).length>0) await firebase.database().ref('').update(enrollUpdates);
+  if(Object.keys(enrollUpdates).length>0) await firebase.database().ref('/').update(enrollUpdates);
 }
 
 // حذف طالب
@@ -683,7 +684,7 @@ async function deleteStudentFromFirebase(stdIdx){
   // Delete user
   const uSnap=await fbRef('users').get();
   if(uSnap.exists()) Object.entries(uSnap.val()).forEach(([k,u])=>{ if(u.username===st.id&&u.role==='student') updates[`users/${k}`]=null; });
-  await firebase.database().ref('').update(updates);
+  await firebase.database().ref('/').update(updates);
 }
 
 // حفظ مادة
@@ -700,7 +701,7 @@ async function saveSubjectToFirebase(si){
     const enrKey=`enr_${st._fbKey}_${subj._fbKey}`;
     updates[`enrollments/${enrKey}`]={studentKey:st._fbKey, subjectKey:subj._fbKey};
   });
-  if(Object.keys(updates).length>0) await firebase.database().ref('').update(updates);
+  if(Object.keys(updates).length>0) await firebase.database().ref('/').update(updates);
 }
 
 // حذف مادة
@@ -712,7 +713,7 @@ async function deleteSubjectFromFirebase(si){
   if(snap.exists()) Object.entries(snap.val()).forEach(([k,e])=>{ if(e.subjectKey===subj._fbKey) updates[`enrollments/${k}`]=null; });
   const gSnap=await fbRef('grades').get();
   if(gSnap.exists()) Object.entries(gSnap.val()).forEach(([k,g])=>{ if(g.subjectKey===subj._fbKey) updates[`grades/${k}`]=null; });
-  await firebase.database().ref('').update(updates);
+  await firebase.database().ref('/').update(updates);
 }
 
 // حفظ البرامج (كاملة)
@@ -1937,6 +1938,8 @@ initGrades();
 document.querySelectorAll('.modal-overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
 });
+window.addEventListener('load', function(){ initFirebase(); });
+
 window.addEventListener('load', function(){ initFirebase(); });
 
 window.addEventListener('load', function(){ initFirebase(); });
