@@ -166,6 +166,7 @@ tr:hover td{background:#f8faff;}
 <body>
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -515,7 +516,9 @@ tr:hover td{background:#f8faff;}
 <div class="toast" id="toast"></div>
 
 
+
 <script>
+
 
 
 
@@ -784,14 +787,17 @@ async function saveSubjectToFirebase(si){
   const subj=subjects[si];
   if(!subj._fbKey) subj._fbKey='subj_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
   await fbRef(`subjects/${subj._fbKey}`).set({name:subj.name, lecturerUserId:subj.lecturerUserId||null});
-  // Save enrollments
+  // Save enrollments with deterministic keys (prevents duplicates)
   const snap=await fbRef('enrollments').get();
   const updates={};
+  // Remove old enrollments for this subject
   if(snap.exists()) Object.entries(snap.val()).forEach(([k,e])=>{ if(e.subjectKey===subj._fbKey) updates[`enrollments/${k}`]=null; });
+  // Re-add with deterministic keys
+  const seen = new Set();
   subj.students.forEach(stdIdx=>{
     const st=students[stdIdx]; if(!st?._fbKey) return;
-    const enrKey=`enr_${st._fbKey}_${subj._fbKey}`;
-    updates[`enrollments/${enrKey}`]={studentKey:st._fbKey, subjectKey:subj._fbKey};
+    const enrKey=('enr_'+st._fbKey+'_'+subj._fbKey).replace(/[.#$[\]]/g,'_');
+    if(!seen.has(enrKey)){ seen.add(enrKey); updates['enrollments/'+enrKey]={studentKey:st._fbKey, subjectKey:subj._fbKey}; }
   });
   if(Object.keys(updates).length>0) await firebase.database().ref('/').update(updates);
 }
@@ -2355,6 +2361,8 @@ async function changeStudentPassword(stdIdx){
     showToast('⚠️ لم يتم العثور على حساب الطالب');
   }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
 }
+
+window.addEventListener('load', function(){ initFirebase(); });
 
 window.addEventListener('load', function(){ initFirebase(); });
 
