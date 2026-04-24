@@ -154,6 +154,13 @@ tr:hover td{background:#f8faff;}
   .page{display:block!important;}.page:not(#page-reports){display:none!important;}
   body{background:white;}
 }
+
+/* Packages */
+.pkg-subject-check { display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px;cursor:pointer; }
+/* Search highlight */
+.search-highlight { background:#fff3cd;border-radius:3px;padding:0 2px; }
+/* Alert badges */
+.alert-count { display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:var(--danger);color:white;border-radius:50%;font-size:10px;font-weight:700;margin-right:4px; }
 </style>
 </head>
 <body>
@@ -170,7 +177,7 @@ tr:hover td{background:#f8faff;}
     <div class="form-group"><label>كلمة المرور</label><input type="password" id="loginPassword" placeholder="أدخل كلمة المرور" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-login" onclick="doLogin()">تسجيل الدخول ←</button>
     <div class="login-error" id="loginError">❌ بيانات الدخول غير صحيحة</div>
-    <div class="login-hint" id="loginHint"><strong>الإدارة:</strong> المستخدم: <strong>admin</strong> | المرور: <strong>admin123</strong></div>
+
   </div>
 </div>
 
@@ -242,7 +249,18 @@ tr:hover td{background:#f8faff;}
 
       <!-- STUDENTS -->
       <div class="page" id="page-students">
-        <div class="card card-accent"><div class="card-title">👩‍🎓 إدارة الطلاب</div>
+        <div class="card card-accent">
+          <div class="card-title">👩‍🎓 إدارة الطلاب</div>
+          <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
+            <div style="position:relative;flex:1;min-width:220px;">
+              <input type="text" id="studentSearchInput" placeholder="🔍 بحث بالاسم أو البريد أو الرقم..." oninput="filterStudents()" style="width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;">
+            </div>
+            <select id="studentProgramFilter" onchange="filterStudents()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
+              <option value="">كل البرامج</option>
+            </select>
+            <button class="btn btn-sm" onclick="exportStudentsExcel()">📊 تصدير Excel</button>
+          </div>
+          <div id="studentsCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
           <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم الثلاثي</th><th>الرقم</th><th>البريد</th><th>البرنامج</th><th>الدفعة</th><th>المتوسط</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="studentsTableBody"></tbody></table></div>
         </div>
       </div>
@@ -288,6 +306,7 @@ tr:hover td{background:#f8faff;}
           <div class="week-tab active" onclick="switchMgmt('programs',this)">🎓 البرامج</div>
           <div class="week-tab" onclick="switchMgmt('tracks',this)">📌 المسارات</div>
           <div class="week-tab" onclick="switchMgmt('batches',this)">👥 الدفعات</div>
+          <div class="week-tab" onclick="switchMgmt('packages',this)">📦 الباقات</div>
         </div>
         <div id="mgmt-programs" class="mgmt-panel">
           <div class="card card-accent"><div class="card-title">🎓 إدارة البرامج</div>
@@ -318,6 +337,32 @@ tr:hover td{background:#f8faff;}
             </div>
             <div id="batchesList"></div>
           </div>
+        </div>
+      </div>
+
+        <!-- PACKAGES PANEL -->
+        <div id="mgmt-packages" class="mgmt-panel" style="display:none;">
+          <div class="card card-accent">
+            <div class="card-title">📦 إدارة الباقات</div>
+            <div class="alert alert-info">أضف الباقات وحدد المواد التي تحتويها — يمكن ربطها بالطلاب عند التسجيل</div>
+            <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
+              <input type="text" id="newPkgName" placeholder="اسم الباقة (مثال: QASP-S)" style="flex:1;min-width:160px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;">
+              <input type="number" id="newPkgPrice" placeholder="السعر (ريال)" style="width:130px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;">
+              <button class="btn btn-primary btn-sm" onclick="addPackage()">+ إضافة باقة</button>
+            </div>
+            <div id="packagesList"></div>
+          </div>
+        </div>
+
+      <!-- ALERTS -->
+      <div class="page" id="page-alerts">
+        <div class="card card-accent">
+          <div class="card-title">🔔 تنبيهات الأقساط المتأخرة</div>
+          <div id="alertsContent"><div class="alert alert-info">جاري التحميل...</div></div>
+        </div>
+        <div class="card card-accent" style="margin-top:1rem;">
+          <div class="card-title">⚠️ الطلاب المتعثرون أكاديمياً</div>
+          <div id="failAlertsContent"><div class="alert alert-info">جاري التحميل...</div></div>
         </div>
       </div>
 
@@ -456,8 +501,20 @@ tr:hover td{background:#f8faff;}
   </div>
 </div></div>
 
+
+<!-- MODAL: PACKAGE SUBJECTS -->
+<div class="modal-overlay" id="pkgSubjectsModal"><div class="modal" style="width:580px;">
+  <h3 id="pkgModalTitle">✏️ مواد الباقة</h3>
+  <div class="alert alert-info">اختر المواد التي تحتويها هذه الباقة</div>
+  <div id="pkgSubjectsContainer" style="max-height:400px;overflow-y:auto;"></div>
+  <div class="modal-actions">
+    <button class="btn btn-primary" onclick="savePkgSubjects()">✓ حفظ</button>
+    <button class="btn" onclick="closeModal('pkgSubjectsModal')">إلغاء</button>
+  </div>
+</div></div>
 <div class="toast" id="toast"></div>
 <script>
+
 
 
 
@@ -896,6 +953,7 @@ const navConfig = {
     {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
     {id:'reports',icon:'📋',label:'التقارير'},
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
+    {id:'alerts',icon:'🔔',label:'التنبيهات'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'},
   ],
   lecturer: [
@@ -917,7 +975,7 @@ function renderNav() {
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
-  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات',
+  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', alerts:'التنبيهات والمتابعة',
   settings:'الإعدادات',mygrades:'بياناتي ودرجاتي'
 };
 function navTo(pageId, el) {
@@ -955,7 +1013,8 @@ function refreshPage(p) {
   if (p==='mygrades') loadMyGrades();
   if (p==='settings') { loadSettings(); updateSettingsSummary(); }
   if (p==='cards') { buildCardsTabs(); renderCards('all'); }
-  if (p==='programs') renderProgramsPanel();
+  if (p==='programs') { renderProgramsPanel(); loadPackagesFromFirebase().then(renderPackagesList); }
+  if (p==='alerts') renderAlertsPage();
 }
 
 // ══════════════════════════════════════════════
@@ -1254,6 +1313,7 @@ function openStudentProfile(stdIdx) {
   document.getElementById('btnBack').style.display='flex';
   document.getElementById('topbarActions').innerHTML=`
     <button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">✏️ تعديل</button>
+    <button class="btn btn-sm" onclick="changeStudentPassword(${stdIdx})">🔐 كلمة المرور</button>
     <button class="btn btn-primary btn-sm" onclick="openGradeReportModal(${stdIdx})">📄 كشف الدرجات</button>`;
   renderStudentProfile(stdIdx);
 }
@@ -1943,6 +2003,312 @@ window.addEventListener('load', function(){ initFirebase(); });
 window.addEventListener('load', function(){ initFirebase(); });
 
 window.addEventListener('load', function(){ initFirebase(); });
+
+window.addEventListener('load', function(){ initFirebase(); });
+
+
+// ══════════════════════════════════════════════
+//  📦 PACKAGES DATA & MANAGEMENT
+// ══════════════════════════════════════════════
+let packagesData = [];
+
+async function loadPackagesFromFirebase(){
+  try{
+    const snap = await fbRef('packages').get();
+    if(snap.exists()){
+      packagesData = Object.entries(snap.val()).map(([k,v])=>({...v,_fbKey:k}));
+    }
+  }catch(e){ console.error('Load packages error:',e); }
+}
+
+async function savePackagesToFirebase(){
+  const data={};
+  packagesData.forEach(p=>{
+    const key = p._fbKey||'pkg_'+Date.now();
+    data[key]={name:p.name, price:p.price||0, subjects:p.subjects||[]};
+  });
+  await fbRef('packages').set(data);
+}
+
+async function addPackage(){
+  const name = document.getElementById('newPkgName').value.trim();
+  const price = parseFloat(document.getElementById('newPkgPrice').value)||0;
+  if(!name) return showToast('⚠️ أدخل اسم الباقة');
+  if(packagesData.find(p=>p.name===name)) return showToast('⚠️ الباقة موجودة مسبقاً');
+  const newPkg = {_fbKey:'pkg_'+Date.now(), name, price, subjects:[]};
+  packagesData.push(newPkg);
+  document.getElementById('newPkgName').value='';
+  document.getElementById('newPkgPrice').value='';
+  try{ await savePackagesToFirebase(); }catch(e){}
+  renderPackagesList();
+  showToast('✓ تم إضافة الباقة');
+}
+
+async function deletePackage(idx){
+  if(!confirm('حذف هذه الباقة؟')) return;
+  packagesData.splice(idx,1);
+  try{ await savePackagesToFirebase(); }catch(e){}
+  renderPackagesList();
+  showToast('✓ تم الحذف');
+}
+
+function renderPackagesList(){
+  const el = document.getElementById('packagesList');
+  if(!el) return;
+  if(!packagesData.length){
+    el.innerHTML='<div class="alert alert-warn">لا توجد باقات — أضف باقة جديدة</div>';
+    return;
+  }
+  el.innerHTML = packagesData.map((pkg,pi)=>`
+    <div class="card" style="margin-bottom:0.8rem;border-right:4px solid var(--primary);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:var(--primary)">${pkg.name}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${pkg.price?pkg.price.toLocaleString()+' ريال':''} — ${(pkg.subjects||[]).length} مقرر</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" onclick="openPkgSubjectsModal(${pi})">✏️ تعديل المواد</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePackage(${pi})">🗑️</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;">
+        ${(pkg.subjects||[]).map(s=>`<span class="badge badge-student">${s}</span>`).join('')||'<span style="font-size:11px;color:var(--text-muted)">لا توجد مواد مضافة</span>'}
+      </div>
+    </div>`).join('');
+}
+
+let editingPkgIdx = -1;
+function openPkgSubjectsModal(pi){
+  editingPkgIdx = pi;
+  const pkg = packagesData[pi];
+  document.getElementById('pkgModalTitle').textContent = `✏️ مواد باقة ${pkg.name}`;
+  // Populate subjects checkboxes
+  const container = document.getElementById('pkgSubjectsContainer');
+  // Get all subjects from QASP and QBA lists + custom subjects
+  const allSubjectNames = [...new Set([
+    ...QASP_S_SUBJECTS, ...QBA_SUBJECTS,
+    ...subjects.map(s=>s.name)
+  ])];
+  container.innerHTML = allSubjectNames.map(s=>`
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px;cursor:pointer;">
+      <input type="checkbox" value="${s}" ${(pkg.subjects||[]).includes(s)?'checked':''} style="width:16px;height:16px;accent-color:var(--primary);">
+      <span style="font-size:12px;">${s}</span>
+    </label>`).join('');
+  document.getElementById('pkgSubjectsModal').classList.add('open');
+}
+
+async function savePkgSubjects(){
+  const checked = Array.from(document.querySelectorAll('#pkgSubjectsContainer input:checked')).map(i=>i.value);
+  packagesData[editingPkgIdx].subjects = checked;
+  try{ await savePackagesToFirebase(); }catch(e){}
+  closeModal('pkgSubjectsModal');
+  renderPackagesList();
+  showToast('✓ تم حفظ مواد الباقة');
+}
+
+// ══════════════════════════════════════════════
+//  🔍 SEARCH & FILTER STUDENTS
+// ══════════════════════════════════════════════
+function filterStudents(){
+  const query = (document.getElementById('studentSearchInput')?.value||'').toLowerCase().trim();
+  const progFilter = document.getElementById('studentProgramFilter')?.value||'';
+  
+  let filtered = students.map((st,idx)=>({...st,idx}));
+  if(query){
+    filtered = filtered.filter(st=>
+      getStudentFullName(st).toLowerCase().includes(query) ||
+      (st.email||'').toLowerCase().includes(query) ||
+      (st.id||'').toLowerCase().includes(query) ||
+      (st.phone||'').includes(query)
+    );
+  }
+  if(progFilter){
+    filtered = filtered.filter(st=>st.program===progFilter);
+  }
+  
+  const count = document.getElementById('studentsCount');
+  if(count) count.textContent = `عرض ${filtered.length} من ${students.length} طالب`;
+  
+  renderStudentsTableFiltered(filtered);
+}
+
+function renderStudentsTableFiltered(filtered){
+  const tbody = document.getElementById('studentsTableBody');
+  if(!tbody) return;
+  if(!filtered.length){
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map((st)=>{
+    const stdIdx = st.idx;
+    const mySubjs = subjects.filter(s=>s.students.includes(stdIdx));
+    const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[stdIdx]?calcTotal(grades[si][stdIdx]):0;});
+    const avg = tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
+    const hasFail = tots.some(t=>t<settings.gradeFail&&t>0);
+    const hasOverdue = (st.installments||[]).some(i=>i.status==='overdue');
+    return `<tr>
+      <td class="mono">${stdIdx+1}</td>
+      <td><strong style="cursor:pointer;color:var(--primary)" onclick="openStudentProfile(${stdIdx})">${getStudentFullName(st)}</strong></td>
+      <td class="mono">${st.id}</td>
+      <td style="font-size:11px">${st.email||'—'}</td>
+      <td style="font-size:11px">${st.program||'—'}</td>
+      <td><span class="badge badge-student">${st.batch||'—'}</span></td>
+      <td>${avg>0?avg+'/100':'—'}</td>
+      <td><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn btn-sm btn-primary" onclick="openStudentProfile(${stdIdx})">👁️</button>
+        <button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteStudent(${stdIdx})">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function populateProgramFilterDropdown(){
+  const sel = document.getElementById('studentProgramFilter');
+  if(!sel) return;
+  const programs = [...new Set(students.map(s=>s.program).filter(Boolean))];
+  sel.innerHTML = '<option value="">كل البرامج</option>' +
+    programs.map(p=>`<option value="${p}">${p}</option>`).join('');
+}
+
+// ══════════════════════════════════════════════
+//  📊 EXPORT EXCEL
+// ══════════════════════════════════════════════
+function exportStudentsExcel(){
+  if(!students.length){ showToast('⚠️ لا يوجد طلاب للتصدير'); return; }
+  
+  let csv = '\uFEFF'; // BOM for Arabic
+  csv += 'الرقم الطلابي,الاسم الكامل,البريد الإلكتروني,الجوال,البرنامج,المسار,الدفعة,نوع التسجيل,المبلغ الإجمالي,المدفوع,المتبقي,حالة الأقساط,المتوسط الأكاديمي,الحالة الأكاديمية\n';
+  
+  students.forEach((st,idx)=>{
+    const mySubjs = subjects.filter(s=>s.students.includes(idx));
+    const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
+    const avg = tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
+    const hasFail = tots.some(t=>t<settings.gradeFail&&t>0);
+    const paidTotal = (st.installments||[]).filter(i=>i.status==='paid').reduce((a,b)=>a+(b.amount||0),0);
+    const remaining = (st.totalAmount||0) - paidTotal;
+    const hasOverdue = (st.installments||[]).some(i=>i.status==='overdue');
+    const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مادة واحدة'};
+    
+    const row = [
+      st.id, getStudentFullName(st), st.email||'', st.phone||'',
+      st.program||'', st.track||'', st.batch||'',
+      pkgMap[st.pkg]||'', st.totalAmount||0, paidTotal, remaining,
+      hasOverdue?'متأخر':'منتظم',
+      avg>0?avg:'—', hasFail?'تعثر':'جيد'
+    ].map(v=>`"${v}"`).join(',');
+    csv += row + '\n';
+  });
+  
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sulukera_students_${new Date().toLocaleDateString('en-CA')}.csv`;
+  a.click();
+  showToast('✅ تم تصدير بيانات الطلاب');
+}
+
+// ══════════════════════════════════════════════
+//  🔔 ALERTS PAGE
+// ══════════════════════════════════════════════
+function renderAlertsPage(){
+  // Overdue installments
+  const overdue = [];
+  students.forEach((st,idx)=>{
+    (st.installments||[]).forEach(inst=>{
+      if(inst.status==='overdue'){
+        overdue.push({student:getStudentFullName(st), id:st.id, 
+          label:inst.label, amount:inst.amount, due:inst.due, idx});
+      }
+    });
+    // Also check pending past due date
+    (st.installments||[]).forEach(inst=>{
+      if(inst.status==='pending' && inst.due && new Date(inst.due) < new Date()){
+        overdue.push({student:getStudentFullName(st), id:st.id,
+          label:inst.label+' (تجاوز الموعد)', amount:inst.amount, due:inst.due, idx});
+      }
+    });
+  });
+  
+  const alertsEl = document.getElementById('alertsContent');
+  if(alertsEl){
+    if(!overdue.length){
+      alertsEl.innerHTML='<div class="alert alert-success">✅ لا توجد أقساط متأخرة</div>';
+    } else {
+      alertsEl.innerHTML=`
+        <div class="alert alert-danger">⚠️ يوجد ${overdue.length} قسط متأخر أو تجاوز الموعد</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>الطالب</th><th>الرقم</th><th>القسط</th><th>المبلغ</th><th>تاريخ الاستحقاق</th><th>إجراء</th></tr></thead>
+          <tbody>${overdue.map(o=>`<tr>
+            <td><strong>${o.student}</strong></td>
+            <td class="mono">${o.id}</td>
+            <td>${o.label}</td>
+            <td style="color:var(--danger);font-weight:700">${(o.amount||0).toLocaleString()} ر.س</td>
+            <td style="color:var(--danger)">${o.due||'—'}</td>
+            <td><button class="btn btn-sm btn-primary" onclick="openStudentProfile(${o.idx})">عرض الملف</button></td>
+          </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+  }
+  
+  // Academic failures
+  const failures = [];
+  students.forEach((st,idx)=>{
+    const mySubjs = subjects.filter(s=>s.students.includes(idx));
+    const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
+    const failedSubjs = mySubjs.filter((_,i)=>tots[i]>0&&tots[i]<settings.gradeFail);
+    if(failedSubjs.length>0){
+      failures.push({student:getStudentFullName(st), id:st.id, 
+        count:failedSubjs.length, subjects:failedSubjs.map(s=>s.name), idx});
+    }
+  });
+  
+  const failEl = document.getElementById('failAlertsContent');
+  if(failEl){
+    if(!failures.length){
+      failEl.innerHTML='<div class="alert alert-success">✅ لا يوجد طلاب متعثرون أكاديمياً</div>';
+    } else {
+      failEl.innerHTML=`
+        <div class="alert alert-warn">⚠️ يوجد ${failures.length} طالب متعثر أكاديمياً</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>الطالب</th><th>الرقم</th><th>عدد المواد الراسب فيها</th><th>المواد</th><th>إجراء</th></tr></thead>
+          <tbody>${failures.map(f=>`<tr>
+            <td><strong>${f.student}</strong></td>
+            <td class="mono">${f.id}</td>
+            <td style="color:var(--danger);font-weight:700;text-align:center">${f.count}</td>
+            <td style="font-size:11px">${f.subjects.join('، ')}</td>
+            <td><button class="btn btn-sm btn-primary" onclick="openStudentProfile(${f.idx})">عرض الملف</button></td>
+          </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════
+//  🔐 CHANGE STUDENT PASSWORD
+// ══════════════════════════════════════════════
+async function changeStudentPassword(stdIdx){
+  const newPass = prompt('أدخل كلمة المرور الجديدة للطالب:');
+  if(!newPass||newPass.length<4){ showToast('⚠️ كلمة المرور قصيرة جداً (4 أحرف على الأقل)'); return; }
+  const st = students[stdIdx];
+  try{
+    // Update in Firebase users
+    const snap = await fbRef('users').get();
+    if(snap.exists()){
+      const entries = Object.entries(snap.val());
+      const userEntry = entries.find(([,u])=>u.username===st.id&&u.role==='student');
+      if(userEntry){
+        await fbRef(`users/${userEntry[0]}/password`).set(newPass);
+        showToast('✅ تم تغيير كلمة المرور');
+        return;
+      }
+    }
+    showToast('⚠️ لم يتم العثور على حساب الطالب');
+  }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
+}
 
 window.addEventListener('load', function(){ initFirebase(); });
 </script>
