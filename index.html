@@ -344,7 +344,7 @@ tr:hover td{background:#f8faff;}
         <div id="mgmt-packages" class="mgmt-panel" style="display:none;">
           <div class="card card-accent">
             <div class="card-title">📦 إدارة الباقات</div>
-            <div class="alert alert-info">أضف الباقات وحدد المواد التي تحتويها — يمكن ربطها بالطلاب عند التسجيل</div>
+            <div class="alert alert-info">أضف الباقات وحدد المقررات التي تحتويها — يمكن ربطها بالطلاب عند التسجيل</div>
             <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
               <input type="text" id="newPkgName" placeholder="اسم الباقة (مثال: QASP-S)" style="flex:1;min-width:160px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;">
               <input type="number" id="newPkgPrice" placeholder="السعر (ريال)" style="width:130px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;">
@@ -504,8 +504,8 @@ tr:hover td{background:#f8faff;}
 
 <!-- MODAL: PACKAGE SUBJECTS -->
 <div class="modal-overlay" id="pkgSubjectsModal"><div class="modal" style="width:580px;">
-  <h3 id="pkgModalTitle">✏️ مواد الباقة</h3>
-  <div class="alert alert-info">اختر المواد التي تحتويها هذه الباقة</div>
+  <h3 id="pkgModalTitle">✏️ مقررات الباقة</h3>
+  <div class="alert alert-info">اختر المقررات التي تحتويها هذه الباقة</div>
   <div id="pkgSubjectsContainer" style="max-height:400px;overflow-y:auto;"></div>
   <div class="modal-actions">
     <button class="btn btn-primary" onclick="savePkgSubjects()">✓ حفظ</button>
@@ -514,6 +514,7 @@ tr:hover td{background:#f8faff;}
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
+
 
 
 
@@ -2060,19 +2061,19 @@ function renderPackagesList(){
     return;
   }
   el.innerHTML = packagesData.map((pkg,pi)=>`
-    <div class="card" style="margin-bottom:0.8rem;border-right:4px solid var(--primary);">
+    <div style="background:white;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.1rem 1.3rem;margin-bottom:0.8rem;border-right:4px solid var(--primary);box-shadow:var(--shadow);">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
         <div>
           <div style="font-size:15px;font-weight:800;color:var(--primary)">${pkg.name}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${pkg.price?pkg.price.toLocaleString()+' ريال':''} — ${(pkg.subjects||[]).length} مقرر</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${pkg.price?pkg.price.toLocaleString()+' ريال · ':''}<strong>${(pkg.subjects||[]).length}</strong> مقرر</div>
         </div>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-sm" onclick="openPkgSubjectsModal(${pi})">✏️ تعديل المواد</button>
+          <button class="btn btn-sm btn-primary" onclick="openPkgSubjectsModal(${pi})">✏️ تعديل المقررات</button>
           <button class="btn btn-danger btn-sm" onclick="deletePackage(${pi})">🗑️</button>
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;">
-        ${(pkg.subjects||[]).map(s=>`<span class="badge badge-student">${s}</span>`).join('')||'<span style="font-size:11px;color:var(--text-muted)">لا توجد مواد مضافة</span>'}
+        ${(pkg.subjects||[]).length ? (pkg.subjects||[]).map(s=>`<span class="badge badge-student" style="font-size:11px">${s}</span>`).join('') : '<span style="font-size:11px;color:var(--text-muted)">لا توجد مقررات مضافة — اضغط تعديل المقررات</span>'}
       </div>
     </div>`).join('');
 }
@@ -2081,20 +2082,25 @@ let editingPkgIdx = -1;
 function openPkgSubjectsModal(pi){
   editingPkgIdx = pi;
   const pkg = packagesData[pi];
-  document.getElementById('pkgModalTitle').textContent = `✏️ مواد باقة ${pkg.name}`;
-  // Populate subjects checkboxes
+  // Update modal title
+  const titleEl = document.getElementById('pkgModalTitle');
+  if(titleEl) titleEl.textContent = `✏️ مقررات باقة ${pkg.name}`;
+  // Populate checkboxes
   const container = document.getElementById('pkgSubjectsContainer');
-  // Get all subjects from QASP and QBA lists + custom subjects
+  if(!container){ console.error('pkgSubjectsContainer not found'); return; }
   const allSubjectNames = [...new Set([
     ...QASP_S_SUBJECTS, ...QBA_SUBJECTS,
     ...subjects.map(s=>s.name)
   ])];
   container.innerHTML = allSubjectNames.map(s=>`
-    <label style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px;cursor:pointer;">
-      <input type="checkbox" value="${s}" ${(pkg.subjects||[]).includes(s)?'checked':''} style="width:16px;height:16px;accent-color:var(--primary);">
-      <span style="font-size:12px;">${s}</span>
+    <label style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--bg);border-radius:8px;margin-bottom:5px;cursor:pointer;border:1px solid var(--border);">
+      <input type="checkbox" value="${s}" ${(pkg.subjects||[]).includes(s)?'checked':''} style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer;">
+      <span style="font-size:13px;">${s}</span>
     </label>`).join('');
-  document.getElementById('pkgSubjectsModal').classList.add('open');
+  // Open modal
+  const modal = document.getElementById('pkgSubjectsModal');
+  if(modal) modal.classList.add('open');
+  else console.error('pkgSubjectsModal not found');
 }
 
 async function savePkgSubjects(){
@@ -2103,7 +2109,7 @@ async function savePkgSubjects(){
   try{ await savePackagesToFirebase(); }catch(e){}
   closeModal('pkgSubjectsModal');
   renderPackagesList();
-  showToast('✓ تم حفظ مواد الباقة');
+  showToast('✓ تم حفظ مقررات الباقة');
 }
 
 // ══════════════════════════════════════════════
@@ -2309,6 +2315,8 @@ async function changeStudentPassword(stdIdx){
     showToast('⚠️ لم يتم العثور على حساب الطالب');
   }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
 }
+
+window.addEventListener('load', function(){ initFirebase(); });
 
 window.addEventListener('load', function(){ initFirebase(); });
 </script>
