@@ -515,6 +515,36 @@ tr:hover td{background:#f8faff;}
 <div class="toast" id="toast"></div>
 <script>
 
+// ══════════════════════════════════════════════
+//  📚 PACKAGE SUBJECTS CONSTANTS
+// ══════════════════════════════════════════════
+const QASP_S_SUBJECTS = [
+  'فلسفة العلوم السلوكية',
+  'الأخلاق والاعتبارات المهنية',
+  'اضطراب طيف التوحد',
+  'مبادئ تحليل السلوك التطبيقي',
+  'مفهوم القياس',
+  'التقييم في تحليل السلوك التطبيقي',
+  'تدخلات تغيير السلوك',
+  'برمجة اكتساب المهارات',
+  'بروتوكولات التقييم',
+  'نهج تحليلات السلوك',
+  'تطبيقات خاصة',
+  'التدريب والإشراف'
+];
+
+const QBA_SUBJECTS = [
+  ...QASP_S_SUBJECTS,
+  'إدارة الفصول الدراسية',
+  'إدارة السلوك التنظيمي',
+  'إشراف متقدم',
+  'التصميم التجريبي',
+  'التقييم الوظيفي',
+  'الممارسات القائمة على الأدلة'
+];
+
+
+
 
 
 
@@ -2315,6 +2345,8 @@ async function changeStudentPassword(stdIdx){
     showToast('⚠️ لم يتم العثور على حساب الطالب');
   }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
 }
+
+window.addEventListener('load', function(){ initFirebase(); });
 
 window.addEventListener('load', function(){ initFirebase(); });
 
