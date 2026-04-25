@@ -174,6 +174,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -531,7 +532,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1365,7 +1368,7 @@ async function saveStudent() {
   }
   const idx2 = editingStudentIdx >= 0 ? editingStudentIdx : students.length - 1;
   try {
-    // ── Step 1: Save student record to Firebase ──
+    // ── Step 1: Save student record to Firebase (once) ──
     await saveStudentToFirebase(idx2, pass);
 
     // ── Step 2: Enroll from package (create subjects if needed) ──
@@ -1375,14 +1378,12 @@ async function saveStudent() {
       for(let pi=0; pi<selectedPkg.subjects.length; pi++){
         const subjName = selectedPkg.subjects[pi];
         let si = subjects.findIndex(s=>s.name===subjName);
-        // Create subject in Firebase if not exists
         if(si<0){
           subjects.push({_fbKey:null, name:subjName, lecturerUserId:null, students:[]});
           si = subjects.length-1;
           grades[si]={};
           await saveSubjectToFirebase(si);
         }
-        // Add student to subject locally
         if(!subjects[si].students.includes(idx2)){
           subjects[si].students.push(idx2);
           if(!grades[si]) grades[si]={};
@@ -1390,7 +1391,6 @@ async function saveStudent() {
         }
       }
     } else {
-      // Manual subject selection (no package or single subject)
       chosenSubjs.forEach(si=>{
         if(!isNaN(si) && subjects[si] && !subjects[si].students.includes(idx2)){
           subjects[si].students.push(idx2);
@@ -1400,8 +1400,28 @@ async function saveStudent() {
       });
     }
 
-    // ── Step 3: Save enrollments to Firebase ──
-    await saveStudentToFirebase(idx2, null); // re-save to update enrollments
+    // ── Step 3: Save enrollments only (no new student record) ──
+    const st_ref = students[idx2];
+    if(st_ref?._fbKey){
+      const enrollUpdates={};
+      const existSnap = await fbRef('enrollments').get();
+      if(existSnap.exists()){
+        Object.entries(existSnap.val()).forEach(([k,e])=>{
+          if(e.studentKey===st_ref._fbKey) enrollUpdates['enrollments/'+k]=null;
+        });
+      }
+      const seen = new Set();
+      subjects.filter(s=>s.students.includes(idx2)).forEach(subj=>{
+        if(!subj._fbKey) return;
+        const enrKey=('enr_'+st_ref._fbKey+'_'+subj._fbKey).replace(/[.#$[\]]/g,'_');
+        if(!seen.has(enrKey)){
+          seen.add(enrKey);
+          enrollUpdates['enrollments/'+enrKey]={studentKey:st_ref._fbKey, subjectKey:subj._fbKey};
+        }
+      });
+      if(Object.keys(enrollUpdates).length>0)
+        await firebase.database().ref('/').update(enrollUpdates);
+    }
 
     showToast('✅ تم حفظ السجل في قاعدة البيانات');
   } catch(e){
@@ -2491,6 +2511,35 @@ async function processPendingPkgSubjects(){
 }
 
 
+
+
+// ══════════════════════════════════════════════
+//  🧹 CLEAN DUPLICATE STUDENTS IN FIREBASE
+// ══════════════════════════════════════════════
+async function cleanDuplicateStudents(){
+  try{
+    const snap = await fbRef('students').get();
+    if(!snap.exists()) return;
+    const all = Object.entries(snap.val());
+    const seen = {};
+    const toDelete = {};
+    all.forEach(([key, st])=>{
+      const id = st.student_code || st.id || key;
+      if(seen[id]){
+        // Keep first, delete rest
+        toDelete['students/'+key] = null;
+        // Also clean enrollments and grades for this key
+      } else {
+        seen[id] = key;
+      }
+    });
+    if(Object.keys(toDelete).length > 0){
+      await firebase.database().ref('/').update(toDelete);
+      console.log('Cleaned', Object.keys(toDelete).length, 'duplicate students');
+      showToast('✅ تم تنظيف '+Object.keys(toDelete).length+' سجل مكرر');
+    }
+  }catch(e){ console.error('Clean error:',e); }
+}
 
 </script>
 </body>
