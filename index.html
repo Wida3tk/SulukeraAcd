@@ -172,6 +172,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -527,7 +528,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1150,7 +1153,10 @@ async function saveSubject() {
 }
 async function deleteSubject(si) {
   if (!confirm(`حذف "${subjects[si].name}"؟`)) return;
-  subjects.splice(si,1); renderSubjectsTable(); showToast('✓ تم الحذف');
+  try { await deleteSubjectFromFirebase(si); } catch(e) { console.error(e); }
+  subjects.splice(si,1);
+  renderSubjectsTable();
+  showToast('✓ تم الحذف');
 }
 
 // ══════════════════════════════════════════════
@@ -1196,20 +1202,26 @@ function updateBatchOptions(selectedBatch) {
   }
 }
 function updateSubjectsForPackage() {
-  const progName=document.getElementById('stdProgram').value;
-  const pkg=document.getElementById('studentPackage').value;
-  const info=document.getElementById('packageBadgeInfo');
-  if (progName==='تحليل السلوك التطبيقي') {
-    const list=pkg==='full'?QBA_SUBJECTS:pkg==='partial'?QASP_S_SUBJECTS:null;
-    const label=pkg==='full'?'📦 باقة QBA — '+QBA_SUBJECTS.length+' مقرراً':pkg==='partial'?'📋 باقة QASP-S — '+QASP_S_SUBJECTS.length+' مقرراً':null;
-    if (list&&info) { info.style.display='block'; info.innerHTML=`<div class="alert alert-info">${label}</div>`; }
-    else if (info) info.style.display='none';
-    if (list) setTimeout(()=>{
-      Array.from(document.getElementById('studentSubjectsList').options).forEach(o=>{
-        o.selected=list.includes(o.text.replace(/\s*\(.*\)$/,'').trim());
+  const pkgKey = document.getElementById('studentPackage').value;
+  const info = document.getElementById('packageBadgeInfo');
+  if(!pkgKey){ if(info) info.style.display='none'; return; }
+  const pkg = packagesData.find(p=>p._fbKey===pkgKey||p.name===pkgKey);
+  if(!pkg){ if(info) info.style.display='none'; return; }
+  if(info){
+    info.style.display='block';
+    info.innerHTML=`<div class="alert alert-success">📦 باقة <strong>${pkg.name}</strong> — ${(pkg.subjects||[]).length} مقرر${pkg.price?' · '+pkg.price.toLocaleString()+' ريال':''}</div>`;
+  }
+  if(pkg.subjects?.length){
+    setTimeout(()=>{
+      const subjSel = document.getElementById('studentSubjectsList');
+      if(!subjSel) return;
+      Array.from(subjSel.options).forEach(o=>{
+        const sname = o.text.replace(/\s*\(.*\)$/,'').trim();
+        o.selected = pkg.subjects.includes(sname);
       });
+      showToast(`✅ تم اختيار مقررات باقة ${pkg.name}`);
     },80);
-  } else if (info) info.style.display='none';
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -2436,6 +2448,7 @@ async function processPendingPkgSubjects(){
     }
   }
 }
+
 
 </script>
 </body>
