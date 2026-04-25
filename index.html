@@ -175,6 +175,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -533,7 +534,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -735,57 +738,40 @@ async function loadAllFromFirebase(){
 // حفظ طالب
 async function saveStudentToFirebase(stdIdx, passw){
   const st = students[stdIdx];
-  // Generate key if new
-  if(!st._fbKey) st._fbKey = 'std_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+  // Use student_code as deterministic Firebase key (prevents duplicates)
+  const fbKey = 'std_' + st.id.replace(/[^a-zA-Z0-9]/g, '_');
+  st._fbKey = fbKey; // Always same key for same student
 
   const stdData = {
     firstName:st.firstName||'', midName:st.midName||'', lastName:st.lastName||'',
     phone:st.phone||'', email:st.email||'', regDate:st.regDate||'',
     program:st.program||'', track:st.track||'', batch:st.batch||'',
-    id:st.id, pkg:st.pkg||'full',
+    id:st.id, pkg:st.pkg||'',
     totalAmount:st.totalAmount||0, notes:st.notes||''
   };
 
-  // Save installments as object
+  // Save installments
   if(st.installments?.length){
     stdData.installments = {};
     st.installments.forEach((inst,i)=>{
       stdData.installments['inst_'+i] = {
-        label:inst.label||`قسط ${i+1}`,
+        label:inst.label||('قسط '+(i+1)),
         amount:inst.amount||0, due:inst.due||'', status:inst.status||'pending'
       };
     });
   }
 
-  await fbRef(`students/${st._fbKey}`).set(stdData);
+  // .set() with deterministic key = always same record, no duplicates
+  await fbRef('students/'+fbKey).set(stdData);
 
-  // Save user account
+  // Save/update user account
   if(passw){
-    const userKey = 'user_' + st.id.replace('-','_');
-    await fbRef(`users/${userKey}`).set({
+    const userKey = 'user_' + st.id.replace(/[^a-zA-Z0-9]/g,'_');
+    await fbRef('users/'+userKey).set({
       name:getStudentFullName(st), username:st.id,
       password:passw, role:'student'
     });
   }
-
-  // Save enrollments — delete old ones first, then re-add
-  // Get current enrollments for this student
-  const snap = await fbRef('enrollments').get();
-  if(snap.exists()){
-    const updates={};
-    Object.entries(snap.val()).forEach(([k,e])=>{
-      if(e.studentKey===st._fbKey) updates[`enrollments/${k}`]=null;
-    });
-    if(Object.keys(updates).length>0) await firebase.database().ref('/').update(updates);
-  }
-  // Add new enrollments
-  const enrollUpdates={};
-  subjects.filter(s=>s.students.includes(stdIdx)).forEach(subj=>{
-    if(!subj._fbKey) return;
-    const enrKey = `enr_${st._fbKey}_${subj._fbKey}`;
-    enrollUpdates[`enrollments/${enrKey}`] = {studentKey:st._fbKey, subjectKey:subj._fbKey};
-  });
-  if(Object.keys(enrollUpdates).length>0) await firebase.database().ref('/').update(enrollUpdates);
 }
 
 // حذف طالب
@@ -1400,23 +1386,25 @@ async function saveStudent() {
       });
     }
 
-    // ── Step 3: Save enrollments only (no new student record) ──
+    // ── Step 3: Save enrollments with deterministic keys ──
     const st_ref = students[idx2];
     if(st_ref?._fbKey){
       const enrollUpdates={};
+      // Delete old enrollments for this student
       const existSnap = await fbRef('enrollments').get();
       if(existSnap.exists()){
         Object.entries(existSnap.val()).forEach(([k,e])=>{
           if(e.studentKey===st_ref._fbKey) enrollUpdates['enrollments/'+k]=null;
         });
       }
+      // Add new enrollments — key = enr_studentFbKey_subjectFbKey (deterministic)
       const seen = new Set();
       subjects.filter(s=>s.students.includes(idx2)).forEach(subj=>{
         if(!subj._fbKey) return;
-        const enrKey=('enr_'+st_ref._fbKey+'_'+subj._fbKey).replace(/[.#$[\]]/g,'_');
+        const enrKey = ('enr_'+st_ref._fbKey+'_'+subj._fbKey).replace(/[.#$[\]]/g,'_');
         if(!seen.has(enrKey)){
           seen.add(enrKey);
-          enrollUpdates['enrollments/'+enrKey]={studentKey:st_ref._fbKey, subjectKey:subj._fbKey};
+          enrollUpdates['enrollments/'+enrKey] = {studentKey:st_ref._fbKey, subjectKey:subj._fbKey};
         }
       });
       if(Object.keys(enrollUpdates).length>0)
@@ -2540,6 +2528,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 </script>
 </body>
