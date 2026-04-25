@@ -173,6 +173,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -529,7 +530,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1357,16 +1360,54 @@ async function saveStudent() {
   } else {
     students.push(stdData);
     const newIdx=students.length-1;
-    users.push({id:'s'+Date.now(),name:fullName,username:id,password:pass||id.toLowerCase(),role:'student',studentIdx:newIdx});
-    if (stdData.pkg==='full') subjects.forEach((s,si)=>{s.students.push(newIdx);grades[si][newIdx]=makeEmptyGrade();});
-    else chosenSubjs.forEach(si=>{subjects[si].students.push(newIdx);grades[si][newIdx]=makeEmptyGrade();});
+    users.push({id:'s'+Date.now(),name:fullName,username:id,
+      password:pass||id.toLowerCase(),role:'student',studentIdx:newIdx});
   }
   const idx2 = editingStudentIdx >= 0 ? editingStudentIdx : students.length - 1;
   try {
+    // ── Step 1: Save student record to Firebase ──
     await saveStudentToFirebase(idx2, pass);
-    await processPendingPkgSubjects();
+
+    // ── Step 2: Enroll from package (create subjects if needed) ──
+    const pkgKey = stdData.pkg;
+    const selectedPkg = packagesData.find(p=>p._fbKey===pkgKey||p.name===pkgKey);
+    if(selectedPkg?.subjects?.length){
+      for(let pi=0; pi<selectedPkg.subjects.length; pi++){
+        const subjName = selectedPkg.subjects[pi];
+        let si = subjects.findIndex(s=>s.name===subjName);
+        // Create subject in Firebase if not exists
+        if(si<0){
+          subjects.push({_fbKey:null, name:subjName, lecturerUserId:null, students:[]});
+          si = subjects.length-1;
+          grades[si]={};
+          await saveSubjectToFirebase(si);
+        }
+        // Add student to subject locally
+        if(!subjects[si].students.includes(idx2)){
+          subjects[si].students.push(idx2);
+          if(!grades[si]) grades[si]={};
+          if(!grades[si][idx2]) grades[si][idx2]=makeEmptyGrade();
+        }
+      }
+    } else {
+      // Manual subject selection (no package or single subject)
+      chosenSubjs.forEach(si=>{
+        if(!isNaN(si) && subjects[si] && !subjects[si].students.includes(idx2)){
+          subjects[si].students.push(idx2);
+          if(!grades[si]) grades[si]={};
+          if(!grades[si][idx2]) grades[si][idx2]=makeEmptyGrade();
+        }
+      });
+    }
+
+    // ── Step 3: Save enrollments to Firebase ──
+    await saveStudentToFirebase(idx2, null); // re-save to update enrollments
+
     showToast('✅ تم حفظ السجل في قاعدة البيانات');
-  } catch(e){ console.error('Save student error:',e); showToast('⚠️ حُفظ محلياً فقط'); }
+  } catch(e){
+    console.error('Save student error:',e);
+    showToast('⚠️ خطأ في الحفظ: '+e.message);
+  }
   closeModal('studentModal'); renderStudentsTable();
 }
 async function deleteStudent(idx) {
@@ -2448,6 +2489,7 @@ async function processPendingPkgSubjects(){
     }
   }
 }
+
 
 
 </script>
