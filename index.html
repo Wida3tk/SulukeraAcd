@@ -167,6 +167,11 @@ tr:hover td{background:#f8faff;}
 
 
 
+
+
+
+
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -517,7 +522,17 @@ tr:hover td{background:#f8faff;}
 
 
 
+
+
+
+
+
 <script>
+
+
+
+
+
 
 
 
@@ -1337,6 +1352,7 @@ async function saveStudent() {
   const idx2 = editingStudentIdx >= 0 ? editingStudentIdx : students.length - 1;
   try {
     await saveStudentToFirebase(idx2, pass);
+    await processPendingPkgSubjects();
     showToast('✅ تم حفظ السجل في قاعدة البيانات');
   } catch(e){ console.error('Save student error:',e); showToast('⚠️ حُفظ محلياً فقط'); }
   closeModal('studentModal'); renderStudentsTable();
@@ -1487,17 +1503,21 @@ function switchProfileTab(tab,el) {
 function renderUsersTable() {
   const roleNames={admin:'🔐 إدارة',lecturer:'👨‍🏫 محاضر',student:'👩‍🎓 طالب'};
   const roleClasses={admin:'badge-admin',lecturer:'badge-lecturer',student:'badge-student'};
-  document.getElementById('usersTableBody').innerHTML=users.map((u,i)=>{
-    const mySubjs=u.role==='lecturer'?getLecturerSubjects(u.id).map(s=>s.name).join('، '):u.role==='student'?(students[u.studentIdx]?.id||'—'):'جميع المواد';
+  // Only show admin and lecturers — students have their own page
+  const displayUsers = users.filter(u=>u.role==='admin'||u.role==='lecturer');
+  document.getElementById('usersTableBody').innerHTML=displayUsers.map((u,i)=>{
+    const origIdx = users.indexOf(u);
+    const mySubjs = u.role==='lecturer' ? getLecturerSubjects(u.id).map(s=>s.name).join('، ') : 'جميع المواد';
     return `<tr><td class="mono">${i+1}</td><td><strong>${u.name}</strong></td>
       <td class="mono" style="color:var(--primary)">${u.username}</td>
-      <td><span class="badge ${roleClasses[u.role]}">${roleNames[u.role]}</span></td>
+      <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${roleNames[u.role]||u.role}</span></td>
       <td style="font-size:11px;color:var(--text-muted)">${mySubjs}</td>
       <td style="display:flex;gap:4px;">${u.username!=='admin'
-        ?`<button class="btn btn-sm" onclick="openUserModal(${i})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteUser(${i})">🗑️</button>`
+        ?`<button class="btn btn-sm" onclick="openUserModal(${origIdx})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteUser(${origIdx})">🗑️</button>`
         :'<span style="font-size:11px;color:var(--text-muted)">محمي</span>'}</td></tr>`;
   }).join('');
 }
+
 function openUserModal(i=-1) {
   editingUserIdx=i;
   document.getElementById('userModalTitle').textContent=i>=0?'✏️ تعديل مستخدم':'👤 إضافة مستخدم';
@@ -1638,34 +1658,74 @@ function generateReport() {
   const tots=mySubjs.map(s=>grades[s.idx]?.[stdIdx]?calcTotal(grades[s.idx][stdIdx]):0);
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
   const hasFail=tots.some(t=>t<settings.gradeFail&&t>0);
-  let html=`<div class="card card-accent"><div class="card-title">📋 كشف درجات — ${getStudentFullName(st)}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;padding:1rem;background:var(--bg);border-radius:var(--radius);">
-      <div><div style="font-size:20px;font-weight:800">${getStudentFullName(st)}</div>
-        <div class="mono" style="color:var(--text-muted)">${st.id}</div>
-        <div style="margin-top:5px"><span class="badge badge-student">${st.batch||'—'}</span> <span class="badge badge-student">${st.program||'—'}</span></div></div>
+  const pkgInfo = packagesData.find(p=>p._fbKey===st.pkg||p.name===st.pkg);
+
+  let html=`<div class="card card-accent">
+    <div class="card-title">📋 كشف درجات — ${getStudentFullName(st)}</div>
+    <!-- Student Info Header -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.8rem;margin-bottom:1.2rem;padding:1rem;background:var(--bg);border-radius:var(--radius);">
       <div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border)"><span>المواد</span><strong>${mySubjs.length}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border)"><span>المتوسط</span><strong>${avg}/100</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0"><span>الحالة</span><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span></div>
+        <div style="font-size:18px;font-weight:800;color:var(--primary-dark)">${getStudentFullName(st)}</div>
+        <div class="mono" style="color:var(--text-muted);font-size:12px;margin-top:2px">${st.id}</div>
+        <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+          <span class="badge badge-student">${st.batch||'—'}</span>
+          <span class="badge badge-student">${st.program||'—'}</span>
+        </div>
+      </div>
+      <div style="border-right:1px solid var(--border);padding-right:1rem;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">المسار</div>
+        <div style="font-size:13px;font-weight:600">${st.track||'—'}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;margin-bottom:3px">الباقة</div>
+        <div style="font-size:13px;font-weight:600">${pkgInfo?.name||st.pkg||'—'}</div>
+      </div>
+      <div style="text-align:center;border-right:1px solid var(--border);padding-right:1rem;">
+        <div style="font-size:42px;font-weight:900;color:${avg>=settings.gradeA?'#1a7a3c':avg>=settings.gradeFail?'var(--primary)':'#c0392b'};line-height:1">${avg}</div>
+        <div style="font-size:11px;color:var(--text-muted)">المتوسط العام / 100</div>
+        <div style="margin-top:6px"><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ وضع جيد'}</span></div>
       </div>
     </div>
-    <div class="table-wrap"><table><thead><tr style="background:var(--primary-dark)">
-      <th style="color:rgba(255,255,255,0.85)">المادة</th><th style="color:rgba(255,255,255,0.85)">المحاضر</th>
-      ${['أ1ح','أ1و','أ1م','أ2ح','أ2و','أ2م','أ3ح','أ3و','أ3م','أ4ح','أ4و','أ4م'].map(h=>`<th style="color:rgba(255,255,255,0.85)">${h}</th>`).join('')}
-      <th style="color:rgba(255,255,255,0.85)">اختبار</th><th style="color:rgba(255,255,255,0.85)">مجموع</th>
-      <th style="color:rgba(255,255,255,0.85)">تصنيف</th><th style="color:rgba(255,255,255,0.85)">حالة</th>
-    </tr></thead><tbody>`;
+    <!-- Subjects Cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.8rem;">`;
+
   mySubjs.forEach(subj=>{
     const g=grades[subj.idx]?.[stdIdx]; if(!g) return;
-    const total=calcTotal(g);const gr=getGrade(total);const st2=getStatus(total);
-    html+=`<tr ${st2==='راسب'?'style="background:#fff8f8"':''}>
-      <td><strong>${subj.name}</strong></td><td style="font-size:11px">${getLecturerName(subj.lecturerUserId)}</td>
-      ${['w1','w2','w3','w4'].flatMap(w=>[`<td>${g[w].attend??'—'}</td>`,`<td>${g[w].hw??'—'}</td>`,`<td>${g[w].disc??'—'}</td>`]).join('')}
-      <td><strong>${g.exam??'—'}</strong></td><td><strong>${total}</strong></td>
-      <td><span class="badge badge-${gr}">${gr}</span></td><td><span class="badge ${st2==='ناجح'?'badge-pass':'badge-fail'}">${st2}</span></td>
-    </tr>`;
+    const total=calcTotal(g); const gr=getGrade(total); const st2=getStatus(total);
+    const wkMax=settings.attend+settings.hw+settings.disc;
+    html+=`<div style="background:white;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;border-top:3px solid ${gr==='A'?'#1a7a3c':gr==='B'?'#0D40FC':gr==='C'?'#b35c00':'#c0392b'};">
+      <div style="padding:0.8rem 1rem;border-bottom:1px solid var(--bg);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${subj.name}</div>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <span class="badge badge-${gr}">${gr}</span>
+            <span style="font-size:20px;font-weight:900;color:${gr==='F'?'#c0392b':'var(--primary)'}">${total}</span>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${getLecturerName(subj.lecturerUserId)||'—'}</div>
+        <div style="margin-top:6px;"><div class="progress"><div class="progress-fill ${pc(total)}" style="width:${total}%"></div></div></div>
+      </div>
+      <div style="padding:0.7rem 1rem;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px;">
+          ${['w1','w2','w3','w4'].map((w,i)=>{
+            const wg=g[w]; const wt=(wg.attend||0)+(wg.hw||0)+(wg.disc||0);
+            return `<div style="text-align:center;background:var(--bg);border-radius:6px;padding:5px;">
+              <div style="font-size:9px;color:var(--text-muted);font-weight:600">أ${i+1}</div>
+              <div style="font-size:15px;font-weight:800;color:var(--primary)">${wt}</div>
+              <div style="font-size:8px;color:var(--text-light)">/${wkMax}</div>
+              <div style="font-size:8px;color:var(--text-muted);margin-top:2px">ح${wg.attend||0}·و${wg.hw||0}·م${wg.disc||0}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:${st2==='ناجح'?'var(--success-light)':'var(--danger-light)'};border-radius:6px;">
+          <span style="font-size:11px;font-weight:600">📝 الاختبار النهائي</span>
+          <span style="font-size:16px;font-weight:800;color:${st2==='ناجح'?'var(--success)':'var(--danger)'}">
+            ${g.exam??'—'}/${settings.exam}
+          </span>
+        </div>
+      </div>
+    </div>`;
   });
-  html+=`</tbody></table></div></div>`;
+
+  html+=`</div></div>`;
   document.getElementById('reportContent').innerHTML=html;
 }
 function exportCSV() {
@@ -2046,14 +2106,6 @@ document.querySelectorAll('.modal-overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
 });
 window.addEventListener('load', function(){ initFirebase(); });
-
-window.addEventListener('load', function(){ initFirebase(); });
-
-window.addEventListener('load', function(){ initFirebase(); });
-
-window.addEventListener('load', function(){ initFirebase(); });
-
-
 // ══════════════════════════════════════════════
 //  📦 PACKAGES DATA & MANAGEMENT
 // ══════════════════════════════════════════════
@@ -2362,17 +2414,29 @@ async function changeStudentPassword(stdIdx){
   }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
 }
 
-window.addEventListener('load', function(){ initFirebase(); });
+async function processPendingPkgSubjects(){
+  if(!window._pendingPkgSubjects) return;
+  const {pkgKey, newIdx} = window._pendingPkgSubjects;
+  window._pendingPkgSubjects = null;
+  const selectedPkg = packagesData.find(p=>p._fbKey===pkgKey||p.name===pkgKey);
+  if(!selectedPkg?.subjects?.length) return;
+  for(let i=0; i<selectedPkg.subjects.length; i++){
+    const subjName = selectedPkg.subjects[i];
+    let si = subjects.findIndex(s=>s.name===subjName);
+    if(si<0){
+      subjects.push({_fbKey:null, name:subjName, lecturerUserId:null, students:[]});
+      si = subjects.length-1;
+      grades[si]={};
+      try{ await saveSubjectToFirebase(si); }catch(e){}
+    }
+    if(!subjects[si].students.includes(newIdx)){
+      subjects[si].students.push(newIdx);
+      if(!grades[si]) grades[si]={};
+      if(!grades[si][newIdx]) grades[si][newIdx]=makeEmptyGrade();
+    }
+  }
+}
 
-window.addEventListener('load', function(){ initFirebase(); });
-
-window.addEventListener('load', function(){ initFirebase(); });
-
-window.addEventListener('load', function(){ initFirebase(); });
-
-window.addEventListener('load', function(){ initFirebase(); });
-
-window.addEventListener('load', function(){ initFirebase(); });
 </script>
 </body>
 </html>
