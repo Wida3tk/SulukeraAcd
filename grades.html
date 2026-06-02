@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>منظومة سلوكيرا — الدرجات</title>
+<title>منظومة سلوكيرا — الدرجات والجدول</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
@@ -237,9 +237,34 @@ tr:hover td{background:#f8faff;}
   .subjects-grid{grid-template-columns:1fr;}
   .stat-box{min-width:80px;}
 }
+
+/* App tabs */
+.app-tab{padding:12px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);font-family:inherit;border-bottom:3px solid transparent;transition:all 0.15s;margin-left:4px;}
+.app-tab:hover{color:var(--primary);}
+.app-tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+
+/* Weekly schedule */
+.schedule-grid{display:grid;grid-template-columns:80px repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.2rem;}
+.sch-header{background:var(--dark);color:white;padding:10px 8px;text-align:center;font-size:12px;font-weight:700;}
+.sch-time{background:var(--bg);padding:8px 6px;text-align:center;font-size:10px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;min-height:52px;}
+.sch-cell{padding:4px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:52px;}
+.sch-cell:last-child{border-right:none;}
+.sch-slot{background:var(--primary);color:white;border-radius:6px;padding:5px 8px;font-size:11px;height:100%;display:flex;flex-direction:column;justify-content:center;}
+.sch-slot-name{font-weight:700;line-height:1.2;}
+.sch-slot-sub{font-size:9px;opacity:0.8;margin-top:2px;}
+
+/* Program units */
+.units-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;}
+.unit-card{background:white;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow);}
+.unit-header{background:var(--dark);color:white;padding:0.9rem 1.1rem;display:flex;align-items:center;gap:10px;}
+.unit-num{width:36px;height:36px;border-radius:50%;background:rgba(85,215,255,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0;}
+.unit-body{padding:1rem 1.1rem;}
+.unit-topic{font-size:12px;padding:5px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+.unit-topic-dot{width:6px;height:6px;border-radius:50%;background:var(--primary);flex-shrink:0;}
 </style>
 </head>
 <body>
+
 
 <!-- LOADER -->
 <div class="loader" id="loader"><div class="spin"></div><p>جاري التحميل...</p></div>
@@ -302,10 +327,19 @@ tr:hover td{background:#f8faff;}
     </div>
   </div>
 
+  <div id="appTabs" style="display:none;background:white;border-bottom:1px solid var(--border);padding:0 1.5rem;">
+    <div style="display:flex;gap:0;max-width:1100px;margin:0 auto;">
+      <button class="app-tab active" onclick="switchAppTab('grades',this)">📊 الدرجات</button>
+      <button class="app-tab" onclick="switchAppTab('schedule',this)">📅 الجدول الأكاديمي</button>
+    </div>
+  </div>
   <div class="content" id="mainContent"></div>
+  <div class="content" id="scheduleContent" style="display:none;max-width:1100px;margin:0 auto;padding:1.5rem;"></div>
 </div>
 
+
 <script>
+
 // ══════════════════════════════════════════════
 //  FIREBASE
 // ══════════════════════════════════════════════
@@ -430,6 +464,7 @@ function showErr(){
 function doLogout(){
   currentUser=null; dbData={};
   document.getElementById('appScreen').style.display='none';
+  document.getElementById('appTabs').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('studentId').value='';
   document.getElementById('lecUsername').value='';
@@ -464,6 +499,7 @@ async function loadAllData(){
 function showStudentView(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
+  document.getElementById('appTabs').style.display='block';
 
   const st = currentUser.data;
   const fullName = [st.firstName,st.midName,st.lastName].filter(Boolean).join(' ');
@@ -590,6 +626,7 @@ function getLecturerName(uid){
 function showLecturerView(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
+  document.getElementById('appTabs').style.display='block';
 
   const lec = currentUser.data;
   document.getElementById('topbarName').textContent = lec.name;
@@ -808,10 +845,132 @@ async function saveGrades(){
   btn.textContent='💾 حفظ الدرجات'; btn.disabled=false;
 }
 
+
+// ══════════════════════════════════════════════
+//  SCHEDULE
+// ══════════════════════════════════════════════
+const DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
+
+function switchAppTab(tab, btn){
+  document.querySelectorAll('.app-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(tab==='grades'){
+    document.getElementById('mainContent').style.display='block';
+    document.getElementById('scheduleContent').style.display='none';
+  } else {
+    document.getElementById('mainContent').style.display='none';
+    document.getElementById('scheduleContent').style.display='block';
+    renderScheduleView();
+  }
+}
+
+function renderScheduleView(){
+  const el = document.getElementById('scheduleContent');
+  const schedule = dbData.schedule || {};
+  const weekly = schedule.weekly || {};
+  const units = schedule.units || {};
+
+  let html = `
+    <div style="display:flex;gap:6px;margin-bottom:1.2rem;flex-wrap:wrap;" id="schTabs">
+      <button class="lec-tab active" onclick="switchSchTab('weekly',this)">📅 الجدول الأسبوعي</button>
+      <button class="lec-tab" onclick="switchSchTab('program',this)">📚 جدول البرنامج</button>
+    </div>
+    <div id="weeklySection">
+      ${renderWeeklySchedule(weekly)}
+    </div>
+    <div id="programSection" style="display:none;">
+      ${renderProgramSchedule(units)}
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+function switchSchTab(tab, btn){
+  document.querySelectorAll('#schTabs .lec-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('weeklySection').style.display = tab==='weekly'?'block':'none';
+  document.getElementById('programSection').style.display = tab==='program'?'block':'none';
+}
+
+function renderWeeklySchedule(weekly){
+  const slots = Object.values(weekly).sort((a,b)=>a.timeStart?.localeCompare(b.timeStart));
+
+  if(!slots.length) return '<div class="empty">📅 لم يتم إضافة جدول أسبوعي بعد</div>';
+
+  // Get unique time slots
+  const times = [...new Set(slots.map(s=>s.timeStart+'-'+s.timeEnd))].sort();
+
+  let html = `<div style="overflow-x:auto;margin-bottom:1.2rem;">
+    <div class="schedule-grid" style="grid-template-columns:90px repeat(5,1fr);">
+      <div class="sch-header">الوقت</div>
+      ${DAYS.map(d=>`<div class="sch-header">${d}</div>`).join('')}
+      ${times.map(time=>{
+        const [start,end] = time.split('-');
+        return `<div class="sch-time">${start}<br><span style="color:var(--light)">${end}</span></div>
+          ${DAYS.map(day=>{
+            const slot = slots.find(s=>s.day===day && s.timeStart===start && s.timeEnd===end);
+            return `<div class="sch-cell">${slot?`
+              <div class="sch-slot" style="background:${slot.color||'var(--primary)'}">
+                <div class="sch-slot-name">${slot.subject||''}</div>
+                <div class="sch-slot-sub">${slot.lecturer||''}</div>
+                ${slot.room?`<div class="sch-slot-sub">🏠 ${slot.room}</div>`:''}
+              </div>`:''}
+            </div>`;
+          }).join('')}`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // Legend
+  const subjects = [...new Set(slots.map(s=>s.subject).filter(Boolean))];
+  if(subjects.length){
+    html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.5rem;">
+      ${subjects.map((s,i)=>{
+        const color = slots.find(sl=>sl.subject===s)?.color||'var(--primary)';
+        return `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);">
+          <span style="width:12px;height:12px;border-radius:3px;background:${color};display:inline-block;"></span>${s}
+        </span>`;
+      }).join('')}
+    </div>`;
+  }
+
+  return html;
+}
+
+function renderProgramSchedule(units){
+  const unitList = Object.entries(units).sort(([,a],[,b])=>a.order-b.order);
+  if(!unitList.length) return '<div class="empty">📚 لم يتم إضافة وحدات البرنامج بعد</div>';
+
+  const colors = ['#0D40FC','#1a7a3c','#b35c00','#8e44ad','#c0392b','#2980b9','#16a085'];
+
+  return `<div class="units-grid">
+    ${unitList.map(([key,unit],i)=>`
+      <div class="unit-card">
+        <div class="unit-header" style="background:${colors[i%colors.length]}">
+          <div class="unit-num">${unit.order||i+1}</div>
+          <div>
+            <div style="font-size:13px;font-weight:700">${unit.title||'وحدة '+(i+1)}</div>
+            ${unit.duration?`<div style="font-size:10px;opacity:0.7;margin-top:1px">⏱ ${unit.duration}</div>`:''}
+            ${unit.dateRange?`<div style="font-size:10px;opacity:0.7">📅 ${unit.dateRange}</div>`:''}
+          </div>
+        </div>
+        <div class="unit-body">
+          ${unit.description?`<p style="font-size:12px;color:var(--muted);margin-bottom:8px">${unit.description}</p>`:''}
+          ${(unit.topics||[]).map(t=>`
+            <div class="unit-topic">
+              <div class="unit-topic-dot"></div>
+              <span style="font-size:12px">${t}</span>
+            </div>`).join('')}
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
 // ══════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════
 window.addEventListener('load', initFB);
+
 </script>
 </body>
 </html>
