@@ -161,9 +161,19 @@ tr:hover td{background:#f8faff;}
 .search-highlight { background:#fff3cd;border-radius:3px;padding:0 2px; }
 /* Alert badges */
 .alert-count { display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:var(--danger);color:white;border-radius:50%;font-size:10px;font-weight:700;margin-right:4px; }
+
+/* Schedule admin */
+.slot-item{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--bg);border-radius:var(--radius);margin-bottom:6px;border:1px solid var(--border);}
+.slot-color{width:12px;height:12px;border-radius:3px;flex-shrink:0;margin-left:8px;}
+.sch-preview-grid{display:grid;gap:0;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;font-size:11px;}
+.sch-ph{background:var(--dark);color:white;padding:8px 6px;text-align:center;font-weight:700;}
+.sch-pt{background:var(--bg);padding:6px 4px;text-align:center;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;min-height:44px;}
+.sch-pc{padding:3px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:44px;}
+.sch-ps{border-radius:5px;padding:4px 6px;font-size:10px;color:white;height:100%;display:flex;flex-direction:column;justify-content:center;}
 </style>
 </head>
 <body>
+
 
 
 
@@ -378,6 +388,87 @@ tr:hover td{background:#f8faff;}
         </div>
       </div>
 
+      <!-- SCHEDULE -->
+      <div class="page" id="page-schedule">
+        <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap;" id="schedAdminTabs">
+          <div class="week-tab active" onclick="switchSchedTab('weekly',this)">📅 الجدول الأسبوعي</div>
+          <div class="week-tab" onclick="switchSchedTab('program',this)">📚 جدول البرنامج</div>
+        </div>
+
+        <!-- Weekly Schedule Panel -->
+        <div id="sched-weekly">
+          <div class="card card-accent">
+            <div class="card-title">📅 إدارة الجدول الأسبوعي</div>
+            <div class="alert alert-info">أضف المحاضرات الأسبوعية — ستظهر للطلاب والمحاضرين في grades.html</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:end;">
+              <div class="form-group" style="margin:0">
+                <label>اليوم</label>
+                <select id="schDay" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
+                  <option>الأحد</option><option>الاثنين</option><option>الثلاثاء</option>
+                  <option>الأربعاء</option><option>الخميس</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>من</label>
+                <input type="time" id="schStart" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>إلى</label>
+                <input type="time" id="schEnd" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>المقرر</label>
+                <select id="schSubject" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
+                  <option value="">-- اختر مقرراً --</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>القاعة (اختياري)</label>
+                <input type="text" id="schRoom" placeholder="مثال: Q1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="addScheduleSlot()" style="align-self:end;white-space:nowrap">+ إضافة</button>
+            </div>
+            <div id="weeklySlotsList"></div>
+          </div>
+          <div class="card card-accent" id="weeklyPreviewCard">
+            <div class="card-title">👁️ معاينة الجدول</div>
+            <div id="weeklyPreview" style="overflow-x:auto;"></div>
+          </div>
+        </div>
+
+        <!-- Program Schedule Panel -->
+        <div id="sched-program" style="display:none;">
+          <div class="card card-accent">
+            <div class="card-title">📚 إدارة جدول البرنامج بالوحدات</div>
+            <div class="alert alert-info">أضف وحدات البرنامج الدراسي — تظهر للطلاب كبطاقات منظمة</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;">
+              <div class="form-group" style="margin:0">
+                <label>عنوان الوحدة *</label>
+                <input type="text" id="unitTitle" placeholder="مثال: الوحدة الأولى — مقدمة">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>المدة</label>
+                <input type="text" id="unitDuration" placeholder="مثال: 4 أسابيع">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>التواريخ</label>
+                <input type="text" id="unitDateRange" placeholder="مثال: 1 يناير — 31 يناير">
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="addUnit()" style="align-self:end">+ إضافة وحدة</button>
+            </div>
+            <div class="form-group">
+              <label>وصف الوحدة (اختياري)</label>
+              <input type="text" id="unitDesc" placeholder="وصف موجز للوحدة...">
+            </div>
+            <div class="form-group">
+              <label>موضوعات الوحدة (سطر لكل موضوع)</label>
+              <textarea id="unitTopics" rows="4" placeholder="موضوع 1&#10;موضوع 2&#10;موضوع 3" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;resize:vertical;"></textarea>
+            </div>
+            <div id="unitsList"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- SETTINGS -->
       <div class="page" id="page-settings">
         <div class="card card-accent"><div class="card-title">⚙️ توزيع الدرجات</div>
@@ -535,7 +626,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1005,6 +1098,7 @@ const navConfig = {
     {id:'reports',icon:'📋',label:'التقارير'},
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
     {id:'alerts',icon:'🔔',label:'التنبيهات'},
+    {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'},
   ],
   lecturer: [
@@ -1026,7 +1120,7 @@ function renderNav() {
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
-  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', alerts:'التنبيهات والمتابعة',
+  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي',
   settings:'الإعدادات',mygrades:'بياناتي ودرجاتي'
 };
 function navTo(pageId, el) {
@@ -1065,6 +1159,7 @@ function refreshPage(p) {
   if (p==='settings') { loadSettings(); updateSettingsSummary(); }
   if (p==='cards') { buildCardsTabs(); renderCards('all'); }
   if (p==='programs') { renderProgramsPanel(); loadPackagesFromFirebase().then(renderPackagesList); }
+  if (p==='schedule') renderScheduleAdmin();
   if (p==='alerts') renderAlertsPage();
 }
 
@@ -2167,6 +2262,172 @@ document.querySelectorAll('.modal-overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
 });
 window.addEventListener('load', function(){ initFirebase(); });
+
+// ══════════════════════════════════════════════
+//  SCHEDULE ADMIN
+// ══════════════════════════════════════════════
+const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
+const SLOT_COLORS = ['#0D40FC','#1a7a3c','#b35c00','#8e44ad','#c0392b','#2980b9','#16a085','#d35400'];
+let scheduleData = {weekly:{}, units:{}};
+
+async function renderScheduleAdmin(){
+  // Load from Firebase
+  try{
+    const snap = await fbRef('schedule').get();
+    if(snap.exists()) scheduleData = snap.val();
+    else scheduleData = {weekly:{}, units:{}};
+  }catch(e){ scheduleData = {weekly:{}, units:{}}; }
+  // Populate subject select
+  const subjSel = document.getElementById('schSubject');
+  if(subjSel){
+    subjSel.innerHTML = '<option value="">-- اختر مقرراً --</option>' +
+      subjects.map(s=>`<option value="${s.name}">${s.name}</option>`).join('');
+  }
+  renderWeeklySlots();
+  renderWeeklyPreview();
+  renderUnitsList();
+}
+
+function switchSchedTab(tab, el){
+  document.querySelectorAll('#schedAdminTabs .week-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('sched-weekly').style.display = tab==='weekly'?'block':'none';
+  document.getElementById('sched-program').style.display = tab==='program'?'block':'none';
+}
+
+// ── WEEKLY ────────────────────────────────────
+async function addScheduleSlot(){
+  const day    = document.getElementById('schDay').value;
+  const start  = document.getElementById('schStart').value;
+  const end    = document.getElementById('schEnd').value;
+  const subj   = document.getElementById('schSubject').value;
+  const room   = document.getElementById('schRoom').value.trim();
+  if(!start||!end||!subj) return showToast('⚠️ أدخل الوقت والمقرر');
+  if(start>=end) return showToast('⚠️ وقت البداية يجب أن يكون قبل النهاية');
+
+  const lecUser = subjects.find(s=>s.name===subj);
+  const lecName = lecUser ? getLecturerName(lecUser.lecturerUserId) : '';
+  const colorIdx = Object.keys(scheduleData.weekly||{}).length % SLOT_COLORS.length;
+
+  const key = 'slot_'+Date.now();
+  const slot = {day, timeStart:start, timeEnd:end, subject:subj, lecturer:lecName, room, color:SLOT_COLORS[colorIdx]};
+
+  if(!scheduleData.weekly) scheduleData.weekly={};
+  scheduleData.weekly[key]=slot;
+  await fbRef('schedule/weekly/'+key).set(slot);
+
+  document.getElementById('schRoom').value='';
+  renderWeeklySlots();
+  renderWeeklyPreview();
+  showToast('✅ تم إضافة المحاضرة');
+}
+
+function renderWeeklySlots(){
+  const el=document.getElementById('weeklySlotsList');
+  if(!el) return;
+  const slots=Object.entries(scheduleData.weekly||{});
+  if(!slots.length){el.innerHTML='<div class="alert alert-warn">لا توجد محاضرات مضافة</div>';return;}
+  el.innerHTML=slots.sort(([,a],[,b])=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day)||a.timeStart?.localeCompare(b.timeStart)).map(([key,s])=>`
+    <div class="slot-item">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;">
+        <div class="slot-color" style="background:${s.color||'var(--primary)'}"></div>
+        <div>
+          <div style="font-size:13px;font-weight:700">${s.subject}</div>
+          <div style="font-size:11px;color:var(--muted)">${s.day} · ${s.timeStart}–${s.timeEnd}${s.room?' · 🏠 '+s.room:''}</div>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-xs" onclick="deleteSlot('${key}')">🗑️</button>
+    </div>`).join('');
+}
+
+async function deleteSlot(key){
+  delete scheduleData.weekly[key];
+  await fbRef('schedule/weekly/'+key).remove();
+  renderWeeklySlots();
+  renderWeeklyPreview();
+  showToast('✅ تم الحذف');
+}
+
+function renderWeeklyPreview(){
+  const el=document.getElementById('weeklyPreview');
+  if(!el) return;
+  const slots=Object.values(scheduleData.weekly||{});
+  if(!slots.length){el.innerHTML='<div class="alert alert-info">أضف محاضرات لرؤية المعاينة</div>';return;}
+  const times=[...new Set(slots.map(s=>s.timeStart+'-'+s.timeEnd))].sort();
+  let html=`<div class="sch-preview-grid" style="grid-template-columns:80px repeat(5,1fr)">
+    <div class="sch-ph">الوقت</div>${DAYS_AR.map(d=>`<div class="sch-ph">${d}</div>`).join('')}
+    ${times.map(t=>{
+      const [st,en]=t.split('-');
+      return `<div class="sch-pt">${st}<br><span style="font-size:9px;color:var(--light)">${en}</span></div>
+        ${DAYS_AR.map(day=>{
+          const sl=slots.find(s=>s.day===day&&s.timeStart===st&&s.timeEnd===en);
+          return `<div class="sch-pc">${sl?`<div class="sch-ps" style="background:${sl.color||'var(--primary)'}">
+            <div style="font-weight:700;font-size:10px">${sl.subject}</div>
+            ${sl.room?`<div style="font-size:9px;opacity:0.8">🏠 ${sl.room}</div>`:''}
+          </div>`:''}</div>`;
+        }).join('')}`;
+    }).join('')}
+  </div>`;
+  el.innerHTML=html;
+}
+
+// ── PROGRAM UNITS ─────────────────────────────
+async function addUnit(){
+  const title   = document.getElementById('unitTitle').value.trim();
+  const duration= document.getElementById('unitDuration').value.trim();
+  const dateRange=document.getElementById('unitDateRange').value.trim();
+  const desc    = document.getElementById('unitDesc').value.trim();
+  const topicsRaw=document.getElementById('unitTopics').value.trim();
+  if(!title) return showToast('⚠️ أدخل عنوان الوحدة');
+  const topics = topicsRaw?topicsRaw.split('\n').map(t=>t.trim()).filter(Boolean):[];
+  const order  = Object.keys(scheduleData.units||{}).length+1;
+  const key    = 'unit_'+Date.now();
+  const unit   = {title,duration,dateRange,description:desc,topics,order};
+  if(!scheduleData.units) scheduleData.units={};
+  scheduleData.units[key]=unit;
+  await fbRef('schedule/units/'+key).set(unit);
+  document.getElementById('unitTitle').value='';
+  document.getElementById('unitDuration').value='';
+  document.getElementById('unitDateRange').value='';
+  document.getElementById('unitDesc').value='';
+  document.getElementById('unitTopics').value='';
+  renderUnitsList();
+  showToast('✅ تم إضافة الوحدة');
+}
+
+function renderUnitsList(){
+  const el=document.getElementById('unitsList');
+  if(!el) return;
+  const units=Object.entries(scheduleData.units||{}).sort(([,a],[,b])=>a.order-b.order);
+  if(!units.length){el.innerHTML='';return;}
+  const colors=['#0D40FC','#1a7a3c','#b35c00','#8e44ad','#c0392b','#2980b9'];
+  el.innerHTML=`<div style="margin-top:1rem;"><div class="card-title" style="font-size:12px;border:none;padding:0;margin-bottom:0.7rem">📋 الوحدات المضافة</div>`+
+    units.map(([key,u],i)=>`
+      <div class="slot-item">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;">
+          <div style="width:32px;height:32px;border-radius:50%;background:${colors[i%colors.length]};color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0">${u.order||i+1}</div>
+          <div>
+            <div style="font-size:13px;font-weight:700">${u.title}</div>
+            <div style="font-size:11px;color:var(--muted)">${u.duration||''} ${u.dateRange?'· '+u.dateRange:''} · ${(u.topics||[]).length} موضوع</div>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-xs" onclick="deleteUnit('${key}')">🗑️</button>
+      </div>`).join('')+'</div>';
+}
+
+async function deleteUnit(key){
+  if(!confirm('حذف هذه الوحدة؟')) return;
+  delete scheduleData.units[key];
+  await fbRef('schedule/units/'+key).remove();
+  // Reorder
+  const remaining=Object.entries(scheduleData.units).sort(([,a],[,b])=>a.order-b.order);
+  const updates={};
+  remaining.forEach(([k,u],i)=>{ scheduleData.units[k].order=i+1; updates['schedule/units/'+k+'/order']=i+1; });
+  if(Object.keys(updates).length) await firebase.database().ref('/').update(updates);
+  renderUnitsList();
+  showToast('✅ تم الحذف');
+}
+
 // ══════════════════════════════════════════════
 //  📦 PACKAGES DATA & MANAGEMENT
 // ══════════════════════════════════════════════
@@ -2528,6 +2789,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 
 </script>
