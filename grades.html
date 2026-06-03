@@ -266,6 +266,7 @@ tr:hover td{background:#f8faff;}
 <body>
 
 
+
 <!-- LOADER -->
 <div class="loader" id="loader"><div class="spin"></div><p>جاري التحميل...</p></div>
 <div class="toast" id="toast"></div>
@@ -338,7 +339,9 @@ tr:hover td{background:#f8faff;}
 </div>
 
 
+
 <script>
+
 
 // ══════════════════════════════════════════════
 //  FIREBASE
@@ -609,7 +612,13 @@ function getStudentSubjects(studentFbKey){
 
 function getGrade_data(studentFbKey, subjectFbKey){
   if(!dbData.grades) return null;
-  return Object.values(dbData.grades).find(g=>g.studentKey===studentFbKey && g.subjectKey===subjectFbKey) || null;
+  // أولاً: ابحث بالمفتاح المحسوب المباشر (الأسرع والأدق)
+  const directKey = ('grade_'+studentFbKey+'_'+subjectFbKey).replace(/[.#$[\]]/g,'_');
+  if(dbData.grades[directKey]) return dbData.grades[directKey];
+  // ثانياً: ابحث في كل القيم
+  return Object.values(dbData.grades).find(g=>
+    g.studentKey===studentFbKey && g.subjectKey===subjectFbKey
+  ) || null;
 }
 
 function getLecturerName(uid){
@@ -637,11 +646,19 @@ function showLecturerView(){
 }
 
 function getLecturerSubjects(){
-  // Find subjects where this lecturer is assigned
   if(!dbData.subjects) return [];
+  const u = currentUser.data;
+  // تحقق من كل المعرّفات الممكنة
+  const myIds = new Set([
+    currentUser.fbKey,
+    u.username,
+    u.id,
+    u._fbKey,
+  ].filter(Boolean));
+
   return Object.entries(dbData.subjects)
-    .filter(([k,s])=>s.lecturerUserId===currentUser.fbKey||s.lecturerUserId===currentUser.data.username)
-    .map(([k,s])=>{return {key:k,...s}; });
+    .filter(([k,s])=> s.lecturerUserId && myIds.has(s.lecturerUserId))
+    .map(([k,s])=>({key:k,...s}));
 }
 
 function getSubjectStudents(subjectFbKey){
@@ -818,28 +835,24 @@ async function saveGrades(){
       const stKey=inp.dataset.stkey;
       const field=inp.dataset.field;
       const val=parseFloat(inp.value)||0;
+      // مفتاح ثابت بناءً على studentKey + subjectKey
       const gradeKey=('grade_'+stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
-
       if(!updates['grades/'+gradeKey])
-        updates['grades/'+gradeKey] = {studentKey:stKey, subjectKey:currentSubjectKey};
+        updates['grades/'+gradeKey]={studentKey:stKey, subjectKey:currentSubjectKey};
       updates['grades/'+gradeKey][field]=val;
     });
 
     await firebase.database().ref('/').update(updates);
 
-    // Update local cache
-    Object.entries(updates).forEach(([path,val])=>{
-      const parts=path.split('/');
-      if(parts[0]==='grades'){
-        if(!dbData.grades) dbData.grades={};
-        dbData.grades[parts[1]] = {...(dbData.grades[parts[1]]||{}), ...val};
-      }
-    });
+    // أعد قراءة grades من Firebase لضمان تطابق البيانات المحلية
+    const freshSnap = await fbRef('grades').get();
+    if(freshSnap.exists()) dbData.grades = freshSnap.val();
+    else dbData.grades = {};
 
     toast('✅ تم حفظ الدرجات');
     renderWeekTable(currentWeek);
   }catch(e){
-    console.error(e); toast('❌ خطأ في الحفظ');
+    console.error(e); toast('❌ خطأ في الحفظ: '+e.message);
   }
 
   btn.textContent='💾 حفظ الدرجات'; btn.disabled=false;
@@ -970,6 +983,7 @@ function renderProgramSchedule(units){
 //  INIT
 // ══════════════════════════════════════════════
 window.addEventListener('load', initFB);
+
 
 </script>
 </body>
