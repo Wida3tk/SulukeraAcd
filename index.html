@@ -190,6 +190,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -635,7 +636,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1748,19 +1751,38 @@ async function saveUser() {
 
   try{
     // 1. احفظ المستخدم
-    await fbRef('users/'+userFbKey).set({name,username,password:password||users.find(u=>u.username===username)?.password||'',role});
-    // 2. احفظ كل مادة مُعدَّلة في Firebase
+    const existingPass = users.find(u=>u.username===username)?.password||'';
+    await fbRef('users/'+userFbKey).set({
+      name, username,
+      password: password||existingPass,
+      role
+    });
+
+    // 2. حدّث lecturerUserId لكل مادة مباشرة في Firebase (بدون إعادة كتابة كامل السجل)
     if(role==='lecturer'){
+      const updates={};
       for(let si=0; si<subjects.length; si++){
-        if(subjs.includes(si)||subjects[si].lecturerUserId===username){
-          await saveSubjectToFirebase(si);
+        const subj=subjects[si];
+        if(!subj._fbKey) continue;
+        if(subjs.includes(si)){
+          // أضف هذا المحاضر لهذه المادة
+          updates['subjects/'+subj._fbKey+'/lecturerUserId'] = username;
+        } else if(
+          subj.lecturerUserId===username ||
+          subj.lecturerUserId===userFbKey
+        ){
+          // أزل هذا المحاضر من المادة (كان مُعيَّنًا ولم يُختر)
+          updates['subjects/'+subj._fbKey+'/lecturerUserId'] = null;
         }
       }
+      if(Object.keys(updates).length>0){
+        await firebase.database().ref('/').update(updates);
+      }
     }
-    showToast('✅ تم حفظ المستخدم وتعيين المقررات');
+    showToast('✅ تم حفظ المقررات');
   }catch(e){
     console.error('saveUser error:',e);
-    showToast('⚠️ حُفظ محلياً فقط: '+e.message);
+    showToast('⚠️ خطأ في الحفظ: '+e.message);
   }
 }
 async function deleteUser(i) {
@@ -2849,6 +2871,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 
 
