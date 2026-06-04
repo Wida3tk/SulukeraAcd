@@ -188,6 +188,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -302,8 +303,8 @@ tr:hover td{background:#f8faff;}
       <!-- USERS -->
       <div class="page" id="page-users">
         <div class="card card-accent"><div class="card-title">👥 إدارة المستخدمين</div>
-          <div class="alert alert-info">🔐 إضافة محاضرين وإدارة حسابات الطلاب</div>
-          <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم</th><th>اسم المستخدم</th><th>الدور</th><th>المواد</th><th>إجراءات</th></tr></thead><tbody id="usersTableBody"></tbody></table></div>
+          <div class="alert alert-info">🔐 إضافة محاضرين وتعيين المقررات لهم</div>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم</th><th>اسم المستخدم</th><th>الدور</th><th>المقررات</th><th>إجراءات</th></tr></thead><tbody id="usersTableBody"></tbody></table></div>
         </div>
       </div>
 
@@ -582,7 +583,7 @@ tr:hover td{background:#f8faff;}
   </div>
   <div class="form-group"><label>اسم المستخدم *</label><input type="text" id="userUsername"></div>
   <div class="form-group"><label>كلمة المرور *</label><input type="password" id="userPassword"></div>
-  <div class="form-group"><label>المواد المرتبطة</label><select id="userSubjects" multiple style="height:80px;"></select></div>
+  <div class="form-group"><label>المقررات المرتبطة بالمحاضر</label><select id="userSubjects" multiple style="height:80px;"></select></div>
   <div class="modal-actions"><button class="btn btn-primary" onclick="saveUser()">✓ حفظ</button><button class="btn" onclick="closeModal('userModal')">إلغاء</button></div>
 </div></div>
 
@@ -631,7 +632,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1186,7 +1189,7 @@ function renderDashboard() {
   const avgs=rows.map(r=>r.total);
   const avg=avgs.length?Math.round(avgs.reduce((a,b)=>a+b,0)/avgs.length):0;
   document.getElementById('dashStats').innerHTML=`
-    <div class="stat"><div class="stat-icon">📖</div><div class="stat-label">المواد</div><div class="stat-value">${mySubjIdxs.length}</div><div class="stat-sub">مادة نشطة</div></div>
+    <div class="stat"><div class="stat-icon">📖</div><div class="stat-label">المقررات</div><div class="stat-value">${mySubjIdxs.length}</div><div class="stat-sub">مادة نشطة</div></div>
     <div class="stat"><div class="stat-icon">👩‍🎓</div><div class="stat-label">الطلاب</div><div class="stat-value">${[...new Set(rows.map(r=>r.student))].length}</div><div class="stat-sub">طالب مسجل</div></div>
     <div class="stat"><div class="stat-icon">📊</div><div class="stat-label">المتوسط</div><div class="stat-value" style="color:var(--primary)">${avg}</div><div class="stat-sub">من 100</div></div>
     <div class="stat"><div class="stat-icon">⚠️</div><div class="stat-label">تعثر</div><div class="stat-value" style="color:#c0392b">${rows.filter(r=>r.st==='راسب').length}</div><div class="stat-sub">حالة</div></div>
@@ -1669,7 +1672,7 @@ function renderUsersTable() {
   const displayUsers = users.filter(u=>u.role==='admin'||u.role==='lecturer');
   document.getElementById('usersTableBody').innerHTML=displayUsers.map((u,i)=>{
     const origIdx = users.indexOf(u);
-    const mySubjs = u.role==='lecturer' ? getLecturerSubjects(u.id).map(s=>s.name).join('، ') : 'جميع المواد';
+    const mySubjs = u.role==='lecturer' ? getLecturerSubjects(u.id).map(s=>s.name).join('، ') : 'جميع المقررات';
     return `<tr><td class="mono">${i+1}</td><td><strong>${u.name}</strong></td>
       <td class="mono" style="color:var(--primary)">${u.username}</td>
       <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${roleNames[u.role]||u.role}</span></td>
@@ -1688,7 +1691,7 @@ function openUserModal(i=-1) {
   document.getElementById('userPassword').value='';
   document.getElementById('userRole').value=i>=0?users[i].role:'lecturer';
   const u = i>=0 ? users[i] : null;
-  // حدد المواد المرتبطة بالمحاضر من subjects مباشرة
+  // حدد المقررات المرتبطة بالمحاضر من subjects مباشرة
   document.getElementById('userSubjects').innerHTML=subjects.map((s,si)=>{
     const isAssigned = u && (
       s.lecturerUserId===u.id ||
@@ -2745,7 +2748,7 @@ function renderAlertsPage(){
       failEl.innerHTML=`
         <div class="alert alert-warn">⚠️ يوجد ${failures.length} طالب متعثر أكاديمياً</div>
         <div class="table-wrap"><table>
-          <thead><tr><th>الطالب</th><th>الرقم</th><th>عدد المواد الراسب فيها</th><th>المواد</th><th>إجراء</th></tr></thead>
+          <thead><tr><th>الطالب</th><th>الرقم</th><th>عدد المواد الراسب فيها</th><th>المقررات</th><th>إجراء</th></tr></thead>
           <tbody>${failures.map(f=>`<tr>
             <td><strong>${f.student}</strong></td>
             <td class="mono">${f.id}</td>
@@ -2835,6 +2838,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 
 
