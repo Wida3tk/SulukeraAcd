@@ -187,6 +187,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -629,7 +630,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1684,7 +1687,16 @@ function openUserModal(i=-1) {
   document.getElementById('userUsername').value=i>=0?users[i].username:'';
   document.getElementById('userPassword').value='';
   document.getElementById('userRole').value=i>=0?users[i].role:'lecturer';
-  document.getElementById('userSubjects').innerHTML=subjects.map((s,si)=>`<option value="${si}" ${i>=0&&users[i].subjects?.includes(si)?'selected':''}>${s.name}</option>`).join('');
+  const u = i>=0 ? users[i] : null;
+  // حدد المواد المرتبطة بالمحاضر من subjects مباشرة
+  document.getElementById('userSubjects').innerHTML=subjects.map((s,si)=>{
+    const isAssigned = u && (
+      s.lecturerUserId===u.id ||
+      s.lecturerUserId===u.username ||
+      s.lecturerUserId===u._fbKey
+    );
+    return `<option value="${si}" ${isAssigned?'selected':''}>${s.name}</option>`;
+  }).join('');
   document.getElementById('userModal').classList.add('open');
 }
 async function saveUser() {
@@ -1694,17 +1706,48 @@ async function saveUser() {
   const role=document.getElementById('userRole').value;
   const subjs=Array.from(document.getElementById('userSubjects').selectedOptions).map(o=>parseInt(o.value));
   if (!name||!username) return showToast('⚠️ أدخل الاسم واسم المستخدم');
+
+  let userFbKey = username; // استخدم username كمعرّف ثابت في Firebase
+
   if (editingUserIdx>=0) {
-    const u=users[editingUserIdx]; u.name=name;u.username=username;u.role=role;u.subjects=subjs;
+    const u=users[editingUserIdx];
+    u.name=name; u.username=username; u.role=role; u.subjects=subjs;
     if (password) u.password=password;
-    if (role==='lecturer') subjs.forEach(si=>{subjects[si].lecturerUserId=u.id;});
+    userFbKey = u._fbKey || username;
+    // عيّن المحاضر للمواد المختارة بـ username الثابت
+    if (role==='lecturer'){
+      // أزل هذا المحاضر من كل المواد أولاً
+      subjects.forEach(s=>{ if(s.lecturerUserId===u.id||s.lecturerUserId===u.username||s.lecturerUserId===userFbKey) s.lecturerUserId=null; });
+      // أضفه للمواد المختارة
+      subjs.forEach(si=>{ if(subjects[si]) subjects[si].lecturerUserId=username; });
+    }
   } else {
     if (!password) return showToast('⚠️ أدخل كلمة المرور');
-    const nu={id:'u'+Date.now(),name,username,password,role,subjects:subjs}; users.push(nu);
-    if (role==='lecturer') subjs.forEach(si=>{subjects[si].lecturerUserId=nu.id;});
+    const nu={id:username,_fbKey:username,name,username,password,role,subjects:subjs};
+    users.push(nu);
+    if (role==='lecturer'){
+      subjs.forEach(si=>{ if(subjects[si]) subjects[si].lecturerUserId=username; });
+    }
   }
+
   closeModal('userModal'); renderUsersTable();
-  try{await saveUsersToFirebase();}catch(e){} showToast('✓ تم حفظ المستخدم');
+
+  try{
+    // 1. احفظ المستخدم
+    await fbRef('users/'+userFbKey).set({name,username,password:password||users.find(u=>u.username===username)?.password||'',role});
+    // 2. احفظ كل مادة مُعدَّلة في Firebase
+    if(role==='lecturer'){
+      for(let si=0; si<subjects.length; si++){
+        if(subjs.includes(si)||subjects[si].lecturerUserId===username){
+          await saveSubjectToFirebase(si);
+        }
+      }
+    }
+    showToast('✅ تم حفظ المستخدم وتعيين المقررات');
+  }catch(e){
+    console.error('saveUser error:',e);
+    showToast('⚠️ حُفظ محلياً فقط: '+e.message);
+  }
 }
 async function deleteUser(i) {
   if (users[i].username==='admin') return showToast('⚠️ لا يمكن حذف مدير النظام');
@@ -2792,6 +2835,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 
 
