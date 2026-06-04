@@ -189,6 +189,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -633,7 +634,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1672,7 +1675,15 @@ function renderUsersTable() {
   const displayUsers = users.filter(u=>u.role==='admin'||u.role==='lecturer');
   document.getElementById('usersTableBody').innerHTML=displayUsers.map((u,i)=>{
     const origIdx = users.indexOf(u);
-    const mySubjs = u.role==='lecturer' ? getLecturerSubjects(u.id).map(s=>s.name).join('، ') : 'جميع المقررات';
+    // ابحث بكل أشكال المعرّف الممكنة
+    const mySubjs = u.role==='lecturer'
+      ? subjects.filter(s=>
+          s.lecturerUserId &&
+          (s.lecturerUserId===u.id ||
+           s.lecturerUserId===u.username ||
+           s.lecturerUserId===u._fbKey)
+        ).map(s=>s.name).join('، ') || '—'
+      : 'جميع المقررات';
     return `<tr><td class="mono">${i+1}</td><td><strong>${u.name}</strong></td>
       <td class="mono" style="color:var(--primary)">${u.username}</td>
       <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${roleNames[u.role]||u.role}</span></td>
@@ -2838,6 +2849,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 
 
