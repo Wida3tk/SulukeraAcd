@@ -269,6 +269,8 @@ tr:hover td{background:#f8faff;}
 
 
 
+
+
 <!-- LOADER -->
 <div class="loader" id="loader"><div class="spin"></div><p>جاري التحميل...</p></div>
 <div class="toast" id="toast"></div>
@@ -344,7 +346,11 @@ tr:hover td{background:#f8faff;}
 
 
 
+
+
 <script>
+
+
 
 
 
@@ -390,8 +396,13 @@ function toast(msg){
 function calcTotal(g){
   if(!g) return 0;
   let t=0;
-  ['w1','w2','w3','w4'].forEach(w=>t+=(g[w+'_attend']||0)+(g[w+'_hw']||0)+(g[w+'_disc']||0));
-  return Math.round(t+(g.exam||0));
+  ['w1','w2','w3','w4'].forEach(w=>{
+    const attend = g[w]?.attend ?? g[w+'_attend'] ?? 0;
+    const hw     = g[w]?.hw     ?? g[w+'_hw']     ?? 0;
+    const disc   = g[w]?.disc   ?? g[w+'_disc']   ?? 0;
+    t += attend + hw + disc;
+  });
+  return Math.round(t + (g.exam||0));
 }
 function getGrade(t){
   return t>=settings.gradeA?'A':t>=settings.gradeB?'B':t>=settings.gradeC?'C':'F';
@@ -517,7 +528,12 @@ function showStudentView(){
   document.getElementById('topbarRole').className = 'user-role role-student';
 
   // Get student's subjects via enrollments
-  const mySubjects = getStudentSubjects(currentUser.fbKey);
+  // فقط مقررات الفصل النشط (إذا وجد)
+  const allMySubjects = getStudentSubjects(currentUser.fbKey);
+  const activeSem = dbData.activeSemesterKey ? dbData.semesters?.[dbData.activeSemesterKey] : null;
+  const mySubjects = activeSem
+    ? allMySubjects.filter(s=>(activeSem.subjects||[]).includes(s.key))
+    : allMySubjects;
   const totals = mySubjects.map(s=>{
     const g = getGrade_data(currentUser.fbKey, s.key);
     return g ? calcTotal(g) : 0;
@@ -618,12 +634,19 @@ function getStudentSubjects(studentFbKey){
 
 function getGrade_data(studentFbKey, subjectFbKey){
   if(!dbData.grades) return null;
-  // أولاً: ابحث بالمفتاح المحسوب المباشر (الأسرع والأدق)
+  const semKey = dbData.activeSemesterKey||null;
+  // ابحث بالمفتاح المباشر مع الفصل أولاً
+  if(semKey){
+    const keyWithSem = ('grade_'+studentFbKey+'_'+subjectFbKey+'_'+semKey).replace(/[.#$[\]]/g,'_');
+    if(dbData.grades[keyWithSem]) return dbData.grades[keyWithSem];
+  }
+  // ثم بدون الفصل
   const directKey = ('grade_'+studentFbKey+'_'+subjectFbKey).replace(/[.#$[\]]/g,'_');
   if(dbData.grades[directKey]) return dbData.grades[directKey];
-  // ثانياً: ابحث في كل القيم
+  // أخيراً: ابحث في كل القيم
   return Object.values(dbData.grades).find(g=>
-    g.studentKey===studentFbKey && g.subjectKey===subjectFbKey
+    g.studentKey===studentFbKey && g.subjectKey===subjectFbKey &&
+    (!semKey || !g.semesterKey || g.semesterKey===semKey)
   ) || null;
 }
 
@@ -654,17 +677,14 @@ function showLecturerView(){
 function getLecturerSubjects(){
   if(!dbData.subjects) return [];
   const u = currentUser.data;
-  // تحقق من كل المعرّفات الممكنة
-  const myIds = new Set([
-    currentUser.fbKey,
-    u.username,
-    u.id,
-    u._fbKey,
-  ].filter(Boolean));
-
-  return Object.entries(dbData.subjects)
+  const myIds = new Set([currentUser.fbKey, u.username, u.id, u._fbKey].filter(Boolean));
+  const allMySubjs = Object.entries(dbData.subjects)
     .filter(([k,s])=> s.lecturerUserId && myIds.has(s.lecturerUserId))
     .map(([k,s])=>({key:k,...s}));
+  // فلتر بمقررات الفصل النشط فقط
+  const activeSem = dbData.activeSemesterKey ? dbData.semesters?.[dbData.activeSemesterKey] : null;
+  if(!activeSem) return allMySubjs;
+  return allMySubjs.filter(s=>(activeSem.subjects||[]).includes(s.key));
 }
 
 function getSubjectStudents(subjectFbKey){
@@ -916,6 +936,21 @@ function switchAppTab(tab, btn){
   }
 }
 
+
+function to12h(time24){
+  if(!time24) return '';
+  const [h,m] = time24.split(':').map(Number);
+  const suffix = h>=12 ? 'م' : 'ص';
+  const h12 = h%12 || 12;
+  return `${h12}:${String(m).padStart(2,'0')} ${suffix}`;
+}
+
+function getSaudiTime(){
+  return new Date().toLocaleTimeString('ar-SA', {
+    timeZone:'Asia/Riyadh', hour:'2-digit', minute:'2-digit', hour12:true
+  });
+}
+
 function renderScheduleView(){
   const el = document.getElementById('scheduleContent');
   const schedule = dbData.schedule || {};
@@ -946,46 +981,74 @@ function switchSchTab(tab, btn){
 
 function renderWeeklySchedule(weekly){
   const slots = Object.values(weekly).sort((a,b)=>a.timeStart?.localeCompare(b.timeStart));
-
   if(!slots.length) return '<div class="empty">📅 لم يتم إضافة جدول أسبوعي بعد</div>';
 
-  // Get unique time slots
-  const times = [...new Set(slots.map(s=>s.timeStart+'-'+s.timeEnd))].sort();
+  // الوقت الحالي بتوقيت السعودية
+  const nowSA = new Date().toLocaleString('en-US',{timeZone:'Asia/Riyadh'});
+  const nowDate = new Date(nowSA);
+  const nowH = nowDate.getHours();
+  const nowM = nowDate.getMinutes();
+  const nowMins = nowH*60+nowM;
 
-  let html = `<div style="overflow-x:auto;margin-bottom:1.2rem;">
-    <div class="schedule-grid" style="grid-template-columns:90px repeat(5,1fr);">
-      <div class="sch-header">الوقت</div>
-      ${DAYS.map(d=>`<div class="sch-header">${d}</div>`).join('')}
+  // ترتيب الأوقات الفريدة
+  const times = [...new Set(slots.map(s=>s.timeStart+'-'+s.timeEnd))]
+    .sort((a,b)=>a.localeCompare(b));
+
+  let html = `
+  <div style="margin-bottom:8px;font-size:11px;color:var(--muted);text-align:left">
+    🕐 التوقيت: ${new Date().toLocaleTimeString('ar-SA',{timeZone:'Asia/Riyadh',hour:'2-digit',minute:'2-digit',hour12:true})} (توقيت الرياض)
+  </div>
+  <div style="overflow-x:auto;margin-bottom:1rem;">
+  <table style="width:100%;border-collapse:collapse;min-width:600px;">
+    <thead>
+      <tr>
+        <th style="background:var(--dark);color:white;padding:10px 12px;text-align:center;font-size:12px;min-width:110px;border-radius:0 6px 0 0">الوقت</th>
+        ${DAYS.map(d=>`<th style="background:var(--dark);color:white;padding:10px 8px;text-align:center;font-size:12px;">${d}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
       ${times.map(time=>{
         const [start,end] = time.split('-');
-        return `<div class="sch-time">${start}<br><span style="color:var(--light)">${end}</span></div>
+        const [sh,sm] = start.split(':').map(Number);
+        const [eh,em] = end.split(':').map(Number);
+        const startMins = sh*60+sm;
+        const endMins = eh*60+em;
+        const isCurrent = nowMins>=startMins && nowMins<endMins;
+        const rowBg = isCurrent ? 'rgba(13,64,252,0.04)' : 'white';
+        return `<tr style="background:${rowBg};">
+          <td style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);border-left:1px solid var(--border);${isCurrent?'border-left:3px solid var(--primary);':''}">
+            <div style="font-size:13px;font-weight:700;color:${isCurrent?'var(--primary)':'var(--text)'}">${to12h(start)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${to12h(end)}</div>
+            ${isCurrent?'<div style="font-size:9px;color:var(--primary);font-weight:700;margin-top:2px">● الآن</div>':''}
+          </td>
           ${DAYS.map(day=>{
             const slot = slots.find(s=>s.day===day && s.timeStart===start && s.timeEnd===end);
-            return `<div class="sch-cell">${slot?`
-              <div class="sch-slot" style="background:${slot.color||'var(--primary)'}">
-                <div class="sch-slot-name">${slot.subject||''}</div>
-                <div class="sch-slot-sub">${slot.lecturer||''}</div>
-                ${slot.room?`<div class="sch-slot-sub">🏠 ${slot.room}</div>`:''}
-              </div>`:''}
-            </div>`;
-          }).join('')}`;
+            return `<td style="padding:5px;border-bottom:1px solid var(--border);border-left:1px solid var(--border);vertical-align:top;">
+              ${slot ? `<div style="background:${slot.color||'var(--primary)'};color:white;border-radius:8px;padding:8px 10px;height:100%;">
+                <div style="font-size:12px;font-weight:700;line-height:1.3">${slot.subject||''}</div>
+                ${slot.lecturer?`<div style="font-size:10px;opacity:0.85;margin-top:3px">👤 ${slot.lecturer}</div>`:''}
+                ${slot.room?`<div style="font-size:10px;opacity:0.85;margin-top:2px">🏠 ${slot.room}</div>`:''}
+              </div>` : ''}
+            </td>`;
+          }).join('')}
+        </tr>`;
       }).join('')}
-    </div>
+    </tbody>
+  </table>
   </div>`;
 
   // Legend
-  const subjects = [...new Set(slots.map(s=>s.subject).filter(Boolean))];
-  if(subjects.length){
-    html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.5rem;">
-      ${subjects.map((s,i)=>{
+  const subjNames = [...new Set(slots.map(s=>s.subject).filter(Boolean))];
+  if(subjNames.length){
+    html += `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:8px 0">
+      ${subjNames.map(s=>{
         const color = slots.find(sl=>sl.subject===s)?.color||'var(--primary)';
         return `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);">
-          <span style="width:12px;height:12px;border-radius:3px;background:${color};display:inline-block;"></span>${s}
+          <span style="width:12px;height:12px;border-radius:3px;background:${color};display:inline-block;flex-shrink:0"></span>${s}
         </span>`;
       }).join('')}
     </div>`;
   }
-
   return html;
 }
 
@@ -1022,6 +1085,8 @@ function renderProgramSchedule(units){
 //  INIT
 // ══════════════════════════════════════════════
 window.addEventListener('load', initFB);
+
+
 
 
 
