@@ -272,6 +272,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOADER -->
 <div class="loader" id="loader"><div class="spin"></div><p>جاري التحميل...</p></div>
 <div class="toast" id="toast"></div>
@@ -350,7 +351,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -385,6 +388,7 @@ let currentUser = null;
 let dbData = {};  // cached Firebase root
 let currentWeek = 1;
 let currentSubjectKey = null;
+let currentBatchName = null;
 
 const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:60 };
 
@@ -714,51 +718,128 @@ function renderLecDashboard(){
 
   if(!mySubjects.length){
     document.getElementById('mainContent').innerHTML=`
-      <div class="card"><div class="empty">📚 لا توجد مواد مرتبطة بحسابك بعد<br><small style="color:var(--muted)">يقوم المدير بتعيين المواد لك</small></div></div>`;
+      <div class="card"><div class="empty">📚 لا توجد مقررات مرتبطة بحسابك في الفصل الحالي<br>
+      <small style="color:var(--muted)">يقوم المدير بتعيين المقررات لك وتفعيل الفصل</small></div></div>`;
     return;
   }
 
-  // Stats
+  // ── احسب الدفعات من طلاب كل مادة ──────────────────────────
+  const batchMap = {}; // { batchName: [subj, subj, ...] }
+  mySubjects.forEach(subj=>{
+    const students = getSubjectStudents(subj.key);
+    const batches = [...new Set(students.map(s=>s.batch).filter(Boolean))];
+    if(!batches.length){
+      // مادة بدون دفعات — ضعها في "عامة"
+      if(!batchMap['عامة']) batchMap['عامة']=[];
+      if(!batchMap['عامة'].find(s=>s.key===subj.key)) batchMap['عامة'].push(subj);
+    } else {
+      batches.forEach(b=>{
+        if(!batchMap[b]) batchMap[b]=[];
+        if(!batchMap[b].find(s=>s.key===subj.key)) batchMap[b].push(subj);
+      });
+    }
+  });
+
+  const batchNames = Object.keys(batchMap).sort();
+  const firstBatch = batchNames[0];
+
+  // ── إحصائيات عامة ──────────────────────────────────────────
   const allStudents = new Set();
   let totalRows=0, passRows=0;
   mySubjects.forEach(subj=>{
-    const stds=getSubjectStudents(subj.key);
-    stds.forEach(st=>{
+    getSubjectStudents(subj.key).forEach(st=>{
       allStudents.add(st.fbKey);
       const g=getGrade_data(st.fbKey,subj.key);
       const tot=g?calcTotal(g):0;
-      totalRows++; if(tot>=settings.gradeFail&&tot>0) passRows++;
+      totalRows++;
+      if(tot>0&&tot>=settings.gradeFail) passRows++;
     });
   });
 
   let html=`
     <div class="stat-row">
-      <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📖 موادي</div></div>
+      <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📖 مقرراتي</div></div>
       <div class="stat-box"><div class="stat-val">${allStudents.size}</div><div class="stat-lbl">👩‍🎓 طلابي</div></div>
-      <div class="stat-box"><div class="stat-val" style="color:var(--success)">${totalRows>0?Math.round(passRows/totalRows*100):0}%</div><div class="stat-lbl">✓ نسبة النجاح</div></div>
+      <div class="stat-box"><div class="stat-val">${batchNames.length}</div><div class="stat-lbl">👥 الدفعات</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:var(--success)">${totalRows>0&&passRows>0?Math.round(passRows/totalRows*100):0}%</div><div class="stat-lbl">✓ نسبة النجاح</div></div>
     </div>
-    <div class="lec-tabs" id="lecSubjTabs">`;
 
-  mySubjects.forEach((subj,i)=>{
-    html+=`<button class="lec-tab ${i===0?'active':''}" onclick="selectLecSubject('${subj.key}',this)">${subj.name}</button>`;
-  });
-  html+=`</div><div id="lecSubjContent"></div>`;
+    <!-- اختيار الدفعة -->
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-title">👥 اختر الدفعة</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;" id="batchTabs">
+        ${batchNames.map((b,i)=>`
+          <button class="lec-tab ${i===0?'active':''}"
+            onclick="selectBatch('${b}',this)">${b}
+            <span style="font-size:10px;opacity:0.7;margin-right:4px">(${batchMap[b].length} مقرر)</span>
+          </button>`).join('')}
+      </div>
+    </div>
 
-  document.getElementById('mainContent').innerHTML=html;
-  if(mySubjects.length) selectLecSubject(mySubjects[0].key, document.querySelector('.lec-tab'));
+    <!-- تبويبات المقررات -->
+    <div id="batchSubjectsArea"></div>`;
+
+  document.getElementById('mainContent').innerHTML = html;
+
+  // خزّن batchMap في window للوصول لاحقاً
+  window._lecBatchMap = batchMap;
+
+  // اعرض أول دفعة تلقائياً
+  if(firstBatch) selectBatch(firstBatch, document.querySelector('#batchTabs .lec-tab'));
 }
 
-function selectLecSubject(subjectKey, btn){
+function selectBatch(batchName, btn){
+  document.querySelectorAll('#batchTabs .lec-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+
+  const batchSubjects = window._lecBatchMap?.[batchName]||[];
+  const area = document.getElementById('batchSubjectsArea');
+  if(!area) return;
+
+  if(!batchSubjects.length){
+    area.innerHTML='<div class="empty">لا توجد مقررات لهذه الدفعة</div>';
+    return;
+  }
+
+  let html=`
+    <div class="card" style="margin-bottom:0.8rem;">
+      <div class="card-title">📖 مقررات دفعة ${batchName}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="lecSubjTabs">
+        ${batchSubjects.map((subj,i)=>`
+          <button class="lec-tab ${i===0?'active':''}"
+            onclick="selectLecSubject('${subj.key}','${batchName}',this)">${subj.name}
+          </button>`).join('')}
+      </div>
+    </div>
+    <div id="lecSubjContent"></div>`;
+
+  area.innerHTML = html;
+
+  // اعرض أول مقرر تلقائياً
+  if(batchSubjects.length){
+    const firstBtn = area.querySelector('#lecSubjTabs .lec-tab');
+    selectLecSubject(batchSubjects[0].key, batchName, firstBtn);
+  }
+}
+
+
+function selectLecSubject(subjectKey, batchName, btn){
   currentSubjectKey=subjectKey;
-  document.querySelectorAll('.lec-tab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  renderGradeInput(subjectKey);
+  currentBatchName=batchName||null;
+  // فقط أزل active من تبويبات المقررات (ليس تبويبات الدفعات)
+  document.querySelectorAll('#lecSubjTabs .lec-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderGradeInput(subjectKey, batchName);
 }
 
-function renderGradeInput(subjectKey){
+function renderGradeInput(subjectKey, batchName){
   const subj = dbData.subjects?.[subjectKey];
   if(!subj) return;
-  const students = getSubjectStudents(subjectKey);
+  // فلتر الطلاب حسب الدفعة المختارة
+  const allStudents = getSubjectStudents(subjectKey);
+  const students = batchName
+    ? allStudents.filter(s=>s.batch===batchName)
+    : allStudents;
   const wkMax = settings.attend+settings.hw+settings.disc;
 
   let html=`
@@ -797,7 +878,10 @@ function selectWeek(w,btn){
 
 function renderWeekTable(w){
   const subj=dbData.subjects?.[currentSubjectKey]; if(!subj) return;
-  const students=getSubjectStudents(currentSubjectKey);
+  const _allStudents=getSubjectStudents(currentSubjectKey);
+  const students = currentBatchName
+    ? _allStudents.filter(s=>s.batch===currentBatchName)
+    : _allStudents;
   const isExam=w===0;
   const wkMax=settings.attend+settings.hw+settings.disc;
 
@@ -868,7 +952,8 @@ function buildSummaryHTML(subjectKey, students){
 function renderSummaryTable(subjectKey){
   const el = document.getElementById('summaryTable_'+subjectKey);
   if(!el) return;
-  const students = getSubjectStudents(subjectKey);
+  const all = getSubjectStudents(subjectKey);
+  const students = currentBatchName ? all.filter(s=>s.batch===currentBatchName) : all;
   el.innerHTML = buildSummaryHTML(subjectKey, students);
 }
 
@@ -1095,6 +1180,7 @@ function renderProgramSchedule(units){
 //  INIT
 // ══════════════════════════════════════════════
 window.addEventListener('load', initFB);
+
 
 
 
