@@ -191,6 +191,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -379,6 +380,46 @@ tr:hover td{background:#f8faff;}
             <div id="packagesList"></div>
           </div>
         </div>
+      </div>
+
+      <!-- SEMESTERS -->
+      <div class="page" id="page-semesters">
+        <div class="card card-accent">
+          <div class="card-title">🗓️ إضافة فصل دراسي جديد</div>
+          <div class="alert alert-info">أنشئ فصلاً، حدد مقرراته ودفعاته، ثم فعّله ليصبح الفصل الحالي</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+            <div class="form-group" style="margin:0">
+              <label>اسم الفصل *</label>
+              <input type="text" id="semName" placeholder="مثال: الفصل الأول 2026">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="form-group" style="margin:0">
+                <label>تاريخ البداية</label>
+                <input type="date" id="semStart">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>تاريخ النهاية</label>
+                <input type="date" id="semEnd">
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+            <div class="form-group" style="margin:0">
+              <label>المقررات النشطة في هذا الفصل <span style="font-size:10px;color:var(--muted)">(Ctrl+Click لتعدد)</span></label>
+              <select id="semSubjects" multiple style="height:130px;width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;"></select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label>الدفعات المشمولة <span style="font-size:10px;color:var(--muted)">(Ctrl+Click لتعدد)</span></label>
+              <select id="semBatches" multiple style="height:130px;width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;"></select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="addSemester()">+ إضافة فصل</button>
+        </div>
+        <div class="card card-accent">
+          <div class="card-title">📋 الفصول الدراسية</div>
+          <div id="semestersList"></div>
+        </div>
+        <div id="semestersContent"></div>
       </div>
 
       <!-- ALERTS -->
@@ -637,7 +678,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -993,8 +1036,43 @@ let gradeReportStdIdx=-1;
 //  HELPERS
 // ══════════════════════════════════════════════
 function getStudentFullName(st){if(!st)return'—';return[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ');}
-function calcTotal(g){if(!g)return 0;let t=0;['w1','w2','w3','w4'].forEach(w=>t+=(g[w].attend||0)+(g[w].hw||0)+(g[w].disc||0));return Math.round(t+(g.exam||0));}
+function calcTotal(g){
+  if(!g) return 0;
+  let t=0;
+  ['w1','w2','w3','w4'].forEach(w=>{
+    // support both formats: g[w].attend OR g[w+'_attend']
+    const attend = g[w]?.attend ?? g[w+'_attend'] ?? 0;
+    const hw     = g[w]?.hw     ?? g[w+'_hw']     ?? 0;
+    const disc   = g[w]?.disc   ?? g[w+'_disc']   ?? 0;
+    t += attend + hw + disc;
+  });
+  return Math.round(t + (g.exam||0));
+}
 function getGrade(t){return t>=settings.gradeA?'A':t>=settings.gradeB?'B':t>=settings.gradeC?'C':'F';}
+
+// يعيد فقط المقررات النشطة في الفصل الحالي للطالب
+function getActiveSubjectsForStudent(stdIdx){
+  if(!activeSemesterKey || !semestersData[activeSemesterKey]) {
+    // لا يوجد فصل نشط — اعرض كل المقررات المسجل فيها
+    return subjects.filter(s=>s.students.includes(stdIdx));
+  }
+  const sem = semestersData[activeSemesterKey];
+  const semSubjectKeys = sem.subjects||[];
+  return subjects.filter(s=>
+    s.students.includes(stdIdx) &&
+    semSubjectKeys.includes(s._fbKey)
+  );
+}
+
+// يعيد درجات طالب في مقرر مع فصل معين
+function getGradeForSemester(si, stdIdx, semKey){
+  // ابحث بمفتاح الفصل أولاً ثم بدونه
+  if(!grades[si]) return null;
+  const g = grades[si][stdIdx];
+  if(!g) return null;
+  if(semKey && g.semesterKey && g.semesterKey!==semKey) return null;
+  return g;
+}
 function getStatus(t){return t>=settings.gradeFail?'ناجح':'راسب';}
 function pc(t){return t>=70?'high':t>=50?'mid':'low';}
 function getLecturerName(id){return users.find(u=>u.id===id)?.name||'—';}
@@ -1112,6 +1190,7 @@ const navConfig = {
     {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
     {id:'reports',icon:'📋',label:'التقارير'},
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
+    {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
     {id:'alerts',icon:'🔔',label:'التنبيهات'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'},
@@ -1135,7 +1214,7 @@ function renderNav() {
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
-  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي',
+  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', semesters:'الفصول الدراسية',
   settings:'الإعدادات',mygrades:'بياناتي ودرجاتي'
 };
 function navTo(pageId, el) {
@@ -1175,6 +1254,7 @@ function refreshPage(p) {
   if (p==='cards') { buildCardsTabs(); renderCards('all'); }
   if (p==='programs') { renderProgramsPanel(); loadPackagesFromFirebase().then(renderPackagesList); }
   if (p==='schedule') renderScheduleAdmin();
+  if (p==='semesters') renderSemestersPage();
   if (p==='alerts') renderAlertsPage();
 }
 
@@ -1331,7 +1411,7 @@ function updateSubjectsForPackage() {
 // ══════════════════════════════════════════════
 function renderStudentsTable() {
   document.getElementById('studentsTableBody').innerHTML=students.map((st,idx)=>{
-    const mySubjs=subjects.filter(s=>s.students.includes(idx));
+    const mySubjs=getActiveSubjectsForStudent(idx);
     const tots=mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
     const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
     const hasFail=tots.some(t=>t<settings.gradeFail&&t>0);
@@ -2510,10 +2590,175 @@ async function deleteUnit(key){
   showToast('✅ تم الحذف');
 }
 
+
+// ══════════════════════════════════════════════
+//  📅 SEMESTER MANAGEMENT
+// ══════════════════════════════════════════════
+
+async function renderSemestersPage(){
+  const el = document.getElementById('semestersContent');
+  if(!el) return;
+  // Reload from Firebase
+  const snap = await fbRef('semesters').get();
+  semestersData = snap.exists() ? snap.val() : {};
+  activeSemesterKey = Object.entries(semestersData).find(([,s])=>s.status==='active')?.[0]||null;
+  renderSemestersList();
+  populateSemesterSubjectSelect();
+  populateSemesterBatchSelect();
+}
+
+function renderSemestersList(){
+  const el = document.getElementById('semestersList');
+  if(!el) return;
+  const list = Object.entries(semestersData).sort(([,a],[,b])=>b.startDate?.localeCompare(a.startDate));
+  if(!list.length){ el.innerHTML='<div class="alert alert-warn">لا توجد فصول دراسية — أضف فصلاً جديداً</div>'; return; }
+
+  el.innerHTML = list.map(([key,sem])=>{
+    const isActive = sem.status==='active';
+    const subjectNames = (sem.subjects||[]).map(sk=>subjects.find(s=>s._fbKey===sk)?.name||sk).filter(Boolean);
+    const batchNames = sem.batches||[];
+    return `<div style="background:white;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.3rem;margin-bottom:0.8rem;border-right:4px solid ${isActive?'var(--success)':'var(--border)'};box-shadow:var(--shadow);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:var(--text)">${sem.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">
+            📅 ${sem.startDate||'—'} → ${sem.endDate||'—'}
+          </div>
+          <div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">
+            <span style="font-size:11px;padding:2px 8px;background:${isActive?'var(--success-light)':'var(--bg)'};color:${isActive?'var(--success)':'var(--muted)'};border-radius:99px;font-weight:700;">
+              ${isActive?'● نشط':'○ منتهي'}
+            </span>
+            ${batchNames.map(b=>`<span class="badge badge-student">${b}</span>`).join('')}
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:var(--muted)">
+            📖 ${subjectNames.length} مقرر: ${subjectNames.slice(0,3).join('، ')}${subjectNames.length>3?` +${subjectNames.length-3}`:'' }
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          ${!isActive?`<button class="btn btn-success btn-sm" onclick="activateSemester('${key}')">✓ تفعيل</button>`:''}
+          ${isActive?`<button class="btn btn-sm" onclick="deactivateSemester('${key}')">◉ إنهاء الفصل</button>`:''}
+          <button class="btn btn-primary btn-sm" onclick="enrollSemesterStudents('${key}')">👥 تسجيل الطلاب</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSemester('${key}')">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function populateSemesterSubjectSelect(){
+  const el = document.getElementById('semSubjects');
+  if(!el) return;
+  el.innerHTML = subjects.map(s=>`<option value="${s._fbKey}">${s.name}</option>`).join('');
+}
+
+function populateSemesterBatchSelect(){
+  const el = document.getElementById('semBatches');
+  if(!el) return;
+  // Get unique batches from students
+  const batches = [...new Set(students.map(s=>s.batch).filter(Boolean))];
+  el.innerHTML = batches.map(b=>`<option value="${b}">${b}</option>`).join('');
+}
+
+async function addSemester(){
+  const name = document.getElementById('semName').value.trim();
+  const start = document.getElementById('semStart').value;
+  const end = document.getElementById('semEnd').value;
+  const selSubjects = Array.from(document.getElementById('semSubjects').selectedOptions).map(o=>o.value);
+  const selBatches = Array.from(document.getElementById('semBatches').selectedOptions).map(o=>o.value);
+
+  if(!name) return showToast('⚠️ أدخل اسم الفصل');
+  if(!selSubjects.length) return showToast('⚠️ اختر مقرراً واحداً على الأقل');
+  if(!selBatches.length) return showToast('⚠️ اختر دفعة واحدة على الأقل');
+
+  const key = 'sem_'+Date.now();
+  const sem = {name, startDate:start, endDate:end, subjects:selSubjects, batches:selBatches, status:'inactive'};
+  await fbRef('semesters/'+key).set(sem);
+  semestersData[key] = sem;
+
+  // Reset form
+  document.getElementById('semName').value='';
+  document.getElementById('semStart').value='';
+  document.getElementById('semEnd').value='';
+  renderSemestersList();
+  showToast('✅ تم إضافة الفصل');
+}
+
+async function activateSemester(key){
+  if(!confirm('تفعيل هذا الفصل؟ سيصبح الفصل الحالي النشط.')) return;
+  // Deactivate all others
+  const updates={};
+  Object.keys(semestersData).forEach(k=>{
+    updates['semesters/'+k+'/status'] = k===key ? 'active' : 'inactive';
+    semestersData[k].status = k===key ? 'active' : 'inactive';
+  });
+  await firebase.database().ref('/').update(updates);
+  activeSemesterKey = key;
+  renderSemestersList();
+  showToast('✅ تم تفعيل الفصل');
+}
+
+async function deactivateSemester(key){
+  if(!confirm('إنهاء هذا الفصل؟')) return;
+  await fbRef('semesters/'+key+'/status').set('inactive');
+  semestersData[key].status='inactive';
+  activeSemesterKey=null;
+  renderSemestersList();
+  showToast('✅ تم إنهاء الفصل');
+}
+
+async function deleteSemester(key){
+  if(!confirm('حذف هذا الفصل؟ لن تُحذف الدرجات.')) return;
+  await fbRef('semesters/'+key).remove();
+  delete semestersData[key];
+  if(activeSemesterKey===key) activeSemesterKey=null;
+  renderSemestersList();
+  showToast('✅ تم الحذف');
+}
+
+async function enrollSemesterStudents(key){
+  const sem = semestersData[key];
+  if(!sem) return;
+  const semBatches = sem.batches||[];
+  const semSubjectKeys = sem.subjects||[];
+
+  // Find all students in the selected batches
+  const targetStudents = students.filter(st=>semBatches.includes(st.batch));
+  if(!targetStudents.length) return showToast('⚠️ لا يوجد طلاب في الدفعات المختارة');
+
+  let enrolled=0;
+  const updates={};
+
+  targetStudents.forEach(st=>{
+    const stdIdx = students.indexOf(st);
+    semSubjectKeys.forEach(subjKey=>{
+      const si = subjects.findIndex(s=>s._fbKey===subjKey);
+      if(si<0) return;
+      // Add student to subject if not already
+      if(!subjects[si].students.includes(stdIdx)){
+        subjects[si].students.push(stdIdx);
+        enrolled++;
+      }
+      // Save enrollment
+      if(st._fbKey){
+        const enrKey=('enr_'+st._fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
+        updates['enrollments/'+enrKey]={studentKey:st._fbKey, subjectKey:subjKey};
+      }
+    });
+  });
+
+  if(Object.keys(updates).length>0)
+    await firebase.database().ref('/').update(updates);
+
+  renderSemestersList();
+  showToast('✅ تم تسجيل '+targetStudents.length+' طالب في '+semSubjectKeys.length+' مقرر');
+}
+
 // ══════════════════════════════════════════════
 //  📦 PACKAGES DATA & MANAGEMENT
 // ══════════════════════════════════════════════
 let packagesData = [];
+let semestersData = {};   // {key: {name,startDate,endDate,batches,subjects,status}}
+let activeSemesterKey = null; // الفصل النشط حالياً
 
 async function loadPackagesFromFirebase(){
   try{
@@ -2871,6 +3116,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 
 
