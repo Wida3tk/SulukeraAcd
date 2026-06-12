@@ -273,6 +273,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOADER -->
 <div class="loader" id="loader"><div class="spin"></div><p>جاري التحميل...</p></div>
 <div class="toast" id="toast"></div>
@@ -352,7 +353,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -691,12 +694,39 @@ function showLecturerView(){
 function getLecturerSubjects(){
   if(!dbData.subjects) return [];
   const u = currentUser.data;
-  const myIds = new Set([currentUser.fbKey, u.username, u.id, u._fbKey].filter(Boolean));
+  // جمع كل المعرّفات الممكنة للمحاضر
+  const myIds = new Set([
+    currentUser.fbKey,
+    u.username,
+    u.id,
+    u._fbKey,
+    // أحياناً Firebase key = username مباشرة
+    u.username?.toLowerCase(),
+  ].filter(Boolean));
+
+  // DEBUG: طباعة في Console لمساعدة التشخيص
+  console.log('🔍 Lecturer IDs:', [...myIds]);
+  console.log('📚 All subjects lecturerUserIds:', 
+    Object.values(dbData.subjects||{}).map(s=>s.lecturerUserId));
+
   const allMySubjs = Object.entries(dbData.subjects)
-    .filter(([k,s])=> s.lecturerUserId && myIds.has(s.lecturerUserId))
+    .filter(([k,s])=> {
+      if(!s.lecturerUserId) return false;
+      // تحقق من التطابق بكل الأشكال
+      return myIds.has(s.lecturerUserId) || 
+             myIds.has(s.lecturerUserId?.toLowerCase());
+    })
     .map(([k,s])=>({key:k,...s}));
+
+  console.log('✅ My subjects:', allMySubjs.map(s=>s.name));
+
   // فلتر بمقررات الفصل النشط فقط
-  const activeSem = dbData.activeSemesterKey ? dbData.semesters?.[dbData.activeSemesterKey] : null;
+  let activeSemKey = dbData.activeSemesterKey;
+  if(!activeSemKey && dbData.semesters){
+    activeSemKey = Object.entries(dbData.semesters)
+      .find(([,s])=>s.status==='active')?.[0]||null;
+  }
+  const activeSem = activeSemKey ? dbData.semesters?.[activeSemKey] : null;
   if(!activeSem) return allMySubjs;
   return allMySubjs.filter(s=>(activeSem.subjects||[]).includes(s.key));
 }
@@ -1180,6 +1210,7 @@ function renderProgramSchedule(units){
 //  INIT
 // ══════════════════════════════════════════════
 window.addEventListener('load', initFB);
+
 
 
 
