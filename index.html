@@ -193,6 +193,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -681,7 +682,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -892,9 +895,10 @@ async function loadAllFromFirebase(){
 // حفظ طالب
 async function saveStudentToFirebase(stdIdx, passw){
   const st = students[stdIdx];
-  // Use student_code as deterministic Firebase key (prevents duplicates)
-  const fbKey = 'std_' + st.id.replace(/[^a-zA-Z0-9]/g, '_');
-  st._fbKey = fbKey; // Always same key for same student
+  // مفتاح ثابت دائماً بناءً على الرقم الطلابي — يمنع التكرار تماماً
+  const fbKey = 'std_' + (st.id||'').replace(/[^a-zA-Z0-9]/g, '_');
+  if(!fbKey || fbKey === 'std_') { console.error('Invalid student ID'); return; }
+  st._fbKey = fbKey;
 
   const stdData = {
     firstName:st.firstName||'', midName:st.midName||'', lastName:st.lastName||'',
@@ -1173,6 +1177,8 @@ async function _finishLogin() {
   }
   renderNav();
   navTo(currentUser.role==='student'?'mygrades':'dashboard', null);
+  // تنظيف تلقائي للسجلات المكررة (صامت)
+  if(currentUser.role==='admin') cleanDuplicateStudents();
 }
 function doLogout() {
   currentUser=null;
@@ -2610,7 +2616,7 @@ async function renderSemestersPage(){
   activeSemesterKey = Object.entries(semestersData).find(([,s])=>s.status==='active')?.[0]||null;
   renderSemestersList();
   populateSemesterSubjectSelect();
-  populateSemesterBatchSelect();
+  await populateSemesterBatchSelect();
 }
 
 function renderSemestersList(){
@@ -2657,12 +2663,24 @@ function populateSemesterSubjectSelect(){
   el.innerHTML = subjects.map(s=>`<option value="${s._fbKey}">${s.name}</option>`).join('');
 }
 
-function populateSemesterBatchSelect(){
+async function populateSemesterBatchSelect(){
   const el = document.getElementById('semBatches');
   if(!el) return;
-  // Get unique batches from students
-  const batches = [...new Set(students.map(s=>s.batch).filter(Boolean))];
-  el.innerHTML = batches.map(b=>`<option value="${b}">${b}</option>`).join('');
+  // اقرأ الدفعات من Firebase مباشرة لضمان الدقة
+  let batches = [...new Set(students.map(s=>s.batch).filter(Boolean))];
+  if(!batches.length){
+    try{
+      const snap = await fbRef('students').get();
+      if(snap.exists()){
+        batches = [...new Set(Object.values(snap.val()).map(s=>s.batch).filter(Boolean))];
+      }
+    }catch(e){}
+  }
+  if(!batches.length){
+    el.innerHTML = '<option value="">لا توجد دفعات — أضف طلاباً أولاً</option>';
+    return;
+  }
+  el.innerHTML = batches.sort().map(b=>`<option value="${b}">${b}</option>`).join('');
 }
 
 async function addSemester(){
@@ -3101,24 +3119,42 @@ async function cleanDuplicateStudents(){
     const all = Object.entries(snap.val());
     const seen = {};
     const toDelete = {};
+    // الكيز الصحيحة تبدأ بـ std_ وتحتوي رقم الطالب
     all.forEach(([key, st])=>{
-      const id = st.student_code || st.id || key;
-      if(seen[id]){
-        // Keep first, delete rest
-        toDelete['students/'+key] = null;
-        // Also clean enrollments and grades for this key
+      const stdId = st.id || '';
+      const correctKey = 'std_' + stdId.replace(/[^a-zA-Z0-9]/g,'_');
+      if(!stdId){ toDelete['students/'+key]=null; return; }
+      if(seen[stdId]){
+        // احذف السجل الذي ليس له المفتاح الصحيح
+        if(key !== correctKey) toDelete['students/'+key]=null;
+        else { toDelete['students/'+seen[stdId]]=null; seen[stdId]=key; }
       } else {
-        seen[id] = key;
+        seen[stdId]=key;
+        // إذا المفتاح خاطئ، انقل البيانات للمفتاح الصحيح
+        if(key !== correctKey){
+          toDelete['students/'+correctKey]=st;
+          toDelete['students/'+key]=null;
+        }
       }
     });
-    if(Object.keys(toDelete).length > 0){
+    if(Object.keys(toDelete).length>0){
       await firebase.database().ref('/').update(toDelete);
-      console.log('Cleaned', Object.keys(toDelete).length, 'duplicate students');
       showToast('✅ تم تنظيف '+Object.keys(toDelete).length+' سجل مكرر');
+      await loadAllFromFirebase();
     }
   }catch(e){ console.error('Clean error:',e); }
 }
 
+
+
+
+
+
+
+
+
+
+
 </script>
-</b
+</body>
 </html>
