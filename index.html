@@ -192,6 +192,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -679,7 +680,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -1268,6 +1271,9 @@ function renderDashboard() {
   let rows=[];
   mySubjIdxs.forEach(si=>{
     subjects[si].students.forEach(stdIdx=>{
+      // تحقق إن هذا المقرر في الفصل النشط للطالب
+      const activeSubs = getActiveSubjectsForStudent(stdIdx);
+      if(!activeSubs.find(s=>s.idx===si)) return;
       const g=grades[si]?.[stdIdx]; const total=g?calcTotal(g):0;
       rows.push({student:getStudentFullName(students[stdIdx]),subject:subjects[si].name,total,gr:getGrade(total),st:getStatus(total)});
     });
@@ -2166,7 +2172,7 @@ function renderCards(program) {
   const colors={'إدارة السلوك التنظيمي':'#0D40FC','تحليل السلوك التطبيقي':'#1a7a3c','البرامج المباشرة':'#b35c00'};
   grid.innerHTML=filtered.map(st=>{
     const idx=st.idx;
-    const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(idx));
+    const mySubjs=getActiveSubjectsForStudent(idx);
     const tots=mySubjs.map(s=>grades[s.idx]?.[idx]?calcTotal(grades[s.idx][idx]):0);
     const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
     const hasFail=tots.some(t=>t<settings.gradeFail&&t>0);
@@ -2720,37 +2726,33 @@ async function enrollSemesterStudents(key){
   if(!sem) return;
   const semBatches = sem.batches||[];
   const semSubjectKeys = sem.subjects||[];
+  if(!semSubjectKeys.length) return showToast('⚠️ لا توجد مقررات في هذا الفصل');
 
-  // Find all students in the selected batches
-  const targetStudents = students.filter(st=>semBatches.includes(st.batch));
-  if(!targetStudents.length) return showToast('⚠️ لا يوجد طلاب في الدفعات المختارة');
+  // اقرأ الطلاب من Firebase مباشرة
+  const stdSnap = await fbRef('students').get();
+  if(!stdSnap.exists()) return showToast('⚠️ لا يوجد طلاب في النظام');
 
-  let enrolled=0;
+  const allDbStudents = Object.entries(stdSnap.val());
+  const targetDbStudents = allDbStudents.filter(([,st])=> semBatches.includes(st.batch));
+
+  if(!targetDbStudents.length){
+    const existing=[...new Set(allDbStudents.map(([,s])=>s.batch).filter(Boolean))];
+    return showToast('⚠️ لا طلاب في الدفعات: '+semBatches.join('، ')+
+      (existing.length?' | الموجودة: '+existing.join('، '):''));
+  }
+
   const updates={};
-
-  targetStudents.forEach(st=>{
-    const stdIdx = students.indexOf(st);
+  targetDbStudents.forEach(([fbKey])=>{
     semSubjectKeys.forEach(subjKey=>{
-      const si = subjects.findIndex(s=>s._fbKey===subjKey);
-      if(si<0) return;
-      // Add student to subject if not already
-      if(!subjects[si].students.includes(stdIdx)){
-        subjects[si].students.push(stdIdx);
-        enrolled++;
-      }
-      // Save enrollment
-      if(st._fbKey){
-        const enrKey=('enr_'+st._fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
-        updates['enrollments/'+enrKey]={studentKey:st._fbKey, subjectKey:subjKey};
-      }
+      const enrKey=('enr_'+fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
+      updates['enrollments/'+enrKey]={studentKey:fbKey, subjectKey:subjKey};
     });
   });
 
-  if(Object.keys(updates).length>0)
-    await firebase.database().ref('/').update(updates);
-
+  await firebase.database().ref('/').update(updates);
+  await loadAllFromFirebase();
   renderSemestersList();
-  showToast('✅ تم تسجيل '+targetStudents.length+' طالب في '+semSubjectKeys.length+' مقرر');
+  showToast('✅ تم تسجيل '+targetDbStudents.length+' طالب في '+semSubjectKeys.length+' مقرر');
 }
 
 // ══════════════════════════════════════════════
@@ -3117,14 +3119,6 @@ async function cleanDuplicateStudents(){
   }catch(e){ console.error('Clean error:',e); }
 }
 
-
-
-
-
-
-
-
-
 </script>
-</body>
+</b
 </html>
