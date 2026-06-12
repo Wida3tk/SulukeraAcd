@@ -271,6 +271,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOADER -->
 <div class="loader" id="loader"><div class="spin"></div><p>جاري التحميل...</p></div>
 <div class="toast" id="toast"></div>
@@ -348,7 +349,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -528,10 +531,15 @@ function showStudentView(){
   document.getElementById('topbarRole').className = 'user-role role-student';
 
   // Get student's subjects via enrollments
-  // فقط مقررات الفصل النشط (إذا وجد)
   const allMySubjects = getStudentSubjects(currentUser.fbKey);
-  const activeSem = dbData.activeSemesterKey ? dbData.semesters?.[dbData.activeSemesterKey] : null;
-  const mySubjects = activeSem
+  // ابحث عن الفصل النشط بكل الطرق الممكنة
+  let activeSemKey = dbData.activeSemesterKey;
+  if(!activeSemKey && dbData.semesters){
+    activeSemKey = Object.entries(dbData.semesters)
+      .find(([,s])=>s.status==='active')?.[0] || null;
+  }
+  const activeSem = activeSemKey ? dbData.semesters?.[activeSemKey] : null;
+  const mySubjects = (activeSem && (activeSem.subjects||[]).length)
     ? allMySubjects.filter(s=>(activeSem.subjects||[]).includes(s.key))
     : allMySubjects;
   const totals = mySubjects.map(s=>{
@@ -539,8 +547,10 @@ function showStudentView(){
     return g ? calcTotal(g) : 0;
   });
   const avg = totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
-  const hasFail = totals.some(t=>t>0&&t<settings.gradeFail);
-  const avgColor = avg>=settings.gradeA?'#55D7FF':avg>=settings.gradeFail?'#55D7FF':'#ff7070';
+  const hasFail = totals.some(t=>t>0 && t<settings.gradeFail);
+  const hasAnyGrades = totals.some(t=>t>0);
+  // اللون: أحمر فقط إذا فيه تعثر حقيقي
+  const avgColor = hasFail ? '#ff7070' : (hasAnyGrades ? '#55D7FF' : '#aabbcc');
 
   let html = `
     <div class="student-header">
@@ -550,7 +560,7 @@ function showStudentView(){
         <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:3px">${st.id} · ${st.program||'—'} · ${st.batch||'—'}</div>
         <div style="margin-top:6px">
           <span style="font-size:11px;padding:3px 10px;border-radius:99px;background:${hasFail?'rgba(192,57,43,0.3)':'rgba(26,122,60,0.3)'};color:${hasFail?'#ff8080':'#80ffb0'};font-weight:600">
-            ${hasFail?'⚠️ يوجد تعثر أكاديمي':'✓ وضع أكاديمي جيد'}
+            ${hasFail?'⚠️ يوجد تعثر أكاديمي':hasAnyGrades?'✓ وضع أكاديمي جيد':'📚 لم تبدأ الدرجات بعد'}
           </span>
         </div>
       </div>
@@ -1085,6 +1095,7 @@ function renderProgramSchedule(units){
 //  INIT
 // ══════════════════════════════════════════════
 window.addEventListener('load', initFB);
+
 
 
 
