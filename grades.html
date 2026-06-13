@@ -292,7 +292,7 @@ tr:hover td{background:#f8faff;}
     <button class="role-tab" onclick="setRole('lecturer',this)">👨‍🏫 محاضر</button>
   </div>
 
-  <!-- Student: ID only -->
+  <!-- Student: ID + password -->
   <div id="studentLoginFields">
     <div class="field">
       <label>الرقم المرجعي</label>
@@ -300,7 +300,12 @@ tr:hover td{background:#f8faff;}
         oninput="this.value=this.value.toUpperCase()"
         onkeydown="if(event.key==='Enter')doLogin()">
     </div>
-    <div class="login-hint">أدخل رقمك المرجعي للاطلاع على درجاتك</div>
+    <div class="field">
+      <label>كلمة المرور</label>
+      <input type="password" id="studentPassword" placeholder="أدخل كلمة المرور"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-hint">أدخل رقمك المرجعي وكلمة المرور للاطلاع على درجاتك</div>
   </div>
 
   <!-- Lecturer: username + password -->
@@ -383,6 +388,29 @@ function initFB(){
 }
 function fbRef(path){ return firebase.database().ref(path); }
 
+async function sha256(text){
+  const data=new TextEncoder().encode(text);
+  const hash=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function verifyUserPassword(user,password){
+  if(!user||!password) return false;
+  if(user.passwordHash&&user.passwordSalt) return await sha256(user.passwordSalt+password)===user.passwordHash;
+  return user.password===password;
+}
+async function upgradeLegacyPassword(userKey,user,password){
+  if(!userKey||!user?.password||user.passwordHash) return;
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes=new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const salt=Array.from(bytes,b=>chars[b%chars.length]).join('');
+  await fbRef('users/'+userKey).update({
+    passwordHash:await sha256(salt+password),
+    passwordSalt:salt,
+    password:null
+  });
+}
+
 // ══════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════
@@ -437,43 +465,58 @@ function setRole(role, btn){
 // ══════════════════════════════════════════════
 async function doLogin(){
   const btn = document.getElementById('loginBtn');
+  const loginLabel = btn.dataset.label || btn.textContent || 'دخول ←';
+  btn.dataset.label = loginLabel;
   btn.textContent='⏳ جاري التحقق...'; btn.disabled=true;
   document.getElementById('loginErr').style.display='none';
+  const fail=()=>{ showErr(); btn.textContent=loginLabel; btn.disabled=false; };
 
   try{
     if(currentRole==='student'){
       const sid = document.getElementById('studentId').value.trim().toUpperCase();
-      if(!sid){ showErr(); btn.textContent='دخول ←'; btn.disabled=false; return; }
+      const pass = document.getElementById('studentPassword')?.value || '';
+      if(!sid||!pass){ fail(); return; }
 
-      // Check student exists
       const snap = await fbRef('students').get();
-      if(!snap.exists()){ showErr(); btn.textContent='دخول ←'; btn.disabled=false; return; }
+      if(!snap.exists()){ fail(); return; }
 
       let found = null;
       Object.entries(snap.val()).forEach(([k,v])=>{
         if((v.id||'').toUpperCase()===sid) found={...v,_fbKey:k};
       });
-      if(!found){ showErr(); btn.textContent='دخول ←'; btn.disabled=false; return; }
+      if(!found){ fail(); return; }
+
+      const userSnap = await fbRef('users').get();
+      let authUser = null, authKey = null;
+      if(userSnap.exists()){
+        Object.entries(userSnap.val()).forEach(([k,v])=>{
+          if(v.username===sid && v.role==='student'){ authUser={...v,_fbKey:k}; authKey=k; }
+        });
+      }
+      if(!authUser || !(await verifyUserPassword(authUser,pass))){ fail(); return; }
+      await upgradeLegacyPassword(authKey,authUser,pass);
 
       currentUser = {role:'student', data:found, fbKey:found._fbKey};
       await loadAllData();
       showStudentView();
 
     } else {
-      // Lecturer
       const uname = document.getElementById('lecUsername').value.trim();
       const pass  = document.getElementById('lecPassword').value;
-      if(!uname||!pass){ showErr(); btn.textContent='دخول ←'; btn.disabled=false; return; }
+      if(!uname||!pass){ fail(); return; }
 
       const snap = await fbRef('users').get();
-      if(!snap.exists()){ showErr(); btn.textContent='دخول ←'; btn.disabled=false; return; }
+      if(!snap.exists()){ fail(); return; }
 
       let found = null;
-      Object.entries(snap.val()).forEach(([k,v])=>{
-        if(v.username===uname && v.password===pass && v.role==='lecturer')
+      for(const [k,v] of Object.entries(snap.val())){
+        if(v.username===uname && v.role==='lecturer' && await verifyUserPassword(v,pass)){
           found={...v,_fbKey:k};
-      });
-      if(!found){ showErr(); btn.textContent='دخول ←'; btn.disabled=false; return; }
+          await upgradeLegacyPassword(k,v,pass);
+          break;
+        }
+      }
+      if(!found){ fail(); return; }
 
       currentUser = {role:'lecturer', data:found, fbKey:found._fbKey};
       await loadAllData();
@@ -481,10 +524,11 @@ async function doLogin(){
     }
   } catch(e){
     console.error('Login error:',e);
-    showErr();
+    fail();
+    return;
   }
 
-  btn.textContent='دخول ←'; btn.disabled=false;
+  btn.textContent=loginLabel; btn.disabled=false;
 }
 
 function showErr(){
@@ -497,6 +541,8 @@ function doLogout(){
   document.getElementById('appTabs').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('studentId').value='';
+  const studentPass=document.getElementById('studentPassword');
+  if(studentPass) studentPass.value='';
   document.getElementById('lecUsername').value='';
   document.getElementById('lecPassword').value='';
 }
@@ -546,9 +592,7 @@ function showStudentView(){
       .find(([,s])=>s.status==='active')?.[0] || null;
   }
   const activeSem = activeSemKey ? dbData.semesters?.[activeSemKey] : null;
-  const mySubjects = (activeSem && (activeSem.subjects||[]).length)
-    ? allMySubjects.filter(s=>(activeSem.subjects||[]).includes(s.key))
-    : allMySubjects;
+  const mySubjects = allMySubjects;
   const totals = mySubjects.map(s=>{
     const g = getGrade_data(currentUser.fbKey, s.key);
     return g ? calcTotal(g) : 0;
