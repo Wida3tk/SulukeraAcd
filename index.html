@@ -194,6 +194,7 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -683,7 +684,9 @@ tr:hover td{background:#f8faff;}
 
 
 
+
 <script>
+
 
 
 
@@ -767,6 +770,54 @@ function initFirebase(){
 function fbDB(){ return firebase.database(); }
 function fbRef(path){ return firebase.database().ref(path); }
 
+function randomPassword(len=10){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes=new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes,b=>chars[b%chars.length]).join('');
+}
+async function sha256(text){
+  const data=new TextEncoder().encode(text);
+  const hash=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function passwordFields(password){
+  const salt=randomPassword(16);
+  return {passwordHash:await sha256(salt+password),passwordSalt:salt,password:null};
+}
+async function verifyUserPassword(user,password){
+  if(!user||!password) return false;
+  if(user.passwordHash&&user.passwordSalt) return await sha256(user.passwordSalt+password)===user.passwordHash;
+  return user.password===password;
+}
+async function upgradeLegacyPassword(user,password){
+  if(!user?._fbKey||!user.password||user.passwordHash) return;
+  const secure=await passwordFields(password);
+  await fbRef('users/'+user._fbKey).update(secure);
+  delete user.password;
+  Object.assign(user,secure);
+}
+async function userRecord(base,password){
+  const record={name:base.name||'',username:base.username||'',role:base.role||'student'};
+  if(password) Object.assign(record,await passwordFields(password));
+  else {
+    if(base.passwordHash) record.passwordHash=base.passwordHash;
+    if(base.passwordSalt) record.passwordSalt=base.passwordSalt;
+    if(base.password) record.password=base.password;
+  }
+  return record;
+}
+function csvCell(v){ return `"${String(v??'').replace(/"/g,'""')}"`; }
+function downloadCsv(filename, rows){
+  const csv='\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 // ── Loader ───────────────────────────────────────────────────
 function showLoader(show){
   let el=document.getElementById('globalLoader');
@@ -814,7 +865,7 @@ async function loadAllFromFirebase(){
       users = allDbUsers.filter(u=>u.role!=='student');
       // Make sure admin is always there
       if(!users.find(u=>u.username==='admin')){
-        users.unshift({id:'u1',_fbKey:'admin',name:'مدير النظام',username:'admin',password:'admin123',role:'admin',subjects:[]});
+        users.unshift({id:'u1',_fbKey:'admin',name:'مدير النظام',username:'admin',password:null,passwordHash:'disabled',passwordSalt:'disabled',role:'admin',subjects:[]});
       }
     }
 
@@ -925,10 +976,10 @@ async function saveStudentToFirebase(stdIdx, passw){
   // Save/update user account
   if(passw){
     const userKey = 'user_' + st.id.replace(/[^a-zA-Z0-9]/g,'_');
-    await fbRef('users/'+userKey).set({
+    await fbRef('users/'+userKey).set(await userRecord({
       name:getStudentFullName(st), username:st.id,
-      password:passw, role:'student'
-    });
+      role:'student'
+    }, passw));
   }
 }
 
@@ -953,8 +1004,15 @@ async function deleteStudentFromFirebase(stdIdx){
 // حفظ مادة
 async function saveSubjectToFirebase(si){
   const subj=subjects[si];
-  if(!subj._fbKey) subj._fbKey='subj_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
-  await fbRef(`subjects/${subj._fbKey}`).set({name:subj.name, lecturerUserId:subj.lecturerUserId||null});
+  // مفتاح ثابت بناءً على اسم المادة
+  if(!subj._fbKey){
+    subj._fbKey = 'subj_'+subj.name.replace(/[^a-zA-Z0-9؀-ۿ]/g,'_').substring(0,30)+'_'+(si+1);
+  }
+  // lecturerUserId يجب أن يكون username دائماً
+  const lecId = subj.lecturerUserId||null;
+  const lecUser = lecId ? users.find(u=>u.username===lecId||u.id===lecId||u._fbKey===lecId) : null;
+  const lecUsername = lecUser?.username || lecId || null;
+  await fbRef('subjects/'+subj._fbKey).set({name:subj.name, lecturerUserId:lecUsername});
   // Save enrollments with deterministic keys (prevents duplicates)
   const snap=await fbRef('enrollments').get();
   const updates={};
@@ -1003,10 +1061,10 @@ async function saveProgramsToFirebase(){
 // حفظ المستخدمين
 async function saveUsersToFirebase(){
   const data={};
-  users.filter(u=>u.role!=='student').forEach(u=>{
+  for(const u of users.filter(u=>u.role!=='student')){
     const key=u._fbKey||u.id||('user_'+u.username);
-    data[key]={name:u.name,username:u.username,password:u.password,role:u.role};
-  });
+    data[key]=await userRecord(u);
+  }
   await fbRef('users').set(data);
 }
 
@@ -1024,7 +1082,7 @@ async function saveSettingsToFirebase(){
 // ══════════════════════════════════════════════
 let settings={attend:5,hw:5,disc:5,exam:40,gradeA:85,gradeB:70,gradeC:60,gradeFail:60};
 let programsData=[];
-let users=[{id:'u1',name:'مدير النظام',username:'admin',password:'admin123',role:'admin',subjects:[]}];
+let users=[{id:'u1',name:'مدير النظام',username:'admin',password:null,passwordHash:'disabled',passwordSalt:'disabled',role:'admin',subjects:[]}];
 let subjects=[];
 let students=[];
 let grades={};
@@ -1059,16 +1117,7 @@ function getGrade(t){return t>=settings.gradeA?'A':t>=settings.gradeB?'B':t>=set
 
 // يعيد فقط المقررات النشطة في الفصل الحالي للطالب
 function getActiveSubjectsForStudent(stdIdx){
-  if(!activeSemesterKey || !semestersData[activeSemesterKey]) {
-    // لا يوجد فصل نشط — اعرض كل المقررات المسجل فيها
-    return subjects.filter(s=>s.students.includes(stdIdx));
-  }
-  const sem = semestersData[activeSemesterKey];
-  const semSubjectKeys = sem.subjects||[];
-  return subjects.filter(s=>
-    s.students.includes(stdIdx) &&
-    semSubjectKeys.includes(s._fbKey)
-  );
+  return subjects.filter(s=>s.students.includes(stdIdx));
 }
 
 // يعيد درجات طالب في مقرر مع فصل معين
@@ -1082,7 +1131,10 @@ function getGradeForSemester(si, stdIdx, semKey){
 }
 function getStatus(t){return t>=settings.gradeFail?'ناجح':'راسب';}
 function pc(t){return t>=70?'high':t>=50?'mid':'low';}
-function getLecturerName(id){return users.find(u=>u.id===id)?.name||'—';}
+function getLecturerName(id){
+  if(!id) return '—';
+  return users.find(u=>u.username===id||u.id===id||u._fbKey===id)?.name||id;
+}
 function getLecturerSubjects(uid){return subjects.map((s,i)=>({...s,idx:i})).filter(s=>s.lecturerUserId===uid);}
 function makeEmptyGrade(){return{w1:{attend:0,hw:0,disc:0},w2:{attend:0,hw:0,disc:0},w3:{attend:0,hw:0,disc:0},w4:{attend:0,hw:0,disc:0},exam:0};}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1115,12 +1167,17 @@ async function doLogin(){
     const snap=await fbRef('users').get();
     if(snap.exists()){
       const allUsers=Object.entries(snap.val()).map(([k,v])=>({...v,_fbKey:k}));
-      const user=allUsers.find(u=>u.username===username&&u.password===password&&u.role===loginRole);
+      const matches=allUsers.filter(u=>u.username===username&&u.role===loginRole);
+      let user=null;
+      for(const candidate of matches){
+        if(await verifyUserPassword(candidate,password)){ user=candidate; break; }
+      }
       if(!user){
         document.getElementById('loginError').style.display='block';
         if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
         return;
       }
+      await upgradeLegacyPassword(user,password);
       currentUser={...user};
       await _finishLogin();
       if(loginRole==='student'){
@@ -1131,18 +1188,14 @@ async function doLogin(){
       return;
     }
   }catch(e){console.warn('Firebase auth error:',e);}
-  // Local fallback — admin only
-  const user=users.find(u=>u.username===username&&u.password===password&&u.role===loginRole);
-  if(!user){document.getElementById('loginError').style.display='block';if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}return;}
-  currentUser=user;
-  await _finishLogin();
+  document.getElementById('loginError').style.display='block';
   if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
 }
 
 function doLogout(){
   currentUser=null;
   students=[];subjects=[];grades={};
-  users=[{id:'u1',name:'مدير النظام',username:'admin',password:'admin123',role:'admin',subjects:[]}];
+  users=[{id:'u1',name:'مدير النظام',username:'admin',password:null,passwordHash:'disabled',passwordSalt:'disabled',role:'admin',subjects:[]}];
   programsData=[];
   document.getElementById('appShell').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
@@ -1167,7 +1220,7 @@ async function _finishLogin() {
   document.getElementById('loginPassword').value='';
   // Clear seed data and load from Firebase
   students=[]; subjects=[]; grades={};
-  users=[{id:'u1',name:'مدير النظام',username:'admin',password:'admin123',role:'admin',subjects:[]}];
+  users=[{id:'u1',name:'مدير النظام',username:'admin',password:null,passwordHash:'disabled',passwordSalt:'disabled',role:'admin',subjects:[]}];
   programsData=[];
   try {
     await loadAllFromFirebase();
@@ -1247,7 +1300,7 @@ function goBack() {
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
   if (pageId==='subjects'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مادة جديدة</button>`;
-  else if (pageId==='students'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='students'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="generateStudentPasswords()">?? ????? ???? ??????</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
   else if (pageId==='users'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
 }
@@ -1326,7 +1379,13 @@ function openSubjectModal(si=-1) {
   document.getElementById('subjectModalTitle').textContent=si>=0?'✏️ تعديل المادة':'📖 إضافة مادة';
   document.getElementById('subjectName').value=si>=0?subjects[si].name:'';
   const lecSel=document.getElementById('subjectLecturerSelect');
-  lecSel.innerHTML='<option value="">-- اختر محاضراً --</option>'+users.filter(u=>u.role==='lecturer').map(u=>`<option value="${u.id}" ${si>=0&&subjects[si].lecturerUserId===u.id?'selected':''}>${u.name}</option>`).join('');
+  lecSel.innerHTML='<option value="">-- اختر محاضراً --</option>'+
+    users.filter(u=>u.role==='lecturer').map(u=>{
+      const val = u.username;
+      const curLec = si>=0 ? subjects[si].lecturerUserId : '';
+      const isSelected = curLec && (curLec===u.username||curLec===u.id||curLec===u._fbKey);
+      return `<option value="${val}" ${isSelected?'selected':''}>${u.name}</option>`;
+    }).join('');
   const stdSel=document.getElementById('subjectStudents');
   stdSel.innerHTML=students.map((st,i)=>`<option value="${i}" ${si>=0&&subjects[si].students.includes(i)?'selected':''}>${getStudentFullName(st)} (${st.id})</option>`).join('');
   document.getElementById('subjectModal').classList.add('open');
@@ -1543,7 +1602,9 @@ async function saveStudent() {
     totalAmount:parseFloat(document.getElementById('stdTotalAmount').value)||0,
     installments, notes:document.getElementById('stdNotes').value.trim()
   };
-  const pass=document.getElementById('studentPass').value;
+  let pass=document.getElementById('studentPass').value;
+  let generatedStudentPassword=false;
+  if(editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
   const chosenSubjs=Array.from(document.getElementById('studentSubjectsList').selectedOptions).map(o=>parseInt(o.value));
   if (editingStudentIdx>=0) {
     students[editingStudentIdx]=stdData;
@@ -1552,7 +1613,7 @@ async function saveStudent() {
     students.push(stdData);
     const newIdx=students.length-1;
     users.push({id:'s'+Date.now(),name:fullName,username:id,
-      password:pass||id.toLowerCase(),role:'student',studentIdx:newIdx});
+      password:pass,role:'student',studentIdx:newIdx});
   }
   const idx2 = editingStudentIdx >= 0 ? editingStudentIdx : students.length - 1;
   try {
@@ -1613,6 +1674,12 @@ async function saveStudent() {
         await firebase.database().ref('/').update(enrollUpdates);
     }
 
+    if(generatedStudentPassword){
+      downloadCsv('sulukera_new_student_password_'+id+'.csv',[
+        ['اسم الطالب','الرقم الطلابي','كلمة المرور المؤقتة'],
+        [fullName,id,pass]
+      ]);
+    }
     showToast('✅ تم حفظ السجل في قاعدة البيانات');
   } catch(e){
     console.error('Save student error:',e);
@@ -1843,12 +1910,11 @@ async function saveUser() {
 
   try{
     // 1. احفظ المستخدم
-    const existingPass = users.find(u=>u.username===username)?.password||'';
-    await fbRef('users/'+userFbKey).set({
-      name, username,
-      password: password||existingPass,
-      role
-    });
+    const existingUser = users.find(u=>u.username===username)||{};
+    await fbRef('users/'+userFbKey).set(await userRecord({
+      ...existingUser,
+      name, username, role
+    }, password));
 
     // 2. حدّث lecturerUserId لكل مادة مباشرة في Firebase (بدون إعادة كتابة كامل السجل)
     if(role==='lecturer'){
@@ -3074,13 +3140,46 @@ async function changeStudentPassword(stdIdx){
       const entries = Object.entries(snap.val());
       const userEntry = entries.find(([,u])=>u.username===st.id&&u.role==='student');
       if(userEntry){
-        await fbRef(`users/${userEntry[0]}/password`).set(newPass);
+        await fbRef(`users/${userEntry[0]}`).update(await passwordFields(newPass));
         showToast('✅ تم تغيير كلمة المرور');
         return;
       }
     }
     showToast('⚠️ لم يتم العثور على حساب الطالب');
   }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
+}
+
+async function generateStudentPasswords(){
+  if(!students.length){ showToast('لا يوجد طلاب لتوليد كلمات مرور لهم'); return; }
+  if(!confirm('سيتم توليد كلمات مرور جديدة لكل الطلاب وتنزيل ملف CSV. هل تريدين المتابعة؟')) return;
+  showLoader(true);
+  const rows=[['اسم الطالب','الرقم الطلابي','كلمة المرور المؤقتة']];
+  const updates={};
+  try{
+    for(let i=0;i<students.length;i++){
+      const st=students[i];
+      if(!st?.id) continue;
+      const password=randomPassword(10);
+      const userKey='user_'+st.id.replace(/[^a-zA-Z0-9]/g,'_');
+      const secure=await passwordFields(password);
+      updates['users/'+userKey]={
+        name:getStudentFullName(st),
+        username:st.id,
+        role:'student',
+        ...secure,
+        passwordChangedAt:new Date().toISOString()
+      };
+      rows.push([getStudentFullName(st),st.id,password]);
+    }
+    if(Object.keys(updates).length) await firebase.database().ref('/').update(updates);
+    downloadCsv('sulukera_student_passwords_'+new Date().toLocaleDateString('en-CA')+'.csv',rows);
+    showToast('تم توليد كلمات المرور وحفظها على Firebase');
+  }catch(e){
+    console.error(e);
+    showToast('تعذر توليد كلمات المرور');
+  }finally{
+    showLoader(false);
+  }
 }
 
 async function processPendingPkgSubjects(){
@@ -3144,6 +3243,7 @@ async function cleanDuplicateStudents(){
     }
   }catch(e){ console.error('Clean error:',e); }
 }
+
 
 
 
