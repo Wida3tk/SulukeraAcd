@@ -592,7 +592,9 @@ function showStudentView(){
       .find(([,s])=>s.status==='active')?.[0] || null;
   }
   const activeSem = activeSemKey ? dbData.semesters?.[activeSemKey] : null;
-  const mySubjects = allMySubjects;
+  const mySubjects = (activeSem && (activeSem.subjects||[]).length && (activeSem.batches||[]).includes(st.batch))
+    ? allMySubjects.filter(s=>(activeSem.subjects||[]).includes(s.key))
+    : allMySubjects;
   const totals = mySubjects.map(s=>{
     const g = getGrade_data(currentUser.fbKey, s.key);
     return g ? calcTotal(g) : 0;
