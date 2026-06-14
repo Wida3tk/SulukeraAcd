@@ -336,6 +336,7 @@ tr:hover td{background:#f8faff;}
     <div class="topbar-user">
       <span class="user-badge" id="topbarName">—</span>
       <span class="user-role" id="topbarRole">—</span>
+      <button class="btn-out" onclick="changeMyPassword()">🔐 تغيير كلمة المرور</button>
       <button class="btn-out" onclick="doLogout()">⬅ خروج</button>
     </div>
   </div>
@@ -397,6 +398,18 @@ async function verifyUserPassword(user,password){
   if(!user||!password) return false;
   if(user.passwordHash&&user.passwordSalt) return await sha256(user.passwordSalt+password)===user.passwordHash;
   return user.password===password;
+}
+async function passwordFields(password){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes=new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const salt=Array.from(bytes,b=>chars[b%chars.length]).join('');
+  return {
+    passwordHash:await sha256(salt+password),
+    passwordSalt:salt,
+    password:null,
+    passwordChangedAt:new Date().toISOString()
+  };
 }
 async function upgradeLegacyPassword(userKey,user,password){
   if(!userKey||!user?.password||user.passwordHash) return;
@@ -496,7 +509,7 @@ async function doLogin(){
       if(!authUser || !(await verifyUserPassword(authUser,pass))){ fail(); return; }
       await upgradeLegacyPassword(authKey,authUser,pass);
 
-      currentUser = {role:'student', data:found, fbKey:found._fbKey};
+      currentUser = {role:'student', data:found, fbKey:found._fbKey, authKey, authUser};
       await loadAllData();
       showStudentView();
 
@@ -518,7 +531,7 @@ async function doLogin(){
       }
       if(!found){ fail(); return; }
 
-      currentUser = {role:'lecturer', data:found, fbKey:found._fbKey};
+      currentUser = {role:'lecturer', data:found, fbKey:found._fbKey, authKey:found._fbKey, authUser:found};
       await loadAllData();
       showLecturerView();
     }
@@ -533,6 +546,47 @@ async function doLogin(){
 
 function showErr(){
   document.getElementById('loginErr').style.display='block';
+}
+
+async function changeMyPassword(){
+  if(!currentUser?.authKey){
+    toast('تعذر تحديد الحساب');
+    return;
+  }
+  const currentPass=prompt('أدخل كلمة المرور الحالية:');
+  if(!currentPass) return;
+
+  try{
+    const authSnap=await fbRef('users/'+currentUser.authKey).get();
+    const authUser=authSnap.exists()
+      ? {...authSnap.val(),_fbKey:currentUser.authKey}
+      : currentUser.authUser;
+
+    if(!(await verifyUserPassword(authUser,currentPass))){
+      toast('كلمة المرور الحالية غير صحيحة');
+      return;
+    }
+
+    const newPass=prompt('أدخل كلمة المرور الجديدة (6 أحرف على الأقل):');
+    if(!newPass || newPass.length<6){
+      toast('كلمة المرور قصيرة');
+      return;
+    }
+
+    const confirmPass=prompt('أعد إدخال كلمة المرور الجديدة:');
+    if(newPass!==confirmPass){
+      toast('كلمتا المرور غير متطابقتين');
+      return;
+    }
+
+    const fields=await passwordFields(newPass);
+    await fbRef('users/'+currentUser.authKey).update(fields);
+    currentUser.authUser={...authUser,...fields};
+    toast('تم تغيير كلمة المرور');
+  }catch(e){
+    console.error('Change password error:',e);
+    toast('تعذر تغيير كلمة المرور');
+  }
 }
 
 function doLogout(){
