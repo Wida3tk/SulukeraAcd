@@ -289,6 +289,9 @@ tr:hover td{background:#f8faff;}
             <select id="studentProgramFilter" onchange="filterStudents()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
               <option value="">كل البرامج</option>
             </select>
+            <select id="studentBatchFilter" onchange="filterStudents()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
+              <option value="">كل الدفعات</option>
+            </select>
             <button class="btn btn-sm" onclick="exportStudentsExcel()">📊 تصدير Excel</button>
           </div>
           <div id="studentsCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
@@ -831,7 +834,10 @@ function clearPendingStudentPasswords(){
 }
 function downloadPendingStudentPasswords(){
   const rows=getPendingStudentPasswords();
-  if(!rows.length) return showToast('لا توجد كلمات مرور جديدة للتصدير');
+  if(!rows.length){
+    showToast('لا توجد كلمات مرور جديدة للتصدير');
+    return;
+  }
   downloadCsv('sulukera_student_passwords_'+new Date().toLocaleDateString('en-CA')+'.csv',[
     ['اسم الطالب','الرقم الطلابي','كلمة المرور المؤقتة'],
     ...rows.map(r=>[r.name,r.id,r.password])
@@ -1502,28 +1508,9 @@ function updateSubjectsForPackage() {
 //  STUDENTS TABLE
 // ══════════════════════════════════════════════
 function renderStudentsTable() {
-  document.getElementById('studentsTableBody').innerHTML=students.map((st,idx)=>{
-    const mySubjs=getActiveSubjectsForStudent(idx);
-    const tots=mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
-    const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-    const hasFail=tots.some(t=>t<settings.gradeFail&&t>0);
-    const hasOverdue=(st.installments||[]).some(i=>i.status==='overdue');
-    return `<tr>
-      <td class="mono">${idx+1}</td>
-      <td><strong style="cursor:pointer;color:var(--primary)" onclick="openStudentProfile(${idx})">${getStudentFullName(st)}</strong></td>
-      <td class="mono">${st.id}</td>
-      <td style="font-size:11px">${st.email||'—'}</td>
-      <td style="font-size:11px">${st.program||'—'}</td>
-      <td><span class="badge badge-student">${st.batch||'—'}</span></td>
-      <td>${avg>0?avg+'/100':'—'}</td>
-      <td><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}</td>
-      <td style="display:flex;gap:4px;">
-        <button class="btn btn-sm btn-primary" onclick="openStudentProfile(${idx})">👁️</button>
-        <button class="btn btn-sm" onclick="openStudentModal(${idx})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteStudent(${idx})">🗑️</button>
-      </td>
-    </tr>`;
-  }).join('');
+  populateProgramFilterDropdown();
+  populateBatchFilterDropdown();
+  filterStudents();
 }
 
 // ══════════════════════════════════════════════
@@ -2969,6 +2956,7 @@ async function savePkgSubjects(){
 function filterStudents(){
   const query = (document.getElementById('studentSearchInput')?.value||'').toLowerCase().trim();
   const progFilter = document.getElementById('studentProgramFilter')?.value||'';
+  const batchFilter = document.getElementById('studentBatchFilter')?.value||'';
   
   let filtered = students.map((st,idx)=>({...st,idx}));
   if(query){
@@ -2981,6 +2969,9 @@ function filterStudents(){
   }
   if(progFilter){
     filtered = filtered.filter(st=>st.program===progFilter);
+  }
+  if(batchFilter){
+    filtered = filtered.filter(st=>st.batch===batchFilter);
   }
   
   const count = document.getElementById('studentsCount');
@@ -3024,9 +3015,21 @@ function renderStudentsTableFiltered(filtered){
 function populateProgramFilterDropdown(){
   const sel = document.getElementById('studentProgramFilter');
   if(!sel) return;
+  const current = sel.value;
   const programs = [...new Set(students.map(s=>s.program).filter(Boolean))];
   sel.innerHTML = '<option value="">كل البرامج</option>' +
     programs.map(p=>`<option value="${p}">${p}</option>`).join('');
+  if(programs.includes(current)) sel.value = current;
+}
+
+function populateBatchFilterDropdown(){
+  const sel = document.getElementById('studentBatchFilter');
+  if(!sel) return;
+  const current = sel.value;
+  const batches = [...new Set(students.map(s=>s.batch).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">كل الدفعات</option>' +
+    batches.map(b=>`<option value="${b}">${b}</option>`).join('');
+  if(batches.includes(current)) sel.value = current;
 }
 
 // ══════════════════════════════════════════════
