@@ -817,6 +817,27 @@ function downloadCsv(filename, rows){
   a.click();
   URL.revokeObjectURL(a.href);
 }
+function getPendingStudentPasswords(){
+  try{ return JSON.parse(localStorage.getItem('pendingStudentPasswords')||'[]'); }
+  catch(e){ return []; }
+}
+function addPendingStudentPassword(row){
+  const rows=getPendingStudentPasswords();
+  rows.push({...row,createdAt:new Date().toISOString()});
+  localStorage.setItem('pendingStudentPasswords',JSON.stringify(rows));
+}
+function clearPendingStudentPasswords(){
+  localStorage.removeItem('pendingStudentPasswords');
+}
+function downloadPendingStudentPasswords(){
+  const rows=getPendingStudentPasswords();
+  if(!rows.length) return showToast('لا توجد كلمات مرور جديدة للتصدير');
+  downloadCsv('sulukera_student_passwords_'+new Date().toLocaleDateString('en-CA')+'.csv',[
+    ['اسم الطالب','الرقم الطلابي','كلمة المرور المؤقتة'],
+    ...rows.map(r=>[r.name,r.id,r.password])
+  ]);
+  if(confirm('تم تنزيل الملف. هل تريدين مسح القائمة المؤقتة؟')) clearPendingStudentPasswords();
+}
 
 // ── Loader ───────────────────────────────────────────────────
 function showLoader(show){
@@ -1300,7 +1321,7 @@ function goBack() {
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
   if (pageId==='subjects'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مادة جديدة</button>`;
-  else if (pageId==='students'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="generateStudentPasswords()">?? ????? ???? ??????</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='students'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
   else if (pageId==='users'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
 }
@@ -1675,10 +1696,7 @@ async function saveStudent() {
     }
 
     if(generatedStudentPassword){
-      downloadCsv('sulukera_new_student_password_'+id+'.csv',[
-        ['اسم الطالب','الرقم الطلابي','كلمة المرور المؤقتة'],
-        [fullName,id,pass]
-      ]);
+      addPendingStudentPassword({name:fullName,id,password:pass});
     }
     showToast('✅ تم حفظ السجل في قاعدة البيانات');
   } catch(e){
