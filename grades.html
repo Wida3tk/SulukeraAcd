@@ -470,7 +470,16 @@ function isFailingGrade(g){
   return isExamEntered(g) && calcTotal(g)<settings.gradeFail;
 }
 function getGradeStatus(g){
-  return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
+  return isExamEntered(g) ? getStatus(calcTotal(g)) : '??? ?????';
+}
+function getActiveSemesters(){
+  return Object.entries(dbData.semesters||{})
+    .filter(([,s])=>s.status==='active')
+    .map(([key,s])=>({key,...s}));
+}
+function activeSubjectKeysForBatch(batch){
+  const active=getActiveSemesters().filter(s=>(s.batches||[]).includes(batch));
+  return [...new Set(active.flatMap(s=>s.subjects||[]))];
 }
 
 // ══════════════════════════════════════════════
@@ -651,15 +660,9 @@ function showStudentView(){
 
   // Get student's subjects via enrollments
   const allMySubjects = getStudentSubjects(currentUser.fbKey);
-  // ابحث عن الفصل النشط بكل الطرق الممكنة
-  let activeSemKey = dbData.activeSemesterKey;
-  if(!activeSemKey && dbData.semesters){
-    activeSemKey = Object.entries(dbData.semesters)
-      .find(([,s])=>s.status==='active')?.[0] || null;
-  }
-  const activeSem = activeSemKey ? dbData.semesters?.[activeSemKey] : null;
-  const mySubjects = (activeSem && (activeSem.subjects||[]).length && (activeSem.batches||[]).includes(st.batch))
-    ? allMySubjects.filter(s=>(activeSem.subjects||[]).includes(s.key))
+  const activeKeys=activeSubjectKeysForBatch(st.batch);
+  const mySubjects = activeKeys.length
+    ? allMySubjects.filter(s=>activeKeys.includes(s.key))
     : allMySubjects;
   const totals = mySubjects.map(s=>{
     const g = getGrade_data(currentUser.fbKey, s.key);
@@ -838,15 +841,9 @@ function getLecturerSubjects(){
 
   console.log('✅ My subjects:', allMySubjs.map(s=>s.name));
 
-  // فلتر بمقررات الفصل النشط فقط
-  let activeSemKey = dbData.activeSemesterKey;
-  if(!activeSemKey && dbData.semesters){
-    activeSemKey = Object.entries(dbData.semesters)
-      .find(([,s])=>s.status==='active')?.[0]||null;
-  }
-  const activeSem = activeSemKey ? dbData.semesters?.[activeSemKey] : null;
-  if(!activeSem) return allMySubjs;
-  return allMySubjs.filter(s=>(activeSem.subjects||[]).includes(s.key));
+  const activeKeys=[...new Set(getActiveSemesters().flatMap(s=>s.subjects||[]))];
+  if(!activeKeys.length) return allMySubjs;
+  return allMySubjs.filter(s=>activeKeys.includes(s.key));
 }
 
 function getSubjectStudents(subjectFbKey){
