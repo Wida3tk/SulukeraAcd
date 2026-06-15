@@ -559,6 +559,18 @@ tr:hover td{background:#f8faff;}
   <div class="modal-actions"><button class="btn btn-primary" onclick="saveSubject()">✓ حفظ</button><button class="btn" onclick="closeModal('subjectModal')">إلغاء</button></div>
 </div></div>
 
+<!-- MODAL: COPY SUBJECTS TO BATCH -->
+<div class="modal-overlay" id="copySubjectsModal"><div class="modal" style="width:720px;">
+  <h3>نسخ مواد إلى دفعة</h3>
+  <div class="alert alert-info">سيتم إنشاء شعب جديدة مستقلة للدفعة المختارة، ولن تتأثر المواد أو الدرجات الحالية.</div>
+  <div class="form-row">
+    <div class="form-group"><label>الدفعة الجديدة *</label><select id="copyBatchSelect"></select></div>
+    <div class="form-group"><label>الفصل الدراسي</label><select id="copySemesterSelect"><option value="">بدون فصل محدد</option></select></div>
+  </div>
+  <div class="form-group"><label>المواد والمحاضرون</label><div id="copySubjectsList" style="max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--bg);"></div></div>
+  <div class="modal-actions"><button class="btn btn-primary" onclick="copySubjectsToBatch()">إنشاء الشعب</button><button class="btn" onclick="closeModal('copySubjectsModal')">إلغاء</button></div>
+</div></div>
+
 <!-- MODAL: STUDENT -->
 <div class="modal-overlay" id="studentModal"><div class="modal" style="width:680px;">
   <h3 id="studentModalTitle">👩‍🎓 سجل الطالب الكامل</h3>
@@ -901,6 +913,9 @@ async function loadAllFromFirebase(){
       subjects = Object.entries(root.subjects).map(([key,s])=>({
         _fbKey:key, name:s.name,
         lecturerUserId:s.lecturerUserId||null,
+        batch:s.batch||'',
+        semesterKey:s.semesterKey||'',
+        sourceSubjectKey:s.sourceSubjectKey||'',
         students:[] // will fill from enrollments
       }));
     }
@@ -951,7 +966,8 @@ async function loadAllFromFirebase(){
             w2:{attend:g.w2_attend||0,hw:g.w2_hw||0,disc:g.w2_disc||0},
             w3:{attend:g.w3_attend||0,hw:g.w3_hw||0,disc:g.w3_disc||0},
             w4:{attend:g.w4_attend||0,hw:g.w4_hw||0,disc:g.w4_disc||0},
-            exam:g.exam||0
+            exam:(g.exam!==undefined&&g.exam!==null&&g.exam!=='')?g.exam:null,
+            examEntered:g.examEntered===true || Number(g.exam)>0
           };
         }
       });
@@ -1039,7 +1055,13 @@ async function saveSubjectToFirebase(si){
   const lecId = subj.lecturerUserId||null;
   const lecUser = lecId ? users.find(u=>u.username===lecId||u.id===lecId||u._fbKey===lecId) : null;
   const lecUsername = lecUser?.username || lecId || null;
-  await fbRef('subjects/'+subj._fbKey).set({name:subj.name, lecturerUserId:lecUsername});
+  await fbRef('subjects/'+subj._fbKey).set({
+    name:subj.name,
+    lecturerUserId:lecUsername,
+    batch:subj.batch||'',
+    semesterKey:subj.semesterKey||'',
+    sourceSubjectKey:subj.sourceSubjectKey||''
+  });
   // Save enrollments with deterministic keys (prevents duplicates)
   const snap=await fbRef('enrollments').get();
   const updates={};
@@ -1156,14 +1178,26 @@ function getGradeForSemester(si, stdIdx, semKey){
   if(semKey && g.semesterKey && g.semesterKey!==semKey) return null;
   return g;
 }
-function getStatus(t){return t>=settings.gradeFail?'ناجح':'راسب';}
+function getStatus(t){return t>=settings.gradeFail?'????':'????';}
+function isExamEntered(g){
+  if(!g) return false;
+  if(g.examEntered===true) return true;
+  const exam = g.exam ?? g.exam_score;
+  return exam!==undefined && exam!==null && exam!=='' && Number(exam)>0;
+}
+function isFailingGrade(g){
+  return isExamEntered(g) && calcTotal(g)<settings.gradeFail;
+}
+function getGradeStatus(g){
+  return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
+}
 function pc(t){return t>=70?'high':t>=50?'mid':'low';}
 function getLecturerName(id){
   if(!id) return '—';
   return users.find(u=>u.username===id||u.id===id||u._fbKey===id)?.name||id;
 }
 function getLecturerSubjects(uid){return subjects.map((s,i)=>({...s,idx:i})).filter(s=>s.lecturerUserId===uid);}
-function makeEmptyGrade(){return{w1:{attend:0,hw:0,disc:0},w2:{attend:0,hw:0,disc:0},w3:{attend:0,hw:0,disc:0},w4:{attend:0,hw:0,disc:0},exam:0};}
+function makeEmptyGrade(){return{w1:{attend:0,hw:0,disc:0},w2:{attend:0,hw:0,disc:0},w3:{attend:0,hw:0,disc:0},w4:{attend:0,hw:0,disc:0},exam:null,examEntered:false};}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function initGrades(){subjects.forEach((subj,si)=>{if(!grades[si])grades[si]={};subj.students.forEach(idx=>{if(!grades[si][idx])grades[si][idx]=makeEmptyGrade();});});}
@@ -1326,7 +1360,7 @@ function goBack() {
 }
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
-  if (pageId==='subjects'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مادة جديدة</button>`;
+  if (pageId==='subjects'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مواد لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مادة جديدة</button>`;
   else if (pageId==='students'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إعادة ضبط كلمات الطلاب</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
   else if (pageId==='users'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
@@ -1361,7 +1395,7 @@ function renderDashboard() {
       const activeSubs = getActiveSubjectsForStudent(stdIdx);
       if(!activeSubs.find(s=>s.idx===si)) return;
       const g=grades[si]?.[stdIdx]; const total=g?calcTotal(g):0;
-      rows.push({student:getStudentFullName(students[stdIdx]),subject:subjects[si].name,total,gr:getGrade(total),st:getStatus(total)});
+      rows.push({student:getStudentFullName(students[stdIdx]),subject:subjects[si].name,total,gr:getGrade(total),st:getGradeStatus(g)});
     });
   });
   const avgs=rows.map(r=>r.total);
@@ -1394,7 +1428,7 @@ function renderSubjectsTable() {
   document.getElementById('subjectsTableBody').innerHTML=subjects.map((subj,si)=>{
     const tots=subj.students.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
     const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-    return `<tr><td class="mono">${si+1}</td><td><strong>${subj.name}</strong></td>
+    return `<tr><td class="mono">${si+1}</td><td><strong>${subj.name}</strong>${subj.batch?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">الدفعة: ${subj.batch}</div>`:''}</td>
       <td>${getLecturerName(subj.lecturerUserId)}</td><td>${subj.students.length}</td><td>${avg}/100</td>
       <td style="display:flex;gap:4px;">${currentUser.role==='admin'
         ?`<button class="btn btn-sm" onclick="openSubjectModal(${si})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteSubject(${si})">🗑️</button>`
@@ -1422,7 +1456,7 @@ async function saveSubject() {
   const lecId=document.getElementById('subjectLecturerSelect').value;
   const stdList=Array.from(document.getElementById('subjectStudents').selectedOptions).map(o=>parseInt(o.value));
   if (!name) return showToast('⚠️ أدخل اسم المادة');
-  if (editingSubjectIdx>=0) { subjects[editingSubjectIdx]={name,lecturerUserId:lecId,students:stdList}; }
+  if (editingSubjectIdx>=0) { subjects[editingSubjectIdx]={...subjects[editingSubjectIdx],name,lecturerUserId:lecId,students:stdList}; }
   else { subjects.push({name,lecturerUserId:lecId,students:stdList}); const si=subjects.length-1; grades[si]={}; stdList.forEach(i=>{grades[si][i]=makeEmptyGrade();}); }
   const si2 = editingSubjectIdx >= 0 ? editingSubjectIdx : subjects.length - 1;
   try {
@@ -1442,6 +1476,85 @@ async function deleteSubject(si) {
 // ══════════════════════════════════════════════
 //  STUDENT ID AUTO-GENERATE
 // ══════════════════════════════════════════════
+function openCopySubjectsModal(){
+  const batchSel=document.getElementById('copyBatchSelect');
+  const batches=[...new Set(students.map(s=>s.batch).filter(Boolean))].sort();
+  batchSel.innerHTML=batches.length
+    ? batches.map(b=>`<option value="${b}">${b}</option>`).join('')
+    : '<option value="">لا توجد دفعات</option>';
+
+  const semSel=document.getElementById('copySemesterSelect');
+  const sems=Object.entries(semestersData||{});
+  semSel.innerHTML='<option value="">بدون فصل محدد</option>'+sems.map(([k,s])=>`<option value="${k}" ${s.status==='active'?'selected':''}>${s.name||k}</option>`).join('');
+
+  const lecturers=users.filter(u=>u.role==='lecturer');
+  const lecturerOptions=(selected='')=>'<option value="">-- اختر محاضراً --</option>'+lecturers.map(u=>`<option value="${u.username}" ${selected===u.username?'selected':''}>${u.name}</option>`).join('');
+  const baseSubjects=subjects.map((s,i)=>({...s,idx:i})).filter(s=>!s.batch);
+  const sourceSubjects=baseSubjects.length ? baseSubjects : subjects.map((s,i)=>({...s,idx:i}));
+  document.getElementById('copySubjectsList').innerHTML=sourceSubjects.map(s=>`
+    <div style="display:grid;grid-template-columns:24px 1fr 220px;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--border);">
+      <input type="checkbox" class="copy-subject-check" value="${s.idx}">
+      <div><strong>${s.name}</strong><div style="font-size:11px;color:var(--text-muted)">الأصل: ${s.batch||'عام'} | المحاضر الحالي: ${getLecturerName(s.lecturerUserId)}</div></div>
+      <select class="copy-subject-lecturer" data-si="${s.idx}" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:inherit;">${lecturerOptions('')}</select>
+    </div>
+  `).join('') || '<div class="alert alert-warn">لا توجد مواد للنسخ</div>';
+  document.getElementById('copySubjectsModal').classList.add('open');
+}
+
+async function copySubjectsToBatch(){
+  const batch=document.getElementById('copyBatchSelect').value;
+  const semesterKey=document.getElementById('copySemesterSelect').value;
+  if(!batch) return showToast('اختاري الدفعة أولاً');
+  const selected=Array.from(document.querySelectorAll('.copy-subject-check:checked')).map(c=>parseInt(c.value));
+  if(!selected.length) return showToast('اختاري مادة واحدة على الأقل');
+  const targetStudentIdxs=students.map((s,i)=>s.batch===batch?i:null).filter(i=>i!==null);
+  if(!targetStudentIdxs.length) return showToast('لا يوجد طلاب في هذه الدفعة');
+
+  showLoader(true);
+  try{
+    const createdSubjectKeys=[];
+    for(const sourceIdx of selected){
+      const source=subjects[sourceIdx];
+      const lecturer=document.querySelector(`.copy-subject-lecturer[data-si="${sourceIdx}"]`)?.value||'';
+      const exists=subjects.find(s=>s.name===source.name && s.batch===batch);
+      if(exists) continue;
+      const copy={
+        _fbKey:null,
+        name:source.name,
+        lecturerUserId:lecturer,
+        batch,
+        semesterKey,
+        sourceSubjectKey:source._fbKey||'',
+        students:[...targetStudentIdxs]
+      };
+      subjects.push(copy);
+      const si=subjects.length-1;
+      grades[si]={};
+      targetStudentIdxs.forEach(idx=>{ grades[si][idx]=makeEmptyGrade(); });
+      await saveSubjectToFirebase(si);
+      createdSubjectKeys.push(subjects[si]._fbKey);
+    }
+
+    if(semesterKey && createdSubjectKeys.length){
+      const sem=semestersData[semesterKey]||{};
+      const nextSubjects=[...new Set([...(sem.subjects||[]),...createdSubjectKeys])];
+      const nextBatches=[...new Set([...(sem.batches||[]),batch])];
+      await fbRef('semesters/'+semesterKey).update({subjects:nextSubjects,batches:nextBatches});
+      semestersData[semesterKey]={...sem,subjects:nextSubjects,batches:nextBatches};
+    }
+
+    await loadAllFromFirebase();
+    closeModal('copySubjectsModal');
+    renderSubjectsTable();
+    showToast(createdSubjectKeys.length?`تم إنشاء ${createdSubjectKeys.length} شعبة للدفعة ${batch}`:'لم يتم إنشاء شعب جديدة؛ قد تكون موجودة مسبقاً');
+  }catch(e){
+    console.error('copySubjectsToBatch error:',e);
+    showToast('تعذر إنشاء الشعب');
+  }finally{
+    showLoader(false);
+  }
+}
+
 function generateStudentId() {
   const nums=students.map(st=>{const m=st.id&&st.id.match(/SUL-(\d+)/);return m?parseInt(m[1]):0;});
   const max=nums.length?Math.max(...nums):0;
@@ -1720,7 +1833,8 @@ function renderStudentProfile(stdIdx) {
   const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
   const tots=mySubjs.map(s=>grades[s.idx]?.[stdIdx]?calcTotal(grades[s.idx][stdIdx]):0);
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-  const hasFail=tots.some(t=>t<settings.gradeFail&&t>0);
+  const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
+  const hasFail=gradeRows.some(isFailingGrade);
   const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مادة واحدة'};
   const paidTotal=(st.installments||[]).filter(i=>i.status==='paid').reduce((a,b)=>a+(b.amount||0),0);
   const remaining=(st.totalAmount||0)-paidTotal;
@@ -1809,7 +1923,7 @@ function renderProfileGrades(stdIdx, mySubjs) {
     return `<div class="subject-grade-card">
       <div class="subject-grade-header">
         <div><div style="font-size:14px;font-weight:700">${subj.name}</div><div style="font-size:11px;color:var(--neon)">${getLecturerName(subj.lecturerUserId)}</div></div>
-        <div><span class="badge badge-${gr}">${gr}</span> <span class="badge ${total>=settings.gradeFail?'badge-pass':'badge-fail'}">${getStatus(total)}</span></div>
+        <div><span class="badge badge-${gr}">${gr}</span> <span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${getGradeStatus(g)}</span></div>
       </div>
       <div class="subject-grade-body">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;padding:10px 14px;background:var(--bg);border-radius:var(--radius)">
@@ -1819,7 +1933,7 @@ function renderProfileGrades(stdIdx, mySubjs) {
         <div class="week-breakdown">
           ${['w1','w2','w3','w4'].map((w,i)=>{const wg=g[w];const wt=(wg.attend||0)+(wg.hw||0)+(wg.disc||0);return `<div class="week-box"><div class="week-box-label">أسبوع ${i+1}</div><div class="week-box-val">${wt}</div><div class="week-box-max">/${wkMax}</div></div>`;}).join('')}
         </div>
-        <div style="padding:10px 14px;background:${total>=settings.gradeFail?'var(--success-light)':'var(--danger-light)'};border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+        <div style="padding:10px 14px;background:${!isExamEntered(g)?'var(--warn-light)':total>=settings.gradeFail?'var(--success-light)':'var(--danger-light)'};border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
           <strong>📝 الاختبار النهائي</strong><span style="font-size:22px;font-weight:800">${g.exam??'—'}/${settings.exam}</span>
         </div>
       </div>
@@ -1980,12 +2094,12 @@ function loadGradesTable() {
     const g=grades[si]?.[stdIdx]; if (!g) return '';
     const st=students[stdIdx]; const wg=isExam?null:g[wKey];
     const wt=isExam?(g.exam||0):((wg?.attend||0)+(wg?.hw||0)+(wg?.disc||0));
-    const total=calcTotal(g); const gr=getGrade(total);
+    const total=calcTotal(g); const gr=getGrade(total); const status=getGradeStatus(g);
     if (isExam) return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong></td>
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.exam}" value="${g.exam??''}" onchange="updateGrade(${si},${stdIdx},'exam',null,this.value)"></td>
       <td><strong>${total}</strong>/100</td><td><span class="badge badge-${gr}">${gr}</span></td>
-      <td><span class="badge ${total>=settings.gradeFail?'badge-pass':'badge-fail'}">${getStatus(total)}</span></td></tr>`;
+      <td><span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td></tr>`;
     return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong></td>
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.attend}" value="${wg?.attend??''}" onchange="updateGrade(${si},${stdIdx},'${wKey}','attend',this.value)"></td>
@@ -1997,8 +2111,8 @@ function loadGradesTable() {
 function updateGrade(si,stdIdx,week,field,val) {
   if (!grades[si]) grades[si]={};
   if (!grades[si][stdIdx]) grades[si][stdIdx]=makeEmptyGrade();
-  const v=val===''?0:Math.max(0,parseFloat(val)||0);
-  if (week==='exam') grades[si][stdIdx].exam=v;
+  const v=val===''?null:Math.max(0,parseFloat(val)||0);
+  if (week==='exam') { grades[si][stdIdx].exam=v; grades[si][stdIdx].examEntered=val!==''; }
   else grades[si][stdIdx][week][field]=v;
 }
 async function saveGrades() {
@@ -2020,7 +2134,8 @@ async function saveGrades() {
         w2_attend:g.w2?.attend||0, w2_hw:g.w2?.hw||0, w2_disc:g.w2?.disc||0,
         w3_attend:g.w3?.attend||0, w3_hw:g.w3?.hw||0, w3_disc:g.w3?.disc||0,
         w4_attend:g.w4?.attend||0, w4_hw:g.w4?.hw||0, w4_disc:g.w4?.disc||0,
-        exam:g.exam||0
+        exam:g.examEntered ? (g.exam||0) : null,
+        examEntered:g.examEntered===true
       };
     });
     if(Object.keys(updates).length>0) await firebase.database().ref().update(updates);
@@ -2034,7 +2149,7 @@ function autoFillDemo() {
   subjects[si].students.forEach(idx=>{
     if (!grades[si]) grades[si]={};
     if (!grades[si][idx]) grades[si][idx]=makeEmptyGrade();
-    if (isExam) grades[si][idx].exam=Math.floor(Math.random()*(settings.exam+1));
+    if (isExam) { grades[si][idx].exam=Math.floor(Math.random()*(settings.exam+1)); grades[si][idx].examEntered=true; }
     else grades[si][idx][wKey]={attend:Math.floor(Math.random()*(settings.attend+1)),hw:Math.floor(Math.random()*(settings.hw+1)),disc:Math.floor(Math.random()*(settings.disc+1))};
   });
   loadGradesTable(); showToast('⚡ تعبئة تجريبية');
@@ -2058,7 +2173,8 @@ function generateReport() {
   const mySubjs=myIdxs.filter(si=>subjects[si].students.includes(stdIdx)).map(si=>({...subjects[si],idx:si}));
   const tots=mySubjs.map(s=>grades[s.idx]?.[stdIdx]?calcTotal(grades[s.idx][stdIdx]):0);
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-  const hasFail=tots.some(t=>t<settings.gradeFail&&t>0);
+  const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
+  const hasFail=gradeRows.some(isFailingGrade);
   const pkgInfo = packagesData.find(p=>p._fbKey===st.pkg||p.name===st.pkg);
 
   let html=`<div class="card card-accent">
@@ -2090,7 +2206,7 @@ function generateReport() {
 
   mySubjs.forEach(subj=>{
     const g=grades[subj.idx]?.[stdIdx]; if(!g) return;
-    const total=calcTotal(g); const gr=getGrade(total); const st2=getStatus(total);
+    const total=calcTotal(g); const gr=getGrade(total); const st2=getGradeStatus(g);
     const wkMax=settings.attend+settings.hw+settings.disc;
     html+=`<div style="background:white;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;border-top:3px solid ${gr==='A'?'#1a7a3c':gr==='B'?'#0D40FC':gr==='C'?'#b35c00':'#c0392b'};">
       <div style="padding:0.8rem 1rem;border-bottom:1px solid var(--bg);">
@@ -2135,7 +2251,7 @@ function exportCSV() {
   let csv='المادة,المجموع,تصنيف,حالة\n';
   subjects.filter(s=>s.students.includes(stdIdx)).forEach(subj=>{
     const si=subjects.indexOf(subj);const g=grades[si]?.[stdIdx];if(!g)return;
-    const total=calcTotal(g);csv+=`${subj.name},${total},${getGrade(total)},${getStatus(total)}\n`;
+    const total=calcTotal(g);csv+=`${subj.name},${total},${getGrade(total)},${getGradeStatus(g)}\n`;
   });
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
   a.download=`grades_${st.id}.csv`;a.click();showToast('✓ تم التصدير');
@@ -2250,9 +2366,10 @@ function renderCards(program) {
   grid.innerHTML=filtered.map(st=>{
     const idx=st.idx;
     const mySubjs=getActiveSubjectsForStudent(idx);
-    const tots=mySubjs.map(s=>grades[s.idx]?.[idx]?calcTotal(grades[s.idx][idx]):0);
+    const tots=mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
     const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-    const hasFail=tots.some(t=>t<settings.gradeFail&&t>0);
+    const gradeRows=mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx];}).filter(Boolean);
+    const hasFail=gradeRows.some(isFailingGrade);
     const hasOverdue=(st.installments||[]).some(i=>i.status==='overdue');
     const color=colors[st.program]||'var(--primary)';
     return `<div style="background:white;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;" onclick="openStudentProfile(${idx})">
@@ -2405,7 +2522,7 @@ function buildGradeReportHTML(stdIdx) {
   const today=new Date().toLocaleDateString('ar-SA');
   const rows=mySubjs.map((subj,i)=>{
     const g=grades[subj.idx]?.[stdIdx]; if(!g) return '';
-    const total=calcTotal(g); const gr=getGrade(total); const status=getStatus(total);
+    const total=calcTotal(g); const gr=getGrade(total); const status=getGradeStatus(g);
     return `<tr style="border-bottom:1px solid #e0e0e0;${status==='راسب'?'background:#fff5f5':''}">
       <td style="padding:7px 10px;font-weight:600">${subj.name}</td>
       <td style="padding:7px 10px;text-align:center">${total}/100</td>
@@ -2992,7 +3109,8 @@ function renderStudentsTableFiltered(filtered){
     const mySubjs = subjects.filter(s=>s.students.includes(stdIdx));
     const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[stdIdx]?calcTotal(grades[si][stdIdx]):0;});
     const avg = tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-    const hasFail = tots.some(t=>t<settings.gradeFail&&t>0);
+    const gradeRows=mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[stdIdx];}).filter(Boolean);
+    const hasFail = gradeRows.some(isFailingGrade);
     const hasOverdue = (st.installments||[]).some(i=>i.status==='overdue');
     return `<tr>
       <td class="mono">${stdIdx+1}</td>
@@ -3045,7 +3163,8 @@ function exportStudentsExcel(){
     const mySubjs = subjects.filter(s=>s.students.includes(idx));
     const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
     const avg = tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-    const hasFail = tots.some(t=>t<settings.gradeFail&&t>0);
+    const gradeRows=mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx];}).filter(Boolean);
+    const hasFail = gradeRows.some(isFailingGrade);
     const paidTotal = (st.installments||[]).filter(i=>i.status==='paid').reduce((a,b)=>a+(b.amount||0),0);
     const remaining = (st.totalAmount||0) - paidTotal;
     const hasOverdue = (st.installments||[]).some(i=>i.status==='overdue');
@@ -3118,7 +3237,7 @@ function renderAlertsPage(){
   students.forEach((st,idx)=>{
     const mySubjs = subjects.filter(s=>s.students.includes(idx));
     const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
-    const failedSubjs = mySubjs.filter((_,i)=>tots[i]>0&&tots[i]<settings.gradeFail);
+    const failedSubjs = mySubjs.filter(s=>{const si=subjects.indexOf(s); return isFailingGrade(grades[si]?.[idx]);});
     if(failedSubjs.length>0){
       failures.push({student:getStudentFullName(st), id:st.id, 
         count:failedSubjs.length, subjects:failedSubjs.map(s=>s.name), idx});
