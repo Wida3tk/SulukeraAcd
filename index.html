@@ -1475,6 +1475,32 @@ function setSubjectBatchFilter(batch){
   currentSubjectsBatchFilter=batch;
   renderSubjectsTable();
 }
+function getSubjectRowsForBatchFilter(){
+  const rows=[];
+  const seen=new Set();
+  subjects.forEach((subj,si)=>{
+    const batchLabel=getSubjectBatchLabel(subj);
+    if(!isSubjectSection(subj)) return;
+    if(currentSubjectsBatchFilter!=='all' && !sameBatchName(batchLabel,currentSubjectsBatchFilter)) return;
+    rows.push({...subj,si,batchLabel,studentIdxs:[...(subj.students||[])]});
+    seen.add(normalizeBatchName(batchLabel)+'|'+(subj._fbKey||si));
+  });
+  Object.values(semestersData||{}).forEach(sem=>{
+    (sem.batches||[]).forEach(batch=>{
+      if(currentSubjectsBatchFilter!=='all' && !sameBatchName(batch,currentSubjectsBatchFilter)) return;
+      (sem.subjects||[]).forEach(subjectKey=>{
+        const si=subjects.findIndex(s=>s._fbKey===subjectKey);
+        if(si<0) return;
+        const key=normalizeBatchName(batch)+'|'+(subjects[si]._fbKey||si);
+        if(seen.has(key)) return;
+        const studentIdxs=(subjects[si].students||[]).filter(idx=>sameBatchName(students[idx]?.batch,batch));
+        rows.push({...subjects[si],si,batchLabel:batch,semesterName:sem.name||'',studentIdxs});
+        seen.add(key);
+      });
+    });
+  });
+  return rows;
+}
 function renderSubjectsTable() {
   renderSubjectBatchTabs();
   const baseSubjects=subjects.map((subj,si)=>({...subj,si})).filter(subj=>!isSubjectSection(subj));
@@ -1494,9 +1520,7 @@ function renderSubjectsTable() {
     }).join('');
   }
 
-  const visibleSubjects=subjects.map((subj,si)=>({...subj,si,batchLabel:getSubjectBatchLabel(subj)}))
-    .filter(isSubjectSection)
-    .filter(subj=>currentSubjectsBatchFilter==='all'||sameBatchName(subj.batchLabel,currentSubjectsBatchFilter));
+  const visibleSubjects=getSubjectRowsForBatchFilter();
   const sectionBody=document.getElementById('subjectSectionsTableBody');
   if(!visibleSubjects.length){
     sectionBody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد شُعب في هذه الدفعة</td></tr>';
@@ -1504,10 +1528,12 @@ function renderSubjectsTable() {
   }
   sectionBody.innerHTML=visibleSubjects.map((subj)=>{
     const si=subj.si;
-    const tots=subj.students.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
+    const rowStudents=subj.studentIdxs||subj.students||[];
+    const tots=rowStudents.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
     const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-    return `<tr><td class="mono">${si+1}</td><td><strong>${subj.name}</strong></td><td><span class="badge badge-student">${subj.batchLabel}</span></td>
-      <td>${getLecturerName(subj.lecturerUserId)}</td><td>${subj.students.length}</td><td>${avg}/100</td>
+    const semesterNote=subj.semesterName?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${subj.semesterName}</div>`:'';
+    return `<tr><td class="mono">${si+1}</td><td><strong>${subj.name}</strong>${semesterNote}</td><td><span class="badge badge-student">${subj.batchLabel}</span></td>
+      <td>${getLecturerName(subj.lecturerUserId)}</td><td>${rowStudents.length}</td><td>${avg}/100</td>
       <td style="display:flex;gap:4px;">${currentUser.role==='admin'
         ?`<button class="btn btn-sm" onclick="openSubjectModal(${si})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteSubject(${si})">🗑️</button>`
         :'<span style="font-size:11px;color:var(--text-muted)">قراءة فقط</span>'}</td></tr>`;
