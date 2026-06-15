@@ -1434,6 +1434,18 @@ function renderDashboard() {
 // ══════════════════════════════════════════════
 //  SUBJECTS
 // ══════════════════════════════════════════════
+function normalizeBatchName(batch){
+  return String(batch||'').trim().toUpperCase();
+}
+function sameBatchName(a,b){
+  return normalizeBatchName(a)===normalizeBatchName(b);
+}
+function addBatchName(batchSet,batch){
+  const clean=String(batch||'').trim();
+  if(!clean) return;
+  const key=normalizeBatchName(clean);
+  if(![...batchSet].some(b=>normalizeBatchName(b)===key)) batchSet.add(clean);
+}
 function getSubjectBatchLabel(subj){
   if(subj.batch) return subj.batch;
   const batches=[...new Set((subj.students||[]).map(i=>students[i]?.batch).filter(Boolean))];
@@ -1445,19 +1457,19 @@ function isSubjectSection(subj){
 }
 function getAllKnownBatches(){
   const batchSet=new Set();
-  students.forEach(s=>{ if(s.batch) batchSet.add(s.batch); });
-  programsData.forEach(p=>(p.tracks||[]).forEach(t=>(t.batches||[]).forEach(b=>{ if(b.name) batchSet.add(b.name); })));
-  Object.values(semestersData||{}).forEach(s=>(s.batches||[]).forEach(b=>batchSet.add(b)));
-  subjects.forEach(s=>{ const b=getSubjectBatchLabel(s); if(b&&b!=='عام') batchSet.add(b); });
+  students.forEach(s=>addBatchName(batchSet,s.batch));
+  programsData.forEach(p=>(p.tracks||[]).forEach(t=>(t.batches||[]).forEach(b=>addBatchName(batchSet,b.name))));
+  Object.values(semestersData||{}).forEach(s=>(s.batches||[]).forEach(b=>addBatchName(batchSet,b)));
+  subjects.forEach(s=>{ const b=getSubjectBatchLabel(s); if(b&&b!=='عام') addBatchName(batchSet,b); });
   return [...batchSet].sort();
 }
 function renderSubjectBatchTabs(){
   const el=document.getElementById('subjectBatchTabs');
   if(!el) return;
   const batches=getAllKnownBatches();
-  if(currentSubjectsBatchFilter!=='all' && !batches.includes(currentSubjectsBatchFilter)) currentSubjectsBatchFilter='all';
+  if(currentSubjectsBatchFilter!=='all' && !batches.some(b=>sameBatchName(b,currentSubjectsBatchFilter))) currentSubjectsBatchFilter='all';
   el.innerHTML=`<button class="btn btn-sm ${currentSubjectsBatchFilter==='all'?'btn-primary':''}" onclick="setSubjectBatchFilter('all')">كل الدفعات</button>`+
-    batches.map(b=>`<button class="btn btn-sm ${currentSubjectsBatchFilter===b?'btn-primary':''}" onclick="setSubjectBatchFilter('${b.replace(/'/g,"\\'")}')">${b}</button>`).join('');
+    batches.map(b=>`<button class="btn btn-sm ${sameBatchName(currentSubjectsBatchFilter,b)?'btn-primary':''}" onclick="setSubjectBatchFilter('${b.replace(/'/g,"\\'")}')">${b}</button>`).join('');
 }
 function setSubjectBatchFilter(batch){
   currentSubjectsBatchFilter=batch;
@@ -1484,7 +1496,7 @@ function renderSubjectsTable() {
 
   const visibleSubjects=subjects.map((subj,si)=>({...subj,si,batchLabel:getSubjectBatchLabel(subj)}))
     .filter(isSubjectSection)
-    .filter(subj=>currentSubjectsBatchFilter==='all'||subj.batchLabel===currentSubjectsBatchFilter);
+    .filter(subj=>currentSubjectsBatchFilter==='all'||sameBatchName(subj.batchLabel,currentSubjectsBatchFilter));
   const sectionBody=document.getElementById('subjectSectionsTableBody');
   if(!visibleSubjects.length){
     sectionBody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد شُعب في هذه الدفعة</td></tr>';
@@ -1544,7 +1556,7 @@ async function deleteSubject(si) {
 // ══════════════════════════════════════════════
 function openCopySubjectsModal(){
   const batchSel=document.getElementById('copyBatchSelect');
-  const batches=[...new Set(students.map(s=>s.batch).filter(Boolean))].sort();
+  const batches=getAllKnownBatches();
   batchSel.innerHTML=batches.length
     ? batches.map(b=>`<option value="${b}">${b}</option>`).join('')
     : '<option value="">لا توجد دفعات</option>';
@@ -1573,7 +1585,7 @@ async function copySubjectsToBatch(){
   if(!batch) return showToast('اختاري الدفعة أولاً');
   const selected=Array.from(document.querySelectorAll('.copy-subject-check:checked')).map(c=>parseInt(c.value));
   if(!selected.length) return showToast('اختاري مادة واحدة على الأقل');
-  const targetStudentIdxs=students.map((s,i)=>s.batch===batch?i:null).filter(i=>i!==null);
+  const targetStudentIdxs=students.map((s,i)=>sameBatchName(s.batch,batch)?i:null).filter(i=>i!==null);
   if(!targetStudentIdxs.length) return showToast('لا يوجد طلاب في هذه الدفعة');
 
   showLoader(true);
@@ -1582,7 +1594,7 @@ async function copySubjectsToBatch(){
     for(const sourceIdx of selected){
       const source=subjects[sourceIdx];
       const lecturer=document.querySelector(`.copy-subject-lecturer[data-si="${sourceIdx}"]`)?.value||'';
-      const exists=subjects.find(s=>s.name===source.name && s.batch===batch);
+      const exists=subjects.find(s=>s.name===source.name && sameBatchName(s.batch,batch));
       if(exists) continue;
       const copy={
         _fbKey:null,
@@ -1691,7 +1703,7 @@ function updateSubjectsForPackage() {
 function getStudentSubjectChoices(batch){
   const batchSections=subjects
     .map((s,i)=>({...s,idx:i}))
-    .filter(s=>isSubjectSection(s)&&getSubjectBatchLabel(s)===batch);
+    .filter(s=>isSubjectSection(s)&&sameBatchName(getSubjectBatchLabel(s),batch));
   if(batchSections.length) return batchSections;
   return subjects.map((s,i)=>({...s,idx:i})).filter(s=>!isSubjectSection(s));
 }
@@ -1801,7 +1813,7 @@ async function saveStudent() {
     regDate:document.getElementById('stdRegDate').value,
     program:document.getElementById('stdProgram').value,
     track:document.getElementById('stdTrack').value,
-    batch:document.getElementById('stdBatchSelect').value,
+    batch:document.getElementById('stdBatchSelect').value.trim(),
     id, pkg:document.getElementById('studentPackage').value,
     totalAmount:parseFloat(document.getElementById('stdTotalAmount').value)||0,
     installments, notes:document.getElementById('stdNotes').value.trim()
@@ -1830,7 +1842,7 @@ async function saveStudent() {
     if(selectedPkg?.subjects?.length){
       for(let pi=0; pi<selectedPkg.subjects.length; pi++){
         const subjName = selectedPkg.subjects[pi];
-        let si = subjects.findIndex(s=>s.name===subjName && isSubjectSection(s) && getSubjectBatchLabel(s)===stdData.batch);
+        let si = subjects.findIndex(s=>s.name===subjName && isSubjectSection(s) && sameBatchName(getSubjectBatchLabel(s),stdData.batch));
         if(si<0) si = subjects.findIndex(s=>s.name===subjName && !isSubjectSection(s));
         if(si<0){
           subjects.push({_fbKey:null, name:subjName, lecturerUserId:null, students:[]});
@@ -3050,7 +3062,7 @@ async function createSixSemesterPlan(){
   if(!confirm(`سيتم إنشاء 6 فصول للدفعة ${batch}. يمكنك تعديل مواد كل فصل لاحقاً. المتابعة؟`)) return;
 
   const updates={};
-  const existing=Object.values(semestersData||{}).filter(s=>(s.batches||[]).includes(batch));
+  const existing=Object.values(semestersData||{}).filter(s=>(s.batches||[]).some(b=>sameBatchName(b,batch)));
   for(let i=1;i<=6;i++){
     const exists=existing.some(s=>(s.name||'').includes(`الفصل ${i}`));
     if(exists) continue;
@@ -3104,7 +3116,7 @@ async function enrollSemesterStudents(key){
   if(!stdSnap.exists()) return showToast('⚠️ لا يوجد طلاب في النظام');
 
   const allDbStudents = Object.entries(stdSnap.val());
-  const targetDbStudents = allDbStudents.filter(([,st])=> semBatches.includes(st.batch));
+  const targetDbStudents = allDbStudents.filter(([,st])=> semBatches.some(b=>sameBatchName(b,st.batch)));
 
   if(!targetDbStudents.length){
     const existing=[...new Set(allDbStudents.map(([,s])=>s.batch).filter(Boolean))];
@@ -3254,7 +3266,7 @@ function filterStudents(){
     filtered = filtered.filter(st=>st.program===progFilter);
   }
   if(batchFilter){
-    filtered = filtered.filter(st=>st.batch===batchFilter);
+    filtered = filtered.filter(st=>sameBatchName(st.batch,batchFilter));
   }
   
   const count = document.getElementById('studentsCount');
@@ -3320,10 +3332,11 @@ function populateBatchFilterDropdown(){
   const sel = document.getElementById('studentBatchFilter');
   if(!sel) return;
   const current = sel.value;
-  const batches = [...new Set(students.map(s=>s.batch).filter(Boolean))].sort();
+  const batches = getAllKnownBatches();
   sel.innerHTML = '<option value="">كل الدفعات</option>' +
     batches.map(b=>`<option value="${b}">${b}</option>`).join('');
-  if(batches.includes(current)) sel.value = current;
+  const selected = batches.find(b=>sameBatchName(b,current));
+  if(selected) sel.value = selected;
 }
 
 // ══════════════════════════════════════════════
