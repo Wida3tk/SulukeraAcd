@@ -1443,10 +1443,18 @@ function getSubjectBatchLabel(subj){
 function isSubjectSection(subj){
   return !!(subj.batch||subj.sourceSubjectKey);
 }
+function getAllKnownBatches(){
+  const batchSet=new Set();
+  students.forEach(s=>{ if(s.batch) batchSet.add(s.batch); });
+  programsData.forEach(p=>(p.tracks||[]).forEach(t=>(t.batches||[]).forEach(b=>{ if(b.name) batchSet.add(b.name); })));
+  Object.values(semestersData||{}).forEach(s=>(s.batches||[]).forEach(b=>batchSet.add(b)));
+  subjects.forEach(s=>{ const b=getSubjectBatchLabel(s); if(b&&b!=='عام') batchSet.add(b); });
+  return [...batchSet].sort();
+}
 function renderSubjectBatchTabs(){
   const el=document.getElementById('subjectBatchTabs');
   if(!el) return;
-  const batches=[...new Set(subjects.filter(isSubjectSection).map(getSubjectBatchLabel).filter(Boolean))].sort();
+  const batches=getAllKnownBatches();
   if(currentSubjectsBatchFilter!=='all' && !batches.includes(currentSubjectsBatchFilter)) currentSubjectsBatchFilter='all';
   el.innerHTML=`<button class="btn btn-sm ${currentSubjectsBatchFilter==='all'?'btn-primary':''}" onclick="setSubjectBatchFilter('all')">كل الدفعات</button>`+
     batches.map(b=>`<button class="btn btn-sm ${currentSubjectsBatchFilter===b?'btn-primary':''}" onclick="setSubjectBatchFilter('${b.replace(/'/g,"\\'")}')">${b}</button>`).join('');
