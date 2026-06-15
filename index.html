@@ -420,7 +420,11 @@ tr:hover td{background:#f8faff;}
               <select id="semBatches" multiple style="height:130px;width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;"></select>
             </div>
           </div>
-          <button class="btn btn-primary" onclick="addSemester()">+ إضافة فصل</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="semesterSaveBtn" onclick="saveSemesterForm()">+ إضافة فصل</button>
+            <button class="btn" id="semesterCancelBtn" onclick="resetSemesterForm()" style="display:none">إلغاء التعديل</button>
+            <button class="btn btn-sm" onclick="createSixSemesterPlan()">إنشاء خطة 6 فصول للدفعة</button>
+          </div>
         </div>
         <div class="card card-accent">
           <div class="card-title">📋 الفصول الدراسية</div>
@@ -2866,6 +2870,7 @@ function renderSemestersList(){
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           ${!isActive?`<button class="btn btn-success btn-sm" onclick="activateSemester('${key}')">✓ تفعيل</button>`:''}
           ${isActive?`<button class="btn btn-sm" onclick="deactivateSemester('${key}')">◉ إنهاء الفصل</button>`:''}
+          <button class="btn btn-sm" onclick="editSemester('${key}')">✏️ تعديل</button>
           <button class="btn btn-primary btn-sm" onclick="enrollSemesterStudents('${key}')">👥 تسجيل الطلاب</button>
           <button class="btn btn-danger btn-sm" onclick="deleteSemester('${key}')">🗑️</button>
         </div>
@@ -2877,7 +2882,7 @@ function renderSemestersList(){
 function populateSemesterSubjectSelect(){
   const el = document.getElementById('semSubjects');
   if(!el) return;
-  el.innerHTML = subjects.map(s=>`<option value="${s._fbKey}">${s.name}</option>`).join('');
+  el.innerHTML = subjects.map(s=>`<option value="${s._fbKey}">${s.name}${s.batch?' - '+s.batch:''}</option>`).join('');
 }
 
 async function populateSemesterBatchSelect(){
@@ -2900,28 +2905,103 @@ async function populateSemesterBatchSelect(){
   el.innerHTML = batches.sort().map(b=>`<option value="${b}">${b}</option>`).join('');
 }
 
-async function addSemester(){
+function getSemesterFormData(){
   const name = document.getElementById('semName').value.trim();
   const start = document.getElementById('semStart').value;
   const end = document.getElementById('semEnd').value;
   const selSubjects = Array.from(document.getElementById('semSubjects').selectedOptions).map(o=>o.value);
   const selBatches = Array.from(document.getElementById('semBatches').selectedOptions).map(o=>o.value);
 
-  if(!name) return showToast('⚠️ أدخل اسم الفصل');
-  if(!selSubjects.length) return showToast('⚠️ اختر مقرراً واحداً على الأقل');
-  if(!selBatches.length) return showToast('⚠️ اختر دفعة واحدة على الأقل');
+  if(!name){ showToast('⚠️ أدخل اسم الفصل'); return null; }
+  if(!selBatches.length){ showToast('⚠️ اختر دفعة واحدة على الأقل'); return null; }
+  return {name, startDate:start, endDate:end, subjects:selSubjects, batches:selBatches};
+}
 
+async function saveSemesterForm(){
+  const data=getSemesterFormData();
+  if(!data) return;
+  if(editingSemesterKey){
+    const old=semestersData[editingSemesterKey]||{};
+    const sem={...old,...data,status:old.status||'inactive'};
+    await fbRef('semesters/'+editingSemesterKey).set(sem);
+    semestersData[editingSemesterKey]=sem;
+    resetSemesterForm();
+    renderSemestersList();
+    showToast('✅ تم تحديث الفصل');
+    return;
+  }
   const key = 'sem_'+Date.now();
-  const sem = {name, startDate:start, endDate:end, subjects:selSubjects, batches:selBatches, status:'inactive'};
+  const sem = {...data, status:'inactive'};
   await fbRef('semesters/'+key).set(sem);
   semestersData[key] = sem;
 
-  // Reset form
+  resetSemesterForm();
+  renderSemestersList();
+  showToast('✅ تم إضافة الفصل');
+}
+
+async function addSemester(){
+  return saveSemesterForm();
+}
+
+function setSelectedOptions(selectId, values){
+  const wanted=new Set(values||[]);
+  Array.from(document.getElementById(selectId).options).forEach(o=>{ o.selected=wanted.has(o.value); });
+}
+
+async function editSemester(key){
+  const sem=semestersData[key];
+  if(!sem) return;
+  editingSemesterKey=key;
+  await populateSemesterBatchSelect();
+  populateSemesterSubjectSelect();
+  document.getElementById('semName').value=sem.name||'';
+  document.getElementById('semStart').value=sem.startDate||'';
+  document.getElementById('semEnd').value=sem.endDate||'';
+  setSelectedOptions('semSubjects',sem.subjects||[]);
+  setSelectedOptions('semBatches',sem.batches||[]);
+  document.getElementById('semesterSaveBtn').textContent='💾 حفظ تعديل الفصل';
+  document.getElementById('semesterCancelBtn').style.display='inline-flex';
+  document.getElementById('semName').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function resetSemesterForm(){
+  editingSemesterKey=null;
   document.getElementById('semName').value='';
   document.getElementById('semStart').value='';
   document.getElementById('semEnd').value='';
+  setSelectedOptions('semSubjects',[]);
+  setSelectedOptions('semBatches',[]);
+  document.getElementById('semesterSaveBtn').textContent='+ إضافة فصل';
+  document.getElementById('semesterCancelBtn').style.display='none';
+}
+
+async function createSixSemesterPlan(){
+  let batches=[...new Set(students.map(s=>s.batch).filter(Boolean))].sort();
+  if(!batches.length){
+    try{
+      const snap=await fbRef('students').get();
+      if(snap.exists()) batches=[...new Set(Object.values(snap.val()).map(s=>s.batch).filter(Boolean))].sort();
+    }catch(e){}
+  }
+  const batch=prompt('أدخلي اسم الدفعة لإنشاء 6 فصول لها:', batches[0]||'');
+  if(!batch) return;
+  if(!confirm(`سيتم إنشاء 6 فصول للدفعة ${batch}. يمكنك تعديل مواد كل فصل لاحقاً. المتابعة؟`)) return;
+
+  const updates={};
+  const existing=Object.values(semestersData||{}).filter(s=>(s.batches||[]).includes(batch));
+  for(let i=1;i<=6;i++){
+    const exists=existing.some(s=>(s.name||'').includes(`الفصل ${i}`));
+    if(exists) continue;
+    const key='sem_'+Date.now()+'_'+i;
+    const sem={name:`${batch} - الفصل ${i}`,startDate:'',endDate:'',subjects:[],batches:[batch],status:'inactive'};
+    updates['semesters/'+key]=sem;
+    semestersData[key]=sem;
+  }
+  if(!Object.keys(updates).length) return showToast('الفصول الستة موجودة لهذه الدفعة مسبقاً');
+  await firebase.database().ref('/').update(updates);
   renderSemestersList();
-  showToast('✅ تم إضافة الفصل');
+  showToast('✅ تم إنشاء خطة الفصول للدفعة');
 }
 
 async function activateSemester(key){
@@ -2991,6 +3071,7 @@ async function enrollSemesterStudents(key){
 let packagesData = [];
 let semestersData = {};   // {key: {name,startDate,endDate,batches,subjects,status}}
 let activeSemesterKey = null; // الفصل النشط حالياً
+let editingSemesterKey = null;
 
 async function loadPackagesFromFirebase(){
   try{
