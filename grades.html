@@ -459,7 +459,19 @@ function getGrade(t){
   return t>=settings.gradeA?'A':t>=settings.gradeB?'B':t>=settings.gradeC?'C':'F';
 }
 function pc(t){ return t>=70?'high':t>=50?'mid':'low'; }
-function getStatus(t){ return t>=settings.gradeFail?'ناجح':'راسب'; }
+function getStatus(t){ return t>=settings.gradeFail?'????':'????'; }
+function isExamEntered(g){
+  if(!g) return false;
+  if(g.examEntered===true) return true;
+  const exam = g.exam ?? g.exam_score;
+  return exam!==undefined && exam!==null && exam!=='' && Number(exam)>0;
+}
+function isFailingGrade(g){
+  return isExamEntered(g) && calcTotal(g)<settings.gradeFail;
+}
+function getGradeStatus(g){
+  return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
+}
 
 // ══════════════════════════════════════════════
 //  ROLE TOGGLE
@@ -653,8 +665,9 @@ function showStudentView(){
     const g = getGrade_data(currentUser.fbKey, s.key);
     return g ? calcTotal(g) : 0;
   });
+  const gradeRows = mySubjects.map(s=>getGrade_data(currentUser.fbKey, s.key)).filter(Boolean);
   const avg = totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
-  const hasFail = totals.some(t=>t>0 && t<settings.gradeFail);
+  const hasFail = gradeRows.some(isFailingGrade);
   const hasAnyGrades = totals.some(t=>t>0);
   // اللون: أحمر فقط إذا فيه تعثر حقيقي
   const avgColor = hasFail ? '#ff7070' : (hasAnyGrades ? '#55D7FF' : '#aabbcc');
@@ -685,6 +698,8 @@ function showStudentView(){
       const g = getGrade_data(currentUser.fbKey, subj.key);
       const total = g?calcTotal(g):0;
       const gr = getGrade(total);
+      const status = getGradeStatus(g);
+      const examDone = isExamEntered(g);
       const wkMax = settings.attend+settings.hw+settings.disc;
       const grColor = gr==='A'?'#1a7a3c':gr==='B'?'#0D40FC':gr==='C'?'#b35c00':'#c0392b';
       const lecName = getLecturerName(subj.lecturerUserId);
@@ -706,8 +721,8 @@ function showStudentView(){
               </div>
               <div style="flex:1">
                 <div class="progress"><div class="progress-fill pf-${pc(total)}" style="width:${total}%"></div></div>
-                <div style="font-size:11px;color:${total>=settings.gradeFail?'var(--success)':'var(--danger)'};margin-top:4px;font-weight:600">
-                  ${getStatus(total)}
+                <div style="font-size:11px;color:${!examDone?'var(--muted)':total>=settings.gradeFail?'var(--success)':'var(--danger)'};margin-top:4px;font-weight:600">
+                  ${status}
                 </div>
               </div>
             </div>
@@ -723,7 +738,7 @@ function showStudentView(){
                 </div>`;
               }).join('')}
             </div>
-            <div class="exam-bar ${total>=settings.gradeFail?'exam-pass':'exam-fail'}">
+            <div class="exam-bar ${!examDone?'':total>=settings.gradeFail?'exam-pass':'exam-fail'}">
               <span style="font-size:11px;font-weight:600">📝 الاختبار النهائي</span>
               <span style="font-size:18px;font-weight:800">${g?.exam??'—'}/${settings.exam}</span>
             </div>
@@ -773,6 +788,9 @@ function getLecturerName(uid){
   // Search by key
   if(dbData.users[uid]) return dbData.users[uid].name||'—';
   return Object.values(dbData.users).find(u=>u.id===uid)?.name || '—';
+}
+function subjectDisplayName(subj){
+  return subj?.batch ? `${subj.name} - ${subj.batch}` : (subj?.name||'');
 }
 
 // ══════════════════════════════════════════════
@@ -937,7 +955,7 @@ function selectBatch(batchName, btn){
       <div style="display:flex;gap:6px;flex-wrap:wrap;" id="lecSubjTabs">
         ${batchSubjects.map((subj,i)=>`
           <button class="lec-tab ${i===0?'active':''}"
-            onclick="selectLecSubject('${subj.key}','${batchName}',this)">${subj.name}
+            onclick="selectLecSubject('${subj.key}','${batchName}',this)">${subjectDisplayName(subj)}
           </button>`).join('')}
       </div>
     </div>
@@ -1025,7 +1043,7 @@ function renderWeekTable(w){
     thead.innerHTML=`<tr><th>الطالب</th><th>الرقم</th><th>الاختبار (/${settings.exam})</th><th>المجموع</th><th>تصنيف</th><th>حالة</th></tr>`;
     tbody.innerHTML=students.map(st=>{
       const g=getGrade_data(st.fbKey,currentSubjectKey);
-      const tot=g?calcTotal(g):0; const gr=getGrade(tot);
+      const tot=g?calcTotal(g):0; const gr=getGrade(tot); const status=getGradeStatus(g);
       return `<tr>
         <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
         <td class="mono">${st.id}</td>
@@ -1033,7 +1051,7 @@ function renderWeekTable(w){
           value="${g?.exam??''}" data-stkey="${st.fbKey}" data-field="exam"></td>
         <td><strong>${tot}</strong>/100</td>
         <td><span class="badge badge-${gr}">${gr}</span></td>
-        <td><span class="badge ${tot>=settings.gradeFail&&tot>0?'badge-pass':'badge-fail'}">${getStatus(tot)}</span></td>
+        <td><span class="badge ${!isExamEntered(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
       </tr>`;
     }).join('');
   } else {
@@ -1066,13 +1084,13 @@ function buildSummaryHTML(subjectKey, students){
     <tbody>
       ${students.map(st=>{
         const g=getGrade_data(st.fbKey,subjectKey);
-        const tot=g?calcTotal(g):0; const gr=getGrade(tot);
+        const tot=g?calcTotal(g):0; const gr=getGrade(tot); const status=getGradeStatus(g);
         return `<tr>
           <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
           <td class="mono">${st.id}</td>
           <td><strong>${tot}</strong>/100</td>
           <td><span class="badge badge-${gr}">${gr}</span></td>
-          <td><span class="badge ${tot>=settings.gradeFail&&tot>0?'badge-pass':'badge-fail'}">${getStatus(tot)}</span></td>
+          <td><span class="badge ${!isExamEntered(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -1100,7 +1118,10 @@ async function saveGrades(){
       const raw=inp.value.trim();
       if(!byStudent[stKey]) byStudent[stKey]={};
       // احفظ الحقل فقط إذا كان فيه قيمة
-      if(raw!=='') byStudent[stKey][field]=parseFloat(raw)||0;
+      if(raw!==''){
+        byStudent[stKey][field]=parseFloat(raw)||0;
+        if(field==='exam') byStudent[stKey].examEntered=true;
+      }
     });
 
     // لكل طالب: اقرأ السجل الكامل الموجود ثم ادمج التغييرات الجديدة
@@ -1119,7 +1140,8 @@ async function saveGrades(){
         w2_attend: existing.w2_attend||0, w2_hw: existing.w2_hw||0, w2_disc: existing.w2_disc||0,
         w3_attend: existing.w3_attend||0, w3_hw: existing.w3_hw||0, w3_disc: existing.w3_disc||0,
         w4_attend: existing.w4_attend||0, w4_hw: existing.w4_hw||0, w4_disc: existing.w4_disc||0,
-        exam: existing.exam||0,
+        exam: isExamEntered(existing) ? (existing.exam||0) : null,
+        examEntered: isExamEntered(existing),
         ...newFields  // التغييرات الجديدة تُطغى على القديمة
       };
       updates['grades/'+gradeKey] = merged;
