@@ -1547,7 +1547,7 @@ function openCopySubjectsModal(){
 
   const lecturers=users.filter(u=>u.role==='lecturer');
   const lecturerOptions=(selected='')=>'<option value="">-- اختر محاضراً --</option>'+lecturers.map(u=>`<option value="${u.username}" ${selected===u.username?'selected':''}>${u.name}</option>`).join('');
-  const baseSubjects=subjects.map((s,i)=>({...s,idx:i})).filter(s=>!s.batch);
+  const baseSubjects=subjects.map((s,i)=>({...s,idx:i})).filter(s=>!isSubjectSection(s));
   const sourceSubjects=baseSubjects.length ? baseSubjects : subjects.map((s,i)=>({...s,idx:i}));
   document.getElementById('copySubjectsList').innerHTML=sourceSubjects.map(s=>`
     <div style="display:grid;grid-template-columns:24px 1fr 220px;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--border);">
@@ -1647,10 +1647,12 @@ function updateBatchOptions(selectedBatch) {
   const track=prog?.tracks.find(t=>t.name===trackName);
   const sel=document.getElementById('stdBatchSelect');
   if (!sel) return;
+  sel.onchange=()=>refreshStudentSubjectOptions(editingStudentIdx);
   sel.innerHTML='<option value="">-- اختر دفعة --</option>';
   if (track&&track.batches.length) {
     track.batches.forEach(b=>{ sel.innerHTML+=`<option value="${b.name}" ${b.name===selectedBatch?'selected':''}>${b.name} (${b.year})</option>`; });
   }
+  refreshStudentSubjectOptions(editingStudentIdx);
 }
 function updateSubjectsForPackage() {
   const pkgKey = document.getElementById('studentPackage').value;
@@ -1667,7 +1669,7 @@ function updateSubjectsForPackage() {
       const subjSel = document.getElementById('studentSubjectsList');
       if(!subjSel) return;
       Array.from(subjSel.options).forEach(o=>{
-        const sname = o.text.replace(/\s*\(.*\)$/,'').trim();
+        const sname = o.text.replace(/\s*\(.*\)$/,'').split(' - ')[0].trim();
         o.selected = pkg.subjects.includes(sname);
       });
       showToast(`✅ تم اختيار مقررات باقة ${pkg.name}`);
@@ -1678,6 +1680,21 @@ function updateSubjectsForPackage() {
 // ══════════════════════════════════════════════
 //  STUDENTS TABLE
 // ══════════════════════════════════════════════
+function getStudentSubjectChoices(batch){
+  const batchSections=subjects
+    .map((s,i)=>({...s,idx:i}))
+    .filter(s=>isSubjectSection(s)&&getSubjectBatchLabel(s)===batch);
+  if(batchSections.length) return batchSections;
+  return subjects.map((s,i)=>({...s,idx:i})).filter(s=>!isSubjectSection(s));
+}
+
+function refreshStudentSubjectOptions(studentIdx=-1){
+  const sel=document.getElementById('studentSubjectsList');
+  if(!sel) return;
+  const batch=document.getElementById('stdBatchSelect')?.value || students[studentIdx]?.batch || '';
+  const choices=getStudentSubjectChoices(batch);
+  sel.innerHTML=choices.map(s=>'<option value="'+s.idx+'" '+(studentIdx>=0&&subjects[s.idx].students.includes(studentIdx)?'selected':'')+'>'+s.name+(isSubjectSection(s)?' - '+getSubjectBatchLabel(s):'')+'</option>').join('');
+}
 function renderStudentsTable() {
   populateProgramFilterDropdown();
   populateBatchFilterDropdown();
@@ -1735,7 +1752,7 @@ function openStudentModal(si=-1) {
   if (st?.batch) { const bs=document.getElementById('stdBatchSelect'); if(bs) bs.value=st.batch; }
   // Subjects list
   const sel=document.getElementById('studentSubjectsList');
-  sel.innerHTML=subjects.map((s,i)=>`<option value="${i}" ${si>=0&&subjects[i].students.includes(si)?'selected':''}>${s.name}</option>`).join('');
+  refreshStudentSubjectOptions(si);
   // Installments
   if (st?.installments&&st.installments.length) {
     document.getElementById('stdInstallmentsCount').value=st.installments.length;
@@ -1805,7 +1822,8 @@ async function saveStudent() {
     if(selectedPkg?.subjects?.length){
       for(let pi=0; pi<selectedPkg.subjects.length; pi++){
         const subjName = selectedPkg.subjects[pi];
-        let si = subjects.findIndex(s=>s.name===subjName);
+        let si = subjects.findIndex(s=>s.name===subjName && isSubjectSection(s) && getSubjectBatchLabel(s)===stdData.batch);
+        if(si<0) si = subjects.findIndex(s=>s.name===subjName && !isSubjectSection(s));
         if(si<0){
           subjects.push({_fbKey:null, name:subjName, lecturerUserId:null, students:[]});
           si = subjects.length-1;
@@ -2907,9 +2925,11 @@ function renderSemestersList(){
 function populateSemesterSubjectSelect(){
   const el = document.getElementById('semSubjects');
   if(!el) return;
-  const sectionSubjects=subjects.filter(isSubjectSection);
-  const list=sectionSubjects.length ? sectionSubjects : subjects;
-  el.innerHTML = list.map(s=>`<option value="${s._fbKey}">${s.name}${getSubjectBatchLabel(s)?' - '+getSubjectBatchLabel(s):''}</option>`).join('');
+  const base=subjects.filter(s=>!isSubjectSection(s));
+  const sections=subjects.filter(isSubjectSection);
+  el.innerHTML =
+    (base.length?`<optgroup label="المواد الأصلية">${base.map(s=>`<option value="${s._fbKey}">${s.name}</option>`).join('')}</optgroup>`:'')+
+    (sections.length?`<optgroup label="شُعب الدفعات">${sections.map(s=>`<option value="${s._fbKey}">${s.name} - ${getSubjectBatchLabel(s)}</option>`).join('')}</optgroup>`:'');
 }
 
 async function populateSemesterBatchSelect(){
