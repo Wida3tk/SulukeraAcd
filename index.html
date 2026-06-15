@@ -251,6 +251,7 @@ tr:hover td{background:#f8faff;}
       <!-- SUBJECTS -->
       <div class="page" id="page-subjects">
         <div class="card card-accent"><div class="card-title">📖 المواد الدراسية</div>
+          <div id="subjectBatchTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;"></div>
           <div class="table-wrap"><table><thead><tr><th>#</th><th>اسم المادة</th><th>المحاضر</th><th>الطلاب</th><th>متوسط</th><th>إجراءات</th></tr></thead><tbody id="subjectsTableBody"></tbody></table></div>
         </div>
       </div>
@@ -1145,6 +1146,7 @@ let previousPage=null;
 let currentCardProgram='all';
 let currentCardTrack='all';
 let gradeReportStdIdx=-1;
+let currentSubjectsBatchFilter='all';
 
 // ══════════════════════════════════════════════
 //  HELPERS
@@ -1424,11 +1426,38 @@ function renderDashboard() {
 // ══════════════════════════════════════════════
 //  SUBJECTS
 // ══════════════════════════════════════════════
+function getSubjectBatchLabel(subj){
+  if(subj.batch) return subj.batch;
+  const batches=[...new Set((subj.students||[]).map(i=>students[i]?.batch).filter(Boolean))];
+  if(batches.length===1) return batches[0];
+  return 'عام';
+}
+function renderSubjectBatchTabs(){
+  const el=document.getElementById('subjectBatchTabs');
+  if(!el) return;
+  const batches=[...new Set(subjects.map(getSubjectBatchLabel).filter(Boolean))].sort();
+  if(currentSubjectsBatchFilter!=='all' && !batches.includes(currentSubjectsBatchFilter)) currentSubjectsBatchFilter='all';
+  el.innerHTML=`<button class="btn btn-sm ${currentSubjectsBatchFilter==='all'?'btn-primary':''}" onclick="setSubjectBatchFilter('all')">كل الدفعات</button>`+
+    batches.map(b=>`<button class="btn btn-sm ${currentSubjectsBatchFilter===b?'btn-primary':''}" onclick="setSubjectBatchFilter('${b.replace(/'/g,"\\'")}')">${b}</button>`).join('');
+}
+function setSubjectBatchFilter(batch){
+  currentSubjectsBatchFilter=batch;
+  renderSubjectsTable();
+}
 function renderSubjectsTable() {
-  document.getElementById('subjectsTableBody').innerHTML=subjects.map((subj,si)=>{
+  renderSubjectBatchTabs();
+  const visibleSubjects=subjects.map((subj,si)=>({...subj,si,batchLabel:getSubjectBatchLabel(subj)}))
+    .filter(subj=>currentSubjectsBatchFilter==='all'||subj.batchLabel===currentSubjectsBatchFilter);
+  const tbody=document.getElementById('subjectsTableBody');
+  if(!visibleSubjects.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد مواد في هذه الدفعة</td></tr>';
+    return;
+  }
+  tbody.innerHTML=visibleSubjects.map((subj)=>{
+    const si=subj.si;
     const tots=subj.students.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
     const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
-    return `<tr><td class="mono">${si+1}</td><td><strong>${subj.name}</strong>${subj.batch?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">الدفعة: ${subj.batch}</div>`:''}</td>
+    return `<tr><td class="mono">${si+1}</td><td><strong>${subj.name}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:2px">الدفعة: ${subj.batchLabel}</div></td>
       <td>${getLecturerName(subj.lecturerUserId)}</td><td>${subj.students.length}</td><td>${avg}/100</td>
       <td style="display:flex;gap:4px;">${currentUser.role==='admin'
         ?`<button class="btn btn-sm" onclick="openSubjectModal(${si})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteSubject(${si})">🗑️</button>`
