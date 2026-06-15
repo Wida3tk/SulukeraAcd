@@ -296,6 +296,7 @@ tr:hover td{background:#f8faff;}
             <select id="studentBatchFilter" onchange="filterStudents()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
               <option value="">كل الدفعات</option>
             </select>
+            <button class="btn btn-sm" onclick="clearStudentFilters()">مسح الفلاتر</button>
             <button class="btn btn-sm" onclick="exportStudentsExcel()">📊 تصدير Excel</button>
           </div>
           <div id="studentsCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
@@ -2914,16 +2915,22 @@ function populateSemesterSubjectSelect(){
 async function populateSemesterBatchSelect(){
   const el = document.getElementById('semBatches');
   if(!el) return;
-  // اقرأ الدفعات من Firebase مباشرة لضمان الدقة
-  let batches = [...new Set(students.map(s=>s.batch).filter(Boolean))];
-  if(!batches.length){
-    try{
-      const snap = await fbRef('students').get();
-      if(snap.exists()){
-        batches = [...new Set(Object.values(snap.val()).map(s=>s.batch).filter(Boolean))];
-      }
-    }catch(e){}
-  }
+  const batchSet=new Set();
+  students.forEach(s=>{ if(s.batch) batchSet.add(s.batch); });
+  programsData.forEach(p=>(p.tracks||[]).forEach(t=>(t.batches||[]).forEach(b=>{ if(b.name) batchSet.add(b.name); })));
+  Object.values(semestersData||{}).forEach(s=>(s.batches||[]).forEach(b=>batchSet.add(b)));
+  subjects.forEach(s=>{ if(s.batch) batchSet.add(s.batch); });
+  try{
+    const rootSnap=await firebase.database().ref('/').get();
+    if(rootSnap.exists()){
+      const root=rootSnap.val();
+      Object.values(root.students||{}).forEach(s=>{ if(s.batch) batchSet.add(s.batch); });
+      Object.values(root.semesters||{}).forEach(s=>(s.batches||[]).forEach(b=>batchSet.add(b)));
+      Object.values(root.subjects||{}).forEach(s=>{ if(s.batch) batchSet.add(s.batch); });
+      Object.values(root.programs||{}).forEach(p=>Object.values(p.tracks||{}).forEach(t=>Object.values(t.batches||{}).forEach(b=>{ if(b.name) batchSet.add(b.name); })));
+    }
+  }catch(e){}
+  let batches=[...batchSet];
   if(!batches.length){
     el.innerHTML = '<option value="">لا توجد دفعات — أضف طلاباً أولاً</option>';
     return;
@@ -3226,6 +3233,16 @@ function filterStudents(){
   if(count) count.textContent = `عرض ${filtered.length} من ${students.length} طالب`;
   
   renderStudentsTableFiltered(filtered);
+}
+
+function clearStudentFilters(){
+  const search=document.getElementById('studentSearchInput');
+  const program=document.getElementById('studentProgramFilter');
+  const batch=document.getElementById('studentBatchFilter');
+  if(search) search.value='';
+  if(program) program.value='';
+  if(batch) batch.value='';
+  filterStudents();
 }
 
 function renderStudentsTableFiltered(filtered){
