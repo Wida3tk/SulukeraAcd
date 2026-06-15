@@ -2925,14 +2925,9 @@ async function addSemester(){
 }
 
 async function activateSemester(key){
-  if(!confirm('تفعيل هذا الفصل؟ سيصبح الفصل الحالي النشط.')) return;
-  // Deactivate all others
-  const updates={};
-  Object.keys(semestersData).forEach(k=>{
-    updates['semesters/'+k+'/status'] = k===key ? 'active' : 'inactive';
-    semestersData[k].status = k===key ? 'active' : 'inactive';
-  });
-  await firebase.database().ref('/').update(updates);
+  if(!confirm('تفعيل هذا الفصل؟ سيبقى أي فصل نشط آخر مفعلاً.')) return;
+  await fbRef('semesters/'+key+'/status').set('active');
+  semestersData[key].status = 'active';
   activeSemesterKey = key;
   renderSemestersList();
   showToast('✅ تم تفعيل الفصل');
@@ -2942,7 +2937,7 @@ async function deactivateSemester(key){
   if(!confirm('إنهاء هذا الفصل؟')) return;
   await fbRef('semesters/'+key+'/status').set('inactive');
   semestersData[key].status='inactive';
-  activeSemesterKey=null;
+  activeSemesterKey=Object.entries(semestersData).find(([,s])=>s.status==='active')?.[0]||null;
   renderSemestersList();
   showToast('✅ تم إنهاء الفصل');
 }
@@ -2951,7 +2946,7 @@ async function deleteSemester(key){
   if(!confirm('حذف هذا الفصل؟ لن تُحذف الدرجات.')) return;
   await fbRef('semesters/'+key).remove();
   delete semestersData[key];
-  if(activeSemesterKey===key) activeSemesterKey=null;
+  if(activeSemesterKey===key) activeSemesterKey=Object.entries(semestersData).find(([,s])=>s.status==='active')?.[0]||null;
   renderSemestersList();
   showToast('✅ تم الحذف');
 }
