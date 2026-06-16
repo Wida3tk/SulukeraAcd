@@ -1188,7 +1188,7 @@ function getGradeForSemester(si, stdIdx, semKey){
   if(semKey && g.semesterKey && g.semesterKey!==semKey) return null;
   return g;
 }
-function getStatus(t){return t>=settings.gradeFail?'????':'????';}
+function getStatus(t){return t>=settings.gradeFail?'ناجح':'راسب';}
 function isExamEntered(g){
   if(!g) return false;
   if(g.examEntered===true) return true;
