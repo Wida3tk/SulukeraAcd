@@ -1210,6 +1210,34 @@ function getLecturerName(id){
 }
 function getLecturerSubjects(uid){return subjects.map((s,i)=>({...s,idx:i})).filter(s=>s.lecturerUserId===uid);}
 function makeEmptyGrade(){return{w1:{attend:0,hw:0,disc:0},w2:{attend:0,hw:0,disc:0},w3:{attend:0,hw:0,disc:0},w4:{attend:0,hw:0,disc:0},exam:null,examEntered:false};}
+async function syncMissingSemesterEnrollments(studentIdx=null){
+  const updates={};
+  let added=0;
+  Object.values(semestersData||{}).forEach(sem=>{
+    const semBatches=sem.batches||[];
+    const semSubjectKeys=sem.subjects||[];
+    if(!semBatches.length||!semSubjectKeys.length) return;
+    students.forEach((st,idx)=>{
+      if(studentIdx!==null && idx!==studentIdx) return;
+      if(!st?._fbKey) return;
+      if(!semBatches.some(b=>sameBatchName(b,st.batch))) return;
+      semSubjectKeys.forEach(subjKey=>{
+        const si=subjects.findIndex(s=>s._fbKey===subjKey);
+        if(si<0) return;
+        if(!subjects[si].students.includes(idx)){
+          subjects[si].students.push(idx);
+          if(!grades[si]) grades[si]={};
+          if(!grades[si][idx]) grades[si][idx]=makeEmptyGrade();
+          const enrKey=('enr_'+st._fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
+          updates['enrollments/'+enrKey]={studentKey:st._fbKey, subjectKey:subjKey};
+          added++;
+        }
+      });
+    });
+  });
+  if(Object.keys(updates).length) await firebase.database().ref('/').update(updates);
+  return added;
+}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function initGrades(){subjects.forEach((subj,si)=>{if(!grades[si])grades[si]={};subj.students.forEach(idx=>{if(!grades[si][idx])grades[si][idx]=makeEmptyGrade();});});}
@@ -1382,7 +1410,17 @@ function refreshPage(p) {
   if (p==='subjects') renderSubjectsTable();
   if (p==='students') renderStudentsTable();
   if (p==='users') renderUsersTable();
-  if (p==='grades') { populateGradeSubjectSelect(); loadGradesTable(); }
+  if (p==='grades') {
+    populateGradeSubjectSelect();
+    loadGradesTable();
+    syncMissingSemesterEnrollments().then(added=>{
+      if(added>0){
+        populateGradeSubjectSelect();
+        loadGradesTable();
+        showToast('تم تحديث تسجيل الطلاب في المقررات');
+      }
+    }).catch(e=>console.error('Enrollment sync error:',e));
+  }
   if (p==='reports') populateReportStudentSelect();
   if (p==='mygrades') loadMyGrades();
   if (p==='settings') { loadSettings(); updateSettingsSummary(); }
@@ -1930,6 +1968,7 @@ async function saveStudent() {
       if(Object.keys(enrollUpdates).length>0)
         await firebase.database().ref('/').update(enrollUpdates);
     }
+    await syncMissingSemesterEnrollments(idx2);
 
     if(generatedStudentPassword){
       addPendingStudentPassword({name:fullName,id,password:pass});
