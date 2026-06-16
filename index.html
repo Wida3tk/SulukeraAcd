@@ -263,7 +263,7 @@ tr:hover td{background:#f8faff;}
       <div class="page" id="page-grades">
         <div style="display:flex;gap:10px;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
           <label style="font-size:12px;color:var(--text-muted);font-weight:600">المادة:</label>
-          <select id="gradeSubjectSelect" onchange="loadGradesTable()" style="padding:7px 12px;border-radius:var(--radius);border:1.5px solid var(--border);font-size:13px;background:white;min-width:220px;font-family:inherit;"></select>
+          <select id="gradeSubjectSelect" onchange="onGradeSubjectChange()" style="padding:7px 12px;border-radius:var(--radius);border:1.5px solid var(--border);font-size:13px;background:white;min-width:220px;font-family:inherit;"></select>
         </div>
         <div class="week-tabs">
           <div class="week-tab active" onclick="selectWeek(1,this)">📅 الأسبوع 1</div>
@@ -274,6 +274,7 @@ tr:hover td{background:#f8faff;}
         </div>
         <div class="card card-accent">
           <div class="card-title" id="gradesCardTitle">إدخال الدرجات</div>
+          <div id="gradeBatchTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
           <div class="table-wrap"><table><thead id="gradesTableHead"></thead><tbody id="gradesTableBody"></tbody></table></div>
           <div style="margin-top:1rem;display:flex;gap:8px;" id="gradeSaveRow">
             <button class="btn btn-success" onclick="saveGrades()">💾 حفظ الدرجات</button>
@@ -1155,6 +1156,7 @@ let currentCardProgram='all';
 let currentCardTrack='all';
 let gradeReportStdIdx=-1;
 let currentSubjectsBatchFilter='all';
+let currentGradeBatchFilter='all';
 
 // ══════════════════════════════════════════════
 //  HELPERS
@@ -2198,6 +2200,31 @@ function populateGradeSubjectSelect() {
   const myIdxs=currentUser.role==='lecturer'?getLecturerSubjects(currentUser.id).map(s=>s.idx):subjects.map((_,i)=>i);
   document.getElementById('gradeSubjectSelect').innerHTML=myIdxs.map(si=>`<option value="${si}">${subjects[si].name}</option>`).join('');
 }
+function onGradeSubjectChange(){
+  currentGradeBatchFilter='all';
+  loadGradesTable();
+}
+function getGradeBatchOptions(subj){
+  const batchSet=new Set();
+  (subj?.students||[]).forEach(stdIdx=>addBatchName(batchSet,students[stdIdx]?.batch));
+  return [...batchSet].sort();
+}
+function setGradeBatchFilter(batch){
+  currentGradeBatchFilter=batch;
+  loadGradesTable();
+}
+function renderGradeBatchTabs(subj){
+  const el=document.getElementById('gradeBatchTabs');
+  if(!el) return;
+  const batches=getGradeBatchOptions(subj);
+  if(currentGradeBatchFilter!=='all' && !batches.some(b=>sameBatchName(b,currentGradeBatchFilter))) currentGradeBatchFilter='all';
+  if(batches.length<=1){
+    el.innerHTML='';
+    return;
+  }
+  el.innerHTML=`<button class="btn btn-sm ${currentGradeBatchFilter==='all'?'btn-primary':''}" onclick="setGradeBatchFilter('all')">كل الدفعات</button>`+
+    batches.map(b=>`<button class="btn btn-sm ${sameBatchName(currentGradeBatchFilter,b)?'btn-primary':''}" onclick="setGradeBatchFilter('${b.replace(/'/g,"\\'")}')">${b}</button>`).join('');
+}
 function selectWeek(w,el) {
   currentWeek=w;
   document.querySelectorAll('.week-tab').forEach(t=>t.classList.remove('active')); el.classList.add('active');
@@ -2206,13 +2233,19 @@ function selectWeek(w,el) {
 function loadGradesTable() {
   const si=parseInt(document.getElementById('gradeSubjectSelect').value)||0;
   const subj=subjects[si]; if (!subj) return;
+  renderGradeBatchTabs(subj);
   const isExam=currentWeek===0; const wKey=isExam?'exam':`w${currentWeek}`;
   document.getElementById('gradesCardTitle').textContent=isExam?`📝 الاختبار النهائي — ${subj.name}`:`📅 الأسبوع ${currentWeek} — ${subj.name}`;
   const thead=document.getElementById('gradesTableHead');
   if (isExam) thead.innerHTML=`<tr><th>#</th><th>الطالب</th><th>الدفعة</th><th>الاختبار (/${settings.exam})</th><th>المجموع</th><th>تصنيف</th><th>حالة</th></tr>`;
   else thead.innerHTML=`<tr><th>#</th><th>الطالب</th><th>الدفعة</th><th>حضور(/${settings.attend})</th><th>واجبات(/${settings.hw})</th><th>مناقشة(/${settings.disc})</th><th>مجموع الأسبوع</th><th>الكلي</th></tr>`;
   const wkMax=settings.attend+settings.hw+settings.disc;
-  document.getElementById('gradesTableBody').innerHTML=subj.students.map((stdIdx,row)=>{
+  const visibleStudentIdxs=(subj.students||[]).filter(stdIdx=>currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter));
+  if(!visibleStudentIdxs.length){
+    document.getElementById('gradesTableBody').innerHTML='<tr><td colspan="'+(isExam?7:8)+'" style="text-align:center;padding:2rem;color:var(--text-muted)">لا يوجد طلاب في هذه الدفعة لهذه المادة</td></tr>';
+    return;
+  }
+  document.getElementById('gradesTableBody').innerHTML=visibleStudentIdxs.map((stdIdx,row)=>{
     const g=grades[si]?.[stdIdx]; if (!g) return '';
     const st=students[stdIdx]; const wg=isExam?null:g[wKey];
     const wt=isExam?(g.exam||0):((wg?.attend||0)+(wg?.hw||0)+(wg?.disc||0));
@@ -2245,7 +2278,7 @@ async function saveGrades() {
     const subj=subjects[si];
     if(!subj) return;
     const updates={};
-    (subj.students||[]).forEach(stdIdx=>{
+    (subj.students||[]).filter(stdIdx=>currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter)).forEach(stdIdx=>{
       const g=grades[si]?.[stdIdx]; if(!g) return;
       const st=students[stdIdx]; if(!st?._fbKey) return;
       const subjKey=subj._fbKey; if(!subjKey) return;
@@ -2268,7 +2301,7 @@ async function saveGrades() {
 function autoFillDemo() {
   const si=parseInt(document.getElementById('gradeSubjectSelect').value)||0;
   const isExam=currentWeek===0; const wKey=isExam?'exam':`w${currentWeek}`;
-  subjects[si].students.forEach(idx=>{
+  subjects[si].students.filter(idx=>currentGradeBatchFilter==='all'||sameBatchName(students[idx]?.batch,currentGradeBatchFilter)).forEach(idx=>{
     if (!grades[si]) grades[si]={};
     if (!grades[si][idx]) grades[si][idx]=makeEmptyGrade();
     if (isExam) { grades[si][idx].exam=Math.floor(Math.random()*(settings.exam+1)); grades[si][idx].examEntered=true; }
