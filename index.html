@@ -1501,6 +1501,18 @@ function getSubjectRowsForBatchFilter(){
       });
     });
   });
+  subjects.forEach((subj,si)=>{
+    const enrolledBatches=[...new Set((subj.students||[]).map(idx=>students[idx]?.batch).filter(Boolean))];
+    enrolledBatches.forEach(batch=>{
+      if(currentSubjectsBatchFilter!=='all' && !sameBatchName(batch,currentSubjectsBatchFilter)) return;
+      const key=normalizeBatchName(batch)+'|'+(subj._fbKey||si);
+      if(seen.has(key)) return;
+      const studentIdxs=(subj.students||[]).filter(idx=>sameBatchName(students[idx]?.batch,batch));
+      if(!studentIdxs.length) return;
+      rows.push({...subj,si,batchLabel:batch,semesterName:'تسجيل مباشر',studentIdxs});
+      seen.add(key);
+    });
+  });
   return rows;
 }
 function renderSubjectsTable() {
