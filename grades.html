@@ -459,7 +459,7 @@ function getGrade(t){
   return t>=settings.gradeA?'A':t>=settings.gradeB?'B':t>=settings.gradeC?'C':'F';
 }
 function pc(t){ return t>=70?'high':t>=50?'mid':'low'; }
-function getStatus(t){ return t>=settings.gradeFail?'????':'????'; }
+function getStatus(t){ return t>=settings.gradeFail?'ناجح':'راسب'; }
 function isExamEntered(g){
   if(!g) return false;
   if(g.examEntered===true) return true;
@@ -470,7 +470,7 @@ function isFailingGrade(g){
   return isExamEntered(g) && calcTotal(g)<settings.gradeFail;
 }
 function getGradeStatus(g){
-  return isExamEntered(g) ? getStatus(calcTotal(g)) : '??? ?????';
+  return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
 }
 function getActiveSemesters(){
   return Object.entries(dbData.semesters||{})
