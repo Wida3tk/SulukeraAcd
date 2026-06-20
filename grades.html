@@ -477,8 +477,12 @@ function getActiveSemesters(){
     .filter(([,s])=>s.status==='active')
     .map(([key,s])=>({key,...s}));
 }
+function normalizeBatchName(batch){
+  return String(batch||'').trim().replace(/\s+/g,' ').toLowerCase();
+}
 function activeSubjectKeysForBatch(batch){
-  const active=getActiveSemesters().filter(s=>(s.batches||[]).includes(batch));
+  const wanted=normalizeBatchName(batch);
+  const active=getActiveSemesters().filter(s=>(s.batches||[]).some(b=>normalizeBatchName(b)===wanted));
   return [...new Set(active.flatMap(s=>s.subjects||[]))];
 }
 
@@ -787,10 +791,10 @@ function getGrade_data(studentFbKey, subjectFbKey){
 
 function getLecturerName(uid){
   if(!uid||!dbData.users) return '—';
-  const u = Object.values(dbData.users).find(u=>u.username===uid||Object.keys(dbData.users||{}).includes(uid));
+  const u = Object.values(dbData.users).find(u=>u.username===uid||u.id===uid);
   // Search by key
   if(dbData.users[uid]) return dbData.users[uid].name||'—';
-  return Object.values(dbData.users).find(u=>u.id===uid)?.name || '—';
+  return u?.name || '—';
 }
 function subjectDisplayName(subj){
   return subj?.batch ? `${subj.name} - ${subj.batch}` : (subj?.name||'');
@@ -1126,7 +1130,7 @@ async function saveGrades(){
     for(const [stKey, newFields] of Object.entries(byStudent)){
       const gradeKey=('grade_'+stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
       // اقرأ الدرجات الحالية من dbData أو Firebase
-      const existing = dbData.grades?.[gradeKey] || 
+      const existing = dbData.grades?.[gradeKey] || getGrade_data(stKey,currentSubjectKey) ||
         (await fbRef('grades/'+gradeKey).get()).val() || {};
       // ادمج: الحقول الحالية + الحقول الجديدة
       const merged = {
@@ -1139,9 +1143,12 @@ async function saveGrades(){
         w4_attend: existing.w4_attend||0, w4_hw: existing.w4_hw||0, w4_disc: existing.w4_disc||0,
         exam: isExamEntered(existing) ? (existing.exam||0) : null,
         examEntered: isExamEntered(existing),
-        ...newFields  // التغييرات الجديدة تُطغى على القديمة
+        ...newFields,  // التغييرات الجديدة تُطغى على القديمة
+        updatedAt:new Date().toISOString()
       };
       updates['grades/'+gradeKey] = merged;
+      const legacyKey=(stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
+      if(legacyKey!==gradeKey) updates['grades/'+legacyKey]=null;
       // حدّث dbData المحلي فوراً
       if(!dbData.grades) dbData.grades={};
       dbData.grades[gradeKey] = merged;
