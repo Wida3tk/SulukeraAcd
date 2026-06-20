@@ -675,9 +675,12 @@ function showStudentView(){
   // Get student's subjects via enrollments
   const allMySubjects = getStudentSubjects(currentUser.fbKey);
   const activeKeys=activeSubjectKeysForBatch(st.batch);
-  const mySubjects = activeKeys.length
-    ? allMySubjects.filter(s=>activeKeys.includes(s.key))
-    : allMySubjects;
+  const structuredMySubjects=allMySubjects.filter(s=>s.courseKey);
+  const activeStructured=activeKeys.length?structuredMySubjects.filter(s=>activeKeys.includes(s.key)):[];
+  const activeLegacy=activeKeys.length?allMySubjects.filter(s=>activeKeys.includes(s.key)):[];
+  const mySubjects = structuredMySubjects.length
+    ? (activeStructured.length?activeStructured:structuredMySubjects)
+    : (activeLegacy.length?activeLegacy:allMySubjects);
   const totals = mySubjects.map(s=>{
     const g = getGrade_data(currentUser.fbKey, s.key);
     return g ? calcTotal(g) : 0;
@@ -853,13 +856,19 @@ function getLecturerSubjects(){
     })
     .map(([k,s])=>({key:k,...s}));
 
-  console.log('✅ My subjects:', allMySubjs.map(s=>s.name));
+  // عند وجود خطط الدفعات الجديدة لا نعرض المقررات القديمة غير المرتبطة بالخطة.
+  const hasStructuredSubjects=Object.values(dbData.subjects||{}).some(s=>s.courseKey);
+  const operationalSubjects=hasStructuredSubjects
+    ? allMySubjs.filter(s=>s.courseKey)
+    : allMySubjs;
+
+  console.log('✅ My subjects:', operationalSubjects.map(s=>s.name));
 
   const activeKeys=[...new Set(getActiveSemesters().flatMap(s=>s.subjects||[]))];
-  if(!activeKeys.length) return allMySubjs;
-  const activeMine=allMySubjs.filter(s=>activeKeys.includes(s.key));
+  if(!activeKeys.length) return operationalSubjects;
+  const activeMine=operationalSubjects.filter(s=>activeKeys.includes(s.key));
   // لا نخفي مقررات المحاضر كلها إذا كان إعداد الفصل الحالي ناقصاً.
-  return activeMine.length ? activeMine : allMySubjs;
+  return activeMine.length ? activeMine : operationalSubjects;
 }
 
 function getSubjectStudents(subjectFbKey){
