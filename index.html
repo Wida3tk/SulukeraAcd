@@ -947,6 +947,10 @@ async function loadAllFromFirebase(){
       }));
     }
 
+    // خطط الفصول مطلوبة لبناء تسجيلات الطلاب تلقائياً عند الدخول.
+    semestersData=root.semesters||{};
+    activeSemesterKey=Object.entries(semestersData).find(([,s])=>s.status==='active')?.[0]||null;
+
     // 6. Enrollments — map students to subjects
     if(root.enrollments){
       Object.values(root.enrollments).forEach(e=>{
