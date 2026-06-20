@@ -1305,6 +1305,8 @@ async function _finishLogin() {
   programsData=[];
   try {
     await loadAllFromFirebase();
+    // أصلح التسجيلات الناقصة بأمان اعتماداً على دفعة الطالب وخطة الفصول.
+    if(currentUser.role==='admin') await syncMissingSemesterEnrollments();
   } catch(e) {
     console.error('Firebase load error:', e);
     showToast('⚠️ خطأ في تحميل البيانات — وضع محلي');
@@ -3162,6 +3164,7 @@ async function saveSemesterForm(){
     const sem={...old,...data,status:old.status||'inactive'};
     await fbRef('semesters/'+editingSemesterKey).set(sem);
     semestersData[editingSemesterKey]=sem;
+    await syncMissingSemesterEnrollments();
     resetSemesterForm();
     renderSemestersList();
     showToast('✅ تم تحديث الفصل');
@@ -3171,6 +3174,7 @@ async function saveSemesterForm(){
   const sem = {...data, status:'inactive'};
   await fbRef('semesters/'+key).set(sem);
   semestersData[key] = sem;
+  await syncMissingSemesterEnrollments();
 
   resetSemesterForm();
   renderSemestersList();
@@ -3246,6 +3250,7 @@ async function activateSemester(key){
   await fbRef('semesters/'+key+'/status').set('active');
   semestersData[key].status = 'active';
   activeSemesterKey = key;
+  await syncMissingSemesterEnrollments();
   renderSemestersList();
   showToast('✅ تم تفعيل الفصل');
 }
