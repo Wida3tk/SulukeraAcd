@@ -898,6 +898,7 @@ async function loadAllFromFirebase(){
     }
 
     // 2. Programs
+    programsData=[];
     if(root.programs){
       programsData = Object.entries(root.programs).map(([key,p])=>({
         id:key, name:p.name,
@@ -909,6 +910,7 @@ async function loadAllFromFirebase(){
     }
 
     // 3. Users (non-student)
+    users=[];
     if(root.users){
       const allDbUsers = Object.entries(root.users).map(([k,u])=>({...u,_fbKey:k}));
       users = allDbUsers.filter(u=>u.role!=='student');
@@ -919,6 +921,7 @@ async function loadAllFromFirebase(){
     }
 
     // 4. Subjects
+    subjects=[];
     if(root.subjects){
       subjects = Object.entries(root.subjects).map(([key,s])=>({
         _fbKey:key, name:s.name,
@@ -931,6 +934,7 @@ async function loadAllFromFirebase(){
     }
 
     // 5. Students
+    students=[];
     if(root.students){
       students = Object.entries(root.students).map(([key,s])=>({
         _fbKey:key,
@@ -941,14 +945,6 @@ async function loadAllFromFirebase(){
         totalAmount:parseFloat(s.totalAmount)||0, notes:s.notes||'',
         installments:(s.installments ? Object.values(s.installments) : [])
       }));
-      // Add student user entries
-      students.forEach((st,idx)=>{
-        const existing=users.find(u=>u.username===st.id);
-        if(!existing){
-          users.push({id:'su_'+idx,_fbKey:'su_'+idx,name:getStudentFullName(st),
-            username:st.id,password:st.id.toLowerCase(),role:'student',studentIdx:idx});
-        } else { existing.studentIdx=idx; }
-      });
     }
 
     // 6. Enrollments — map students to subjects
@@ -966,7 +962,8 @@ async function loadAllFromFirebase(){
     grades={};
     subjects.forEach((_,si)=>{ grades[si]={}; subjects[si].students.forEach(idx=>{ grades[si][idx]=makeEmptyGrade(); }); });
     if(root.grades){
-      Object.values(root.grades).forEach(g=>{
+      // السجل الأحدث يفوز إذا وُجد تنسيق قديم وجديد لنفس الطالب والمقرر.
+      Object.values(root.grades).sort((a,b)=>(a.updatedAt||'').localeCompare(b.updatedAt||'')).forEach(g=>{
         const si=subjects.findIndex(s=>s._fbKey===g.subjectKey);
         const stdIdx=students.findIndex(s=>s._fbKey===g.studentKey);
         if(si>=0 && stdIdx>=0){
@@ -1057,9 +1054,9 @@ async function deleteStudentFromFirebase(stdIdx){
 // حفظ مادة
 async function saveSubjectToFirebase(si){
   const subj=subjects[si];
-  // مفتاح ثابت بناءً على اسم المادة
+  // مفتاح مستقل عن الاسم وموقع المادة في المصفوفة، حتى لا يحدث تصادم بعد الحذف.
   if(!subj._fbKey){
-    subj._fbKey = 'subj_'+subj.name.replace(/[^a-zA-Z0-9؀-ۿ]/g,'_').substring(0,30)+'_'+(si+1);
+    subj._fbKey = 'subj_'+Date.now()+'_'+randomPassword(6);
   }
   // lecturerUserId يجب أن يكون username دائماً
   const lecId = subj.lecturerUserId||null;
@@ -1119,12 +1116,13 @@ async function saveProgramsToFirebase(){
 
 // حفظ المستخدمين
 async function saveUsersToFirebase(){
-  const data={};
+  const updates={};
   for(const u of users.filter(u=>u.role!=='student')){
     const key=u._fbKey||u.id||('user_'+u.username);
-    data[key]=await userRecord(u);
+    updates[key]=await userRecord(u);
   }
-  await fbRef('users').set(data);
+  // لا نعيد كتابة users بالكامل حتى لا تُمسح حسابات الطلاب.
+  if(Object.keys(updates).length) await fbRef('users').update(updates);
 }
 
 // حفظ الإعدادات
@@ -1293,24 +1291,6 @@ async function doLogin(){
   if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
 }
 
-function doLogout(){
-  currentUser=null;
-  students=[];subjects=[];grades={};
-  users=[{id:'u1',name:'مدير النظام',username:'admin',password:null,passwordHash:'disabled',passwordSalt:'disabled',role:'admin',subjects:[]}];
-  programsData=[];
-  document.getElementById('appShell').style.display='none';
-  document.getElementById('loginScreen').style.display='flex';
-}
-
-// ══════════════════════════════════════════════
-//  STUDENT ID AUTO-GENERATE
-// ══════════════════════════════════════════════
-function generateStudentId(){
-  const nums=students.map(st=>{const m=st.id&&st.id.match(/SUL-(\d+)/);return m?parseInt(m[1]):0;});
-  const max=nums.length?Math.max(...nums):0;
-  return `SUL-${String(max+1).padStart(3,'0')}`;
-}
-
 async function _finishLogin() {
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appShell').style.display='block';
@@ -1331,11 +1311,12 @@ async function _finishLogin() {
   }
   renderNav();
   navTo(currentUser.role==='student'?'mygrades':'dashboard', null);
-  // تنظيف تلقائي للسجلات المكررة (صامت)
-  if(currentUser.role==='admin') cleanDuplicateStudents();
+  // لا تُجرى أي هجرة بيانات تلقائية عند الدخول؛ تغيير مفاتيح الطلاب يحتاج
+  // تحديث التسجيلات والدرجات معاً ولا يجوز تنفيذه بصمت.
 }
 function doLogout() {
   currentUser=null;
+  students=[]; subjects=[]; grades={}; users=[]; programsData=[];
   document.getElementById('appShell').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
 }
@@ -1826,7 +1807,10 @@ function openStudentModal(si=-1) {
   editingStudentIdx=si;
   document.getElementById('studentModalTitle').textContent=si>=0?'✏️ تعديل سجل الطالب':'👩‍🎓 إضافة طالب';
   const st=si>=0?students[si]:null;
-  document.getElementById('studentIdField').value=si>=0?(st?.id||''):generateStudentId();
+  const idField=document.getElementById('studentIdField');
+  idField.value=si>=0?(st?.id||''):generateStudentId();
+  // الرقم الطلابي هو المعرّف الدائم للعلاقات، فلا يتغير بعد إنشاء السجل.
+  idField.readOnly=si>=0;
   document.getElementById('stdFirstName').value=st?.firstName||'';
   document.getElementById('stdMidName').value=st?.midName||'';
   document.getElementById('stdLastName').value=st?.lastName||'';
@@ -1877,6 +1861,23 @@ async function saveStudent() {
   const firstName=document.getElementById('stdFirstName').value.trim();
   const id=document.getElementById('studentIdField').value.trim();
   if (!firstName||!id) return showToast('⚠️ أدخل الاسم الأول والرقم الطلابي');
+  const selectedProgram=document.getElementById('stdProgram').value;
+  const selectedTrack=document.getElementById('stdTrack').value;
+  const selectedBatch=document.getElementById('stdBatchSelect').value.trim();
+  if(!selectedProgram||!selectedTrack||!selectedBatch)
+    return showToast('⚠️ اختاري البرنامج والمسار والدفعة');
+  const duplicateIdx=students.findIndex((st,i)=>i!==editingStudentIdx&&(st.id||'').toUpperCase()===id.toUpperCase());
+  if(duplicateIdx>=0) return showToast('⚠️ الرقم الطلابي مستخدم مسبقاً');
+  if(editingStudentIdx<0){
+    const candidateKey='std_'+id.replace(/[^a-zA-Z0-9]/g,'_');
+    try{
+      if((await fbRef('students/'+candidateKey).get()).exists())
+        return showToast('⚠️ الرقم الطلابي موجود في قاعدة البيانات');
+    }catch(e){
+      console.error('Student ID check error:',e);
+      return showToast('⚠️ تعذر التحقق من الرقم الطلابي');
+    }
+  }
   const fullName=[firstName,document.getElementById('stdMidName').value.trim(),document.getElementById('stdLastName').value.trim()].filter(Boolean).join(' ');
   const instCount=parseInt(document.getElementById('stdInstallmentsCount').value)||1;
   const installments=[];
@@ -1889,9 +1890,9 @@ async function saveStudent() {
     phone:document.getElementById('stdPhone').value.trim(),
     email:document.getElementById('stdEmail').value.trim(),
     regDate:document.getElementById('stdRegDate').value,
-    program:document.getElementById('stdProgram').value,
-    track:document.getElementById('stdTrack').value,
-    batch:document.getElementById('stdBatchSelect').value.trim(),
+    program:selectedProgram,
+    track:selectedTrack,
+    batch:selectedBatch,
     id, pkg:document.getElementById('studentPackage').value,
     totalAmount:parseFloat(document.getElementById('stdTotalAmount').value)||0,
     installments, notes:document.getElementById('stdNotes').value.trim()
@@ -1901,7 +1902,7 @@ async function saveStudent() {
   if(editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
   const chosenSubjs=Array.from(document.getElementById('studentSubjectsList').selectedOptions).map(o=>parseInt(o.value));
   if (editingStudentIdx>=0) {
-    students[editingStudentIdx]=stdData;
+    students[editingStudentIdx]={...students[editingStudentIdx],...stdData};
     if (pass) { const u=users.find(u=>u.username===id&&u.role==='student'); if(u){u.password=pass;u.name=fullName;} }
   } else {
     students.push(stdData);
@@ -1976,14 +1977,30 @@ async function saveStudent() {
     showToast('✅ تم حفظ السجل في قاعدة البيانات');
   } catch(e){
     console.error('Save student error:',e);
+    // أعد الحالة المحلية من المصدر حتى لا يظهر طالب لم يُحفظ فعلياً.
+    await loadAllFromFirebase();
     showToast('⚠️ خطأ في الحفظ: '+e.message);
   }
   closeModal('studentModal'); renderStudentsTable();
 }
 async function deleteStudent(idx) {
   if (!confirm(`حذف "${getStudentFullName(students[idx])}"؟`)) return;
-  subjects.forEach(s=>{s.students=s.students.filter(i=>i!==idx);});
-  users=users.filter(u=>!(u.role==='student'&&u.studentIdx===idx));
+  try{
+    await deleteStudentFromFirebase(idx);
+  }catch(e){
+    console.error('Delete student error:',e);
+    return showToast('⚠️ تعذر حذف الطالب من قاعدة البيانات');
+  }
+  // أعد ترقيم العلاقات المحلية بعد حذف عنصر من المصفوفة.
+  subjects.forEach((s,si)=>{
+    s.students=(s.students||[]).filter(i=>i!==idx).map(i=>i>idx?i-1:i);
+    const nextGrades={};
+    Object.entries(grades[si]||{}).forEach(([studentIdx,g])=>{
+      const n=Number(studentIdx);
+      if(n!==idx) nextGrades[n>idx?n-1:n]=g;
+    });
+    grades[si]=nextGrades;
+  });
   students.splice(idx,1);
   renderStudentsTable(); showToast('✓ تم الحذف');
 }
@@ -2154,7 +2171,9 @@ function openUserModal(i=-1) {
   editingUserIdx=i;
   document.getElementById('userModalTitle').textContent=i>=0?'✏️ تعديل مستخدم':'👤 إضافة مستخدم';
   document.getElementById('userFullName').value=i>=0?users[i].name:'';
-  document.getElementById('userUsername').value=i>=0?users[i].username:'';
+  const usernameField=document.getElementById('userUsername');
+  usernameField.value=i>=0?users[i].username:'';
+  usernameField.readOnly=i>=0;
   document.getElementById('userPassword').value='';
   document.getElementById('userRole').value=i>=0?users[i].role:'lecturer';
   const u = i>=0 ? users[i] : null;
@@ -2176,6 +2195,8 @@ async function saveUser() {
   const role=document.getElementById('userRole').value;
   const subjs=Array.from(document.getElementById('userSubjects').selectedOptions).map(o=>parseInt(o.value));
   if (!name||!username) return showToast('⚠️ أدخل الاسم واسم المستخدم');
+  if(users.some((u,i)=>i!==editingUserIdx&&u.username.toLowerCase()===username.toLowerCase()))
+    return showToast('⚠️ اسم المستخدم مستخدم مسبقاً');
 
   let userFbKey = username; // استخدم username كمعرّف ثابت في Firebase
 
@@ -2240,8 +2261,24 @@ async function saveUser() {
 async function deleteUser(i) {
   if (users[i].username==='admin') return showToast('⚠️ لا يمكن حذف مدير النظام');
   if (!confirm(`حذف "${users[i].name}"؟`)) return;
-  users.splice(i,1); renderUsersTable();
-  try{await saveUsersToFirebase();}catch(e){} showToast('✓ تم الحذف');
+  const user=users[i];
+  const updates={};
+  updates['users/'+(user._fbKey||user.id||user.username)]=null;
+  subjects.forEach(s=>{
+    if(s._fbKey && [user.username,user.id,user._fbKey].includes(s.lecturerUserId)){
+      updates['subjects/'+s._fbKey+'/lecturerUserId']=null;
+      s.lecturerUserId=null;
+    }
+  });
+  try{
+    await firebase.database().ref('/').update(updates);
+    users.splice(i,1);
+    renderUsersTable();
+    showToast('✓ تم الحذف');
+  }catch(e){
+    console.error('Delete user error:',e);
+    showToast('⚠️ تعذر حذف المستخدم');
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -2333,7 +2370,8 @@ async function saveGrades() {
       const g=grades[si]?.[stdIdx]; if(!g) return;
       const st=students[stdIdx]; if(!st?._fbKey) return;
       const subjKey=subj._fbKey; if(!subjKey) return;
-      const gradeKey=`${st._fbKey}_${subjKey}`;
+      const gradeKey=('grade_'+st._fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
+      const legacyKey=(st._fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
       updates[`grades/${gradeKey}`]={
         studentKey:st._fbKey, subjectKey:subjKey,
         w1_attend:g.w1?.attend||0, w1_hw:g.w1?.hw||0, w1_disc:g.w1?.disc||0,
@@ -2341,8 +2379,10 @@ async function saveGrades() {
         w3_attend:g.w3?.attend||0, w3_hw:g.w3?.hw||0, w3_disc:g.w3?.disc||0,
         w4_attend:g.w4?.attend||0, w4_hw:g.w4?.hw||0, w4_disc:g.w4?.disc||0,
         exam:g.examEntered ? (g.exam||0) : null,
-        examEntered:g.examEntered===true
+        examEntered:g.examEntered===true,
+        updatedAt:new Date().toISOString()
       };
+      if(legacyKey!==gradeKey) updates[`grades/${legacyKey}`]=null;
     });
     if(Object.keys(updates).length>0) await firebase.database().ref().update(updates);
     showToast('✅ تم حفظ الدرجات');
@@ -2606,7 +2646,11 @@ function renderCards(program) {
 // ══════════════════════════════════════════════
 //  PROGRAM / TRACK / BATCH MANAGEMENT PAGE
 // ══════════════════════════════════════════════
-function renderProgramsPanel() { renderProgramsList(); renderTrackSelectsInMgmt(); renderBatchTrackSelect(); }
+function renderProgramsPanel() {
+  renderProgramsList(); renderTrackSelectsInMgmt(); renderBatchTrackSelect();
+  const year=document.getElementById('newBatchYear');
+  if(year && (!year.value || Number(year.value)===2024)) year.value=new Date().getFullYear();
+}
 function renderProgramsList() {
   const list=document.getElementById('programsList'); if(!list) return;
   list.innerHTML=programsData.length?programsData.map((p,pi)=>`
@@ -2687,15 +2731,25 @@ function renderBatchesList() {
 async function addBatch() {
   const val=document.getElementById('batchTrackFilter').value;
   const name=document.getElementById('newBatchName').value.trim();
-  const year=parseInt(document.getElementById('newBatchYear').value)||2024;
+  const year=parseInt(document.getElementById('newBatchYear').value)||new Date().getFullYear();
   if (!val) return showToast('⚠️ اختر مساراً');
   if (!name) return showToast('⚠️ أدخل اسم الدفعة');
   const [pi,ti]=val.split('_').map(Number);
   if (programsData[pi].tracks[ti].batches.find(b=>b.name===name)) return showToast('⚠️ موجودة مسبقاً');
-  programsData[pi].tracks[ti].batches.push({id:'b'+Date.now(), name, year});
-  try { await saveProgramsToFirebase(); } catch(e){}
+  const newBatch={id:'b'+Date.now(), name, year};
+  programsData[pi].tracks[ti].batches.push(newBatch);
+  try {
+    await saveProgramsToFirebase();
+  } catch(e){
+    programsData[pi].tracks[ti].batches=programsData[pi].tracks[ti].batches.filter(b=>b!==newBatch);
+    console.error('Add batch error:',e);
+    return showToast('⚠️ تعذر حفظ الدفعة');
+  }
   document.getElementById('newBatchName').value='';
-  renderBatchesList(); showToast('✓ تم إضافة الدفعة');
+  renderBatchesList();
+  populateBatchFilterDropdown();
+  populateSemesterBatchSelect();
+  showToast('✓ تم إضافة الدفعة');
 }
 async function deleteBatch(pi,ti,bi) {
   if (!confirm('حذف الدفعة؟')) return;
