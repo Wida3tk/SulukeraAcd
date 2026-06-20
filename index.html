@@ -394,6 +394,29 @@ tr:hover td{background:#f8faff;}
         </div>
       </div>
 
+      <!-- BATCH-CENTRIC ACADEMIC PLANS -->
+      <div class="page" id="page-batchplans">
+        <div class="card card-accent">
+          <div class="card-title">🧩 قالب المقررات الثابت</div>
+          <div class="alert alert-info">وزّعي المقررات الـ18 على الفصول مرة واحدة. مسار QASP-S يأخذ أول 12 مقررًا، ومسار QBA يأخذ المقررات الـ18.</div>
+          <div id="curriculumTemplateList"></div>
+          <button class="btn btn-primary" onclick="saveCurriculumTemplate()">💾 حفظ قالب الفصول</button>
+        </div>
+        <div class="card card-accent">
+          <div class="card-title">👥 خطة الدفعة والمحاضرون</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+            <select id="batchPlanSelect" onchange="renderSelectedBatchPlan()" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:inherit;"></select>
+            <button class="btn btn-primary" onclick="generateSelectedBatchPlan()">إنشاء/تحديث مقررات الدفعة</button>
+          </div>
+          <div id="batchPlanCourses"></div>
+        </div>
+        <div class="card" style="border:1px solid #f2b8b5;">
+          <div class="card-title" style="color:var(--danger)">⚠️ إعادة تهيئة الهيكل الأكاديمي</div>
+          <div class="alert alert-danger">ينزّل نسخة احتياطية، ثم يحذف المقررات والتسجيلات والدرجات والفصول القديمة فقط. لن يحذف الطلاب أو حساباتهم أو الدفعات أو المحاضرين.</div>
+          <button class="btn btn-danger" onclick="resetAcademicStructure()">تنزيل نسخة احتياطية وإعادة التهيئة</button>
+        </div>
+      </div>
+
       <!-- SEMESTERS -->
       <div class="page" id="page-semesters">
         <div class="card card-accent">
@@ -615,11 +638,20 @@ tr:hover td{background:#f8faff;}
     <div class="form-row">
       <div class="form-group"><label>الدفعة</label>
         <select id="stdBatchSelect"><option value="">-- اختر --</option></select></div>
-      <div class="form-group"><label>الباقة</label>
+      <div class="form-group"><label>المسار الأكاديمي *</label>
+        <select id="studentPlanType" onchange="refreshStudentSubjectOptions(editingStudentIdx)">
+          <option value="QASP-S">QASP-S — 12 مقرر</option>
+          <option value="QBA">QBA — 18 مقرر</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>الباقة المالية</label>
         <select id="studentPackage" onchange="updateSubjectsForPackage()">
           <option value="">-- اختر الباقة --</option>
         </select>
       </div>
+      <div class="form-group"></div>
     </div>
     <div id="packageBadgeInfo" style="display:none;"></div>
     <div class="form-group"><label>المقررات (Ctrl+Click لتعدد)</label>
@@ -761,6 +793,13 @@ const QBA_SUBJECTS = [
   'التقييم الوظيفي',
   'الممارسات القائمة على الأدلة'
 ];
+
+const FIXED_COURSES = QBA_SUBJECTS.map((name,index)=>({
+  key:'course_'+String(index+1).padStart(2,'0'),
+  name,
+  eligiblePlans:index<QASP_S_SUBJECTS.length?['QASP-S','QBA']:['QBA']
+}));
+let curriculumTemplate={};
 
 
 
@@ -929,6 +968,9 @@ async function loadAllFromFirebase(){
         batch:s.batch||'',
         semesterKey:s.semesterKey||'',
         sourceSubjectKey:s.sourceSubjectKey||'',
+        courseKey:s.courseKey||'',
+        semesterNo:Number(s.semesterNo)||0,
+        eligiblePlans:Array.isArray(s.eligiblePlans)?s.eligiblePlans:[],
         students:[] // will fill from enrollments
       }));
     }
@@ -942,6 +984,7 @@ async function loadAllFromFirebase(){
         phone:s.phone||'', email:s.email||'', regDate:s.regDate||'',
         program:s.program||'', track:s.track||'', batch:s.batch||'',
         id:s.id||key, pkg:s.pkg||'full',
+        planType:s.planType||(String(root.packages?.[s.pkg]?.name||s.pkg||'').toUpperCase().includes('QASP')?'QASP-S':'QBA'),
         totalAmount:parseFloat(s.totalAmount)||0, notes:s.notes||'',
         installments:(s.installments ? Object.values(s.installments) : [])
       }));
@@ -950,6 +993,7 @@ async function loadAllFromFirebase(){
     // خطط الفصول مطلوبة لبناء تسجيلات الطلاب تلقائياً عند الدخول.
     semestersData=root.semesters||{};
     activeSemesterKey=Object.entries(semestersData).find(([,s])=>s.status==='active')?.[0]||null;
+    curriculumTemplate=root.curriculumTemplate||{};
 
     // 6. Enrollments — map students to subjects
     if(root.enrollments){
@@ -1009,7 +1053,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     firstName:st.firstName||'', midName:st.midName||'', lastName:st.lastName||'',
     phone:st.phone||'', email:st.email||'', regDate:st.regDate||'',
     program:st.program||'', track:st.track||'', batch:st.batch||'',
-    id:st.id, pkg:st.pkg||'',
+    id:st.id, pkg:st.pkg||'', planType:st.planType||inferPlanType(st.pkg),
     totalAmount:st.totalAmount||0, notes:st.notes||''
   };
 
@@ -1071,7 +1115,10 @@ async function saveSubjectToFirebase(si){
     lecturerUserId:lecUsername,
     batch:subj.batch||'',
     semesterKey:subj.semesterKey||'',
-    sourceSubjectKey:subj.sourceSubjectKey||''
+    sourceSubjectKey:subj.sourceSubjectKey||'',
+    courseKey:subj.courseKey||'',
+    semesterNo:Number(subj.semesterNo)||0,
+    eligiblePlans:subj.eligiblePlans||[]
   });
   // Save enrollments with deterministic keys (prevents duplicates)
   const snap=await fbRef('enrollments').get();
@@ -1164,6 +1211,16 @@ let currentGradeBatchFilter='all';
 //  HELPERS
 // ══════════════════════════════════════════════
 function getStudentFullName(st){if(!st)return'—';return[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ');}
+function inferPlanType(pkg){
+  const value=String(pkg||'').toUpperCase();
+  const pkgName=(packagesData||[]).find(p=>p._fbKey===pkg)?.name||'';
+  return (value.includes('QASP')||pkgName.toUpperCase().includes('QASP'))?'QASP-S':'QBA';
+}
+function studentEligibleForOffering(student,subject){
+  const plan=student?.planType||inferPlanType(student?.pkg);
+  const eligible=subject?.eligiblePlans||[];
+  return !eligible.length||eligible.includes(plan);
+}
 function calcTotal(g){
   if(!g) return 0;
   let t=0;
@@ -1226,6 +1283,7 @@ async function syncMissingSemesterEnrollments(studentIdx=null){
       semSubjectKeys.forEach(subjKey=>{
         const si=subjects.findIndex(s=>s._fbKey===subjKey);
         if(si<0) return;
+        if(!studentEligibleForOffering(st,subjects[si])) return;
         if(!subjects[si].students.includes(idx)){
           subjects[si].students.push(idx);
           if(!grades[si]) grades[si]={};
@@ -1340,6 +1398,7 @@ const navConfig = {
     {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
     {id:'reports',icon:'📋',label:'التقارير'},
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
+    {id:'batchplans',icon:'🧩',label:'خطط الدفعات والمقررات'},
     {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
     {id:'alerts',icon:'🔔',label:'التنبيهات'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
@@ -1364,7 +1423,7 @@ function renderNav() {
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
-  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', semesters:'الفصول الدراسية',
+  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', semesters:'الفصول الدراسية',
   settings:'الإعدادات',mygrades:'بياناتي ودرجاتي'
 };
 function navTo(pageId, el) {
@@ -1413,6 +1472,7 @@ function refreshPage(p) {
   if (p==='settings') { loadSettings(); updateSettingsSummary(); }
   if (p==='cards') { buildCardsTabs(); renderCards('all'); }
   if (p==='programs') { renderProgramsPanel(); loadPackagesFromFirebase().then(renderPackagesList); }
+  if (p==='batchplans') renderBatchPlansPage();
   if (p==='schedule') renderScheduleAdmin();
   if (p==='semesters') renderSemestersPage();
   if (p==='alerts') renderAlertsPage();
@@ -1745,6 +1805,11 @@ function updateSubjectsForPackage() {
   if(!pkgKey){ if(info) info.style.display='none'; return; }
   const pkg = packagesData.find(p=>p._fbKey===pkgKey||p.name===pkgKey);
   if(!pkg){ if(info) info.style.display='none'; return; }
+  const planSelect=document.getElementById('studentPlanType');
+  if(planSelect){
+    planSelect.value=String(pkg.name||'').toUpperCase().includes('QASP')?'QASP-S':'QBA';
+    refreshStudentSubjectOptions(editingStudentIdx);
+  }
   if(info){
     info.style.display='block';
     info.innerHTML=`<div class="alert alert-success">📦 باقة <strong>${pkg.name}</strong> — ${(pkg.subjects||[]).length} مقرر${pkg.price?' · '+pkg.price.toLocaleString()+' ريال':''}</div>`;
@@ -1765,10 +1830,11 @@ function updateSubjectsForPackage() {
 // ══════════════════════════════════════════════
 //  STUDENTS TABLE
 // ══════════════════════════════════════════════
-function getStudentSubjectChoices(batch){
+function getStudentSubjectChoices(batch,planType){
   const batchSections=subjects
     .map((s,i)=>({...s,idx:i}))
-    .filter(s=>isSubjectSection(s)&&sameBatchName(getSubjectBatchLabel(s),batch));
+    .filter(s=>isSubjectSection(s)&&sameBatchName(getSubjectBatchLabel(s),batch))
+    .filter(s=>studentEligibleForOffering({planType:planType||'QBA'},s));
   if(batchSections.length) return batchSections;
   return subjects.map((s,i)=>({...s,idx:i})).filter(s=>!isSubjectSection(s));
 }
@@ -1777,7 +1843,8 @@ function refreshStudentSubjectOptions(studentIdx=-1){
   const sel=document.getElementById('studentSubjectsList');
   if(!sel) return;
   const batch=document.getElementById('stdBatchSelect')?.value || students[studentIdx]?.batch || '';
-  const choices=getStudentSubjectChoices(batch);
+  const planType=document.getElementById('studentPlanType')?.value||students[studentIdx]?.planType||'QBA';
+  const choices=getStudentSubjectChoices(batch,planType);
   sel.innerHTML=choices.map(s=>'<option value="'+s.idx+'" '+(studentIdx>=0&&subjects[s.idx].students.includes(studentIdx)?'selected':'')+'>'+s.name+(isSubjectSection(s)?' - '+getSubjectBatchLabel(s):'')+'</option>').join('');
 }
 function renderStudentsTable() {
@@ -1832,6 +1899,7 @@ function openStudentModal(si=-1) {
     if(st?.pkg) pkgSel.value = st.pkg;
   }
   document.getElementById('stdNotes').value=st?.notes||'';
+  document.getElementById('studentPlanType').value=st?.planType||inferPlanType(st?.pkg);
   document.getElementById('stdTotalAmount').value=st?.totalAmount||'';
   // Program → Track → Batch (cascading)
   populateProgramSelect(st?.program||'');
@@ -1900,6 +1968,7 @@ async function saveStudent() {
     track:selectedTrack,
     batch:selectedBatch,
     id, pkg:document.getElementById('studentPackage').value,
+    planType:document.getElementById('studentPlanType').value,
     totalAmount:parseFloat(document.getElementById('stdTotalAmount').value)||0,
     installments, notes:document.getElementById('stdNotes').value.trim()
   };
@@ -1921,27 +1990,23 @@ async function saveStudent() {
     // ── Step 1: Save student record to Firebase (once) ──
     await saveStudentToFirebase(idx2, pass);
 
-    // ── Step 2: Enroll from package (create subjects if needed) ──
-    const pkgKey = stdData.pkg;
-    const selectedPkg = packagesData.find(p=>p._fbKey===pkgKey||p.name===pkgKey);
-    if(selectedPkg?.subjects?.length){
-      for(let pi=0; pi<selectedPkg.subjects.length; pi++){
-        const subjName = selectedPkg.subjects[pi];
-        let si = subjects.findIndex(s=>s.name===subjName && isSubjectSection(s) && sameBatchName(getSubjectBatchLabel(s),stdData.batch));
-        if(si<0) si = subjects.findIndex(s=>s.name===subjName && !isSubjectSection(s));
-        if(si<0){
-          subjects.push({_fbKey:null, name:subjName, lecturerUserId:null, students:[]});
-          si = subjects.length-1;
-          grades[si]={};
-          await saveSubjectToFirebase(si);
-        }
-        if(!subjects[si].students.includes(idx2)){
+    // ── Step 2: التسجيل من خطة الدفعة حسب المسار ──
+    const batchOfferings=subjects.map((s,i)=>({...s,idx:i})).filter(s=>
+      s.courseKey&&sameBatchName(s.batch,stdData.batch)
+    );
+    if(batchOfferings.length){
+      batchOfferings.forEach(offering=>{
+        const si=offering.idx;
+        const eligible=studentEligibleForOffering(stdData,offering);
+        subjects[si].students=(subjects[si].students||[]).filter(i=>i!==idx2);
+        if(eligible){
           subjects[si].students.push(idx2);
           if(!grades[si]) grades[si]={};
           if(!grades[si][idx2]) grades[si][idx2]=makeEmptyGrade();
         }
-      }
+      });
     } else {
+      // توافق مؤقت مع الهيكل القديم إلى أن تُنشأ خطة الدفعة.
       chosenSubjs.forEach(si=>{
         if(!isNaN(si) && subjects[si] && !subjects[si].students.includes(idx2)){
           subjects[si].students.push(idx2);
@@ -2741,7 +2806,7 @@ async function addBatch() {
   if (!val) return showToast('⚠️ اختر مساراً');
   if (!name) return showToast('⚠️ أدخل اسم الدفعة');
   const [pi,ti]=val.split('_').map(Number);
-  if (programsData[pi].tracks[ti].batches.find(b=>b.name===name)) return showToast('⚠️ موجودة مسبقاً');
+  if (getAllKnownBatches().some(b=>sameBatchName(b,name))) return showToast('⚠️ اسم الدفعة مستخدم مسبقاً');
   const newBatch={id:'b'+Date.now(), name, year};
   programsData[pi].tracks[ti].batches.push(newBatch);
   try {
@@ -2751,6 +2816,8 @@ async function addBatch() {
     console.error('Add batch error:',e);
     return showToast('⚠️ تعذر حفظ الدفعة');
   }
+  try{ await generateBatchPlan(name,false); }
+  catch(e){ console.error('Auto batch plan error:',e); }
   document.getElementById('newBatchName').value='';
   renderBatchesList();
   populateBatchFilterDropdown();
@@ -3309,6 +3376,189 @@ async function enrollSemesterStudents(key){
   await loadAllFromFirebase();
   renderSemestersList();
   showToast('✅ تم تسجيل '+targetDbStudents.length+' طالب في '+semSubjectKeys.length+' مقرر');
+}
+
+// ══════════════════════════════════════════════
+//  🧩 BATCH-CENTRIC CURRICULUM
+// ══════════════════════════════════════════════
+function defaultCurriculumTemplate(){
+  return Object.fromEntries(FIXED_COURSES.map(c=>[c.key,{semesterNo:0}]));
+}
+function effectiveCurriculumTemplate(){
+  return {...defaultCurriculumTemplate(),...(curriculumTemplate||{})};
+}
+function stableToken(value){
+  let hash=2166136261;
+  for(const ch of normalizeBatchName(value)){
+    hash^=ch.charCodeAt(0);
+    hash=Math.imul(hash,16777619);
+  }
+  return (hash>>>0).toString(36);
+}
+function offeringKeyFor(batch,courseKey){ return `off_${stableToken(batch)}_${courseKey}`; }
+
+async function renderBatchPlansPage(){
+  const snap=await fbRef('/').get();
+  if(snap.exists()) curriculumTemplate=snap.val().curriculumTemplate||curriculumTemplate||{};
+  renderCurriculumTemplate();
+  const select=document.getElementById('batchPlanSelect');
+  const current=select.value;
+  const batches=getAllKnownBatches();
+  select.innerHTML='<option value="">-- اختاري الدفعة --</option>'+batches.map(b=>`<option value="${b}">${b}</option>`).join('');
+  if(batches.includes(current)) select.value=current;
+  renderSelectedBatchPlan();
+}
+
+function renderCurriculumTemplate(){
+  const container=document.getElementById('curriculumTemplateList');
+  if(!container) return;
+  const template=effectiveCurriculumTemplate();
+  container.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>المقرر الثابت</th><th>المسارات</th><th>الفصل</th></tr></thead>
+    <tbody>${FIXED_COURSES.map((course,index)=>`<tr>
+      <td class="mono">${index+1}</td><td><strong>${course.name}</strong></td>
+      <td>${course.eligiblePlans.join(' + ')}</td>
+      <td><select class="curriculum-semester" data-course-key="${course.key}" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">
+        <option value="0">-- حددي --</option>${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${Number(template[course.key]?.semesterNo)===n?'selected':''}>الفصل ${n}</option>`).join('')}
+      </select></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+async function saveCurriculumTemplate(){
+  const next={};
+  document.querySelectorAll('.curriculum-semester').forEach(select=>{
+    next[select.dataset.courseKey]={semesterNo:Number(select.value)||0};
+  });
+  const missing=FIXED_COURSES.filter(c=>!next[c.key]?.semesterNo);
+  if(missing.length) return showToast(`⚠️ حددي الفصل لكل المقررات — متبقي ${missing.length}`);
+  const catalog=Object.fromEntries(FIXED_COURSES.map(c=>[c.key,c]));
+  const updates={courseCatalog:catalog,curriculumTemplate:next};
+  subjects.filter(s=>s.courseKey).forEach(s=>{
+    const course=FIXED_COURSES.find(c=>c.key===s.courseKey);
+    if(!course||!s._fbKey) return;
+    updates['subjects/'+s._fbKey+'/semesterNo']=next[s.courseKey].semesterNo;
+    updates['subjects/'+s._fbKey+'/eligiblePlans']=course.eligiblePlans;
+  });
+  await firebase.database().ref('/').update(updates);
+  curriculumTemplate=next;
+  showToast('✅ تم حفظ قالب المقررات والفصول');
+  renderSelectedBatchPlan();
+}
+
+function renderSelectedBatchPlan(){
+  const batch=document.getElementById('batchPlanSelect')?.value;
+  const container=document.getElementById('batchPlanCourses');
+  if(!container) return;
+  if(!batch){ container.innerHTML='<div class="alert alert-info">اختاري دفعة لعرض مقرراتها وتعيين المحاضرين</div>'; return; }
+  const template=effectiveCurriculumTemplate();
+  const lecturers=users.filter(u=>u.role==='lecturer');
+  const offerings=subjects.filter(s=>s.courseKey&&sameBatchName(s.batch,batch));
+  container.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>المقرر</th><th>الفصل</th><th>المسارات</th><th>المحاضر</th></tr></thead>
+    <tbody>${FIXED_COURSES.map((course,index)=>{
+      const offering=offerings.find(s=>s.courseKey===course.key);
+      return `<tr><td>${index+1}</td><td><strong>${course.name}</strong>${!offering?' <span class="badge badge-warn">لم يُنشأ</span>':''}</td>
+        <td>الفصل ${template[course.key]?.semesterNo||'—'}</td><td>${course.eligiblePlans.join(' + ')}</td>
+        <td><select class="batch-plan-lecturer" data-subject-key="${offering?._fbKey||''}" ${offering?'':'disabled'} style="min-width:180px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">
+          <option value="">-- بدون محاضر --</option>${lecturers.map(u=>`<option value="${u.username}" ${offering?.lecturerUserId===u.username?'selected':''}>${u.name}</option>`).join('')}
+        </select></td></tr>`;
+    }).join('')}</tbody></table></div>
+    ${offerings.length?'<button class="btn btn-success" onclick="saveBatchPlanLecturers()">💾 حفظ تعيين المحاضرين</button>':''}`;
+}
+
+async function generateBatchPlan(batch,showMessage=true){
+  if(!batch) return false;
+  const template=effectiveCurriculumTemplate();
+  if(FIXED_COURSES.some(c=>!template[c.key]?.semesterNo)){
+    if(showMessage) showToast('⚠️ احفظي توزيع المقررات على الفصول أولاً');
+    return false;
+  }
+  const rootSnap=await fbRef('/').get();
+  const root=rootSnap.exists()?rootSnap.val():{};
+  const dbSubjects=root.subjects||{};
+  const existing=Object.entries(dbSubjects).filter(([,s])=>s.courseKey&&sameBatchName(s.batch,batch));
+  const updates={};
+  const offeringKeys=[];
+  FIXED_COURSES.forEach(course=>{
+    const found=existing.find(([,s])=>s.courseKey===course.key);
+    const key=found?.[0]||offeringKeyFor(batch,course.key);
+    const old=found?.[1]||{};
+    offeringKeys.push(key);
+    updates['subjects/'+key]={
+      ...old,name:course.name,courseKey:course.key,batch,
+      semesterNo:template[course.key].semesterNo,
+      eligiblePlans:course.eligiblePlans,
+      lecturerUserId:old.lecturerUserId||null,
+      sourceSubjectKey:''
+    };
+  });
+  Object.entries(root.enrollments||{}).forEach(([key,enrollment])=>{
+    if(offeringKeys.includes(enrollment.subjectKey)) updates['enrollments/'+key]=null;
+  });
+  Object.entries(root.students||{}).forEach(([studentKey,student])=>{
+    if(!sameBatchName(student.batch,batch)) return;
+    const pkgName=root.packages?.[student.pkg]?.name||student.pkg||'';
+    const plan=student.planType||(String(pkgName).toUpperCase().includes('QASP')?'QASP-S':'QBA');
+    FIXED_COURSES.filter(c=>c.eligiblePlans.includes(plan)).forEach(course=>{
+      const subjectKey=offeringKeyFor(batch,course.key);
+      const found=existing.find(([,s])=>s.courseKey===course.key);
+      const actualKey=found?.[0]||subjectKey;
+      const enrollmentKey=('enr_'+studentKey+'_'+actualKey).replace(/[.#$[\]]/g,'_');
+      updates['enrollments/'+enrollmentKey]={studentKey,subjectKey:actualKey};
+    });
+  });
+  await firebase.database().ref('/').update(updates);
+  await loadAllFromFirebase();
+  if(showMessage) showToast(`✅ تم تجهيز 18 مقررًا لدفعة ${batch}`);
+  return true;
+}
+
+async function generateSelectedBatchPlan(){
+  const batch=document.getElementById('batchPlanSelect')?.value;
+  if(!batch) return showToast('⚠️ اختاري الدفعة');
+  showLoader(true);
+  try{ await generateBatchPlan(batch,true); renderSelectedBatchPlan(); }
+  catch(e){ console.error(e); showToast('⚠️ تعذر إنشاء خطة الدفعة'); }
+  finally{ showLoader(false); }
+}
+
+async function saveBatchPlanLecturers(){
+  const updates={};
+  document.querySelectorAll('.batch-plan-lecturer').forEach(select=>{
+    if(select.dataset.subjectKey) updates['subjects/'+select.dataset.subjectKey+'/lecturerUserId']=select.value||null;
+  });
+  await firebase.database().ref('/').update(updates);
+  Object.entries(updates).forEach(([path,value])=>{
+    const key=path.split('/')[1],subject=subjects.find(s=>s._fbKey===key);
+    if(subject) subject.lecturerUserId=value;
+  });
+  showToast('✅ تم حفظ محاضري الدفعة');
+}
+
+function downloadJson(filename,data){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+}
+
+async function resetAcademicStructure(){
+  if(!confirm('سيتم تنزيل نسخة احتياطية ثم حذف المقررات والتسجيلات والدرجات والفصول القديمة. الطلاب والحسابات والدفعات لن تُحذف. المتابعة؟')) return;
+  showLoader(true);
+  try{
+    const snap=await fbRef('/').get();
+    const root=snap.exists()?snap.val():{};
+    downloadJson('sulukera_backup_before_academic_reset_'+new Date().toISOString().slice(0,10)+'.json',root);
+    const catalog=Object.fromEntries(FIXED_COURSES.map(c=>[c.key,c]));
+    const nextTemplate=defaultCurriculumTemplate();
+    await firebase.database().ref('/').update({
+      subjects:null,enrollments:null,grades:null,semesters:null,
+      courseCatalog:catalog,curriculumTemplate:nextTemplate
+    });
+    curriculumTemplate=nextTemplate; semestersData={}; subjects=[]; grades={};
+    await loadAllFromFirebase();
+    renderCurriculumTemplate();
+    renderSelectedBatchPlan();
+    showToast('✅ تمت إعادة التهيئة والطلاب محفوظون');
+  }catch(e){ console.error(e); showToast('❌ تعذرت إعادة التهيئة'); }
+  finally{ showLoader(false); }
 }
 
 // ══════════════════════════════════════════════
