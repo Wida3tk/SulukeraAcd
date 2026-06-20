@@ -413,6 +413,7 @@ tr:hover td{background:#f8faff;}
         <div class="card" style="border:1px solid #f2b8b5;">
           <div class="card-title" style="color:var(--danger)">⚠️ إعادة تهيئة الهيكل الأكاديمي</div>
           <div class="alert alert-danger">ينزّل نسخة احتياطية، ثم يحذف المقررات والتسجيلات والدرجات والفصول القديمة فقط. لن يحذف الطلاب أو حساباتهم أو الدفعات أو المحاضرين.</div>
+          <button class="btn btn-warning" onclick="removeLegacyAcademicData()">تنظيف المقررات القديمة المكررة فقط</button>
           <button class="btn btn-danger" onclick="resetAcademicStructure()">تنزيل نسخة احتياطية وإعادة التهيئة</button>
         </div>
       </div>
@@ -2220,8 +2221,9 @@ function renderUsersTable() {
   document.getElementById('usersTableBody').innerHTML=displayUsers.map((u,i)=>{
     const origIdx = users.indexOf(u);
     // ابحث بكل أشكال المعرّف الممكنة
+    const structuredExists=subjects.some(s=>s.courseKey);
     const mySubjs = u.role==='lecturer'
-      ? subjects.filter(s=>
+      ? subjects.filter(s=>(!structuredExists||s.courseKey)&&
           s.lecturerUserId &&
           (s.lecturerUserId===u.id ||
            s.lecturerUserId===u.username ||
@@ -2249,7 +2251,9 @@ function openUserModal(i=-1) {
   document.getElementById('userRole').value=i>=0?users[i].role:'lecturer';
   const u = i>=0 ? users[i] : null;
   // حدد المقررات المرتبطة بالمحاضر من subjects مباشرة
-  document.getElementById('userSubjects').innerHTML=subjects.map((s,si)=>{
+  const structuredExists=subjects.some(s=>s.courseKey);
+  document.getElementById('userSubjects').innerHTML=subjects.map((s,si)=>({...s,si})).filter(s=>!structuredExists||s.courseKey).map(s=>{
+    const si=s.si;
     const isAssigned = u && (
       s.lecturerUserId===u.id ||
       s.lecturerUserId===u.username ||
@@ -3537,6 +3541,41 @@ async function saveBatchPlanLecturers(){
 function downloadJson(filename,data){
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+}
+
+async function removeLegacyAcademicData(){
+  if(!confirm('سيتم تنزيل نسخة احتياطية ثم حذف المقررات القديمة التي لا تنتمي لخطط الدفعات، مع تسجيلاتها ودرجاتها القديمة. الطلاب والمقررات الجديدة لن تُحذف. المتابعة؟')) return;
+  showLoader(true);
+  try{
+    const snap=await fbRef('/').get();
+    const root=snap.exists()?snap.val():{};
+    const legacySubjectKeys=new Set(Object.entries(root.subjects||{})
+      .filter(([,subject])=>!subject.courseKey)
+      .map(([key])=>key));
+    if(!legacySubjectKeys.size){
+      showToast('✅ لا توجد مقررات قديمة للتنظيف');
+      return;
+    }
+    downloadJson('sulukera_backup_before_legacy_cleanup_'+new Date().toISOString().slice(0,10)+'.json',root);
+    const updates={semesters:null};
+    legacySubjectKeys.forEach(key=>{ updates['subjects/'+key]=null; });
+    Object.entries(root.enrollments||{}).forEach(([key,enrollment])=>{
+      if(legacySubjectKeys.has(enrollment.subjectKey)) updates['enrollments/'+key]=null;
+    });
+    Object.entries(root.grades||{}).forEach(([key,grade])=>{
+      if(legacySubjectKeys.has(grade.subjectKey)) updates['grades/'+key]=null;
+    });
+    await firebase.database().ref('/').update(updates);
+    await loadAllFromFirebase();
+    renderSelectedBatchPlan();
+    renderUsersTable();
+    showToast(`✅ حُذف ${legacySubjectKeys.size} مقرر قديم مكرر`);
+  }catch(e){
+    console.error('Legacy cleanup error:',e);
+    showToast('❌ تعذر تنظيف المقررات القديمة');
+  }finally{
+    showLoader(false);
+  }
 }
 
 async function resetAcademicStructure(){
