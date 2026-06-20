@@ -847,18 +847,40 @@ function getLecturerSubjects(){
 
   const activeKeys=[...new Set(getActiveSemesters().flatMap(s=>s.subjects||[]))];
   if(!activeKeys.length) return allMySubjs;
-  return allMySubjs.filter(s=>activeKeys.includes(s.key));
+  const activeMine=allMySubjs.filter(s=>activeKeys.includes(s.key));
+  // لا نخفي مقررات المحاضر كلها إذا كان إعداد الفصل الحالي ناقصاً.
+  return activeMine.length ? activeMine : allMySubjs;
 }
 
 function getSubjectStudents(subjectFbKey){
-  if(!dbData.enrollments||!dbData.students) return [];
+  if(!dbData.students) return [];
   const result=[];
-  Object.values(dbData.enrollments).forEach(e=>{
+  const addStudent=(studentKey)=>{
+    const student=dbData.students?.[studentKey];
+    if(student && !result.find(r=>r.fbKey===studentKey))
+      result.push({fbKey:studentKey,...student});
+  };
+
+  // التسجيلات الصريحة هي المصدر الأول.
+  Object.values(dbData.enrollments||{}).forEach(e=>{
     if(e.subjectKey===subjectFbKey&&e.studentKey&&dbData.students[e.studentKey]){
-      if(!result.find(r=>r.fbKey===e.studentKey))
-        result.push({fbKey:e.studentKey,...dbData.students[e.studentKey]});
+      addStudent(e.studentKey);
     }
   });
+
+  // معالجة البيانات القديمة أو الناقصة: استنتج الطلاب من دفعة المادة/الفصل.
+  const subject=dbData.subjects?.[subjectFbKey]||{};
+  const subjectBatches=new Set();
+  if(subject.batch) subjectBatches.add(normalizeBatchName(subject.batch));
+  Object.values(dbData.semesters||{}).forEach(sem=>{
+    if((sem.subjects||[]).includes(subjectFbKey))
+      (sem.batches||[]).forEach(batch=>subjectBatches.add(normalizeBatchName(batch)));
+  });
+  if(subjectBatches.size){
+    Object.entries(dbData.students).forEach(([studentKey,student])=>{
+      if(subjectBatches.has(normalizeBatchName(student.batch))) addStudent(studentKey);
+    });
+  }
   return result;
 }
 
@@ -987,7 +1009,7 @@ function renderGradeInput(subjectKey, batchName){
   // فلتر الطلاب حسب الدفعة المختارة
   const allStudents = getSubjectStudents(subjectKey);
   const students = batchName
-    ? allStudents.filter(s=>s.batch===batchName)
+    ? allStudents.filter(s=>normalizeBatchName(s.batch)===normalizeBatchName(batchName))
     : allStudents;
   const wkMax = settings.attend+settings.hw+settings.disc;
 
@@ -1029,7 +1051,7 @@ function renderWeekTable(w){
   const subj=dbData.subjects?.[currentSubjectKey]; if(!subj) return;
   const _allStudents=getSubjectStudents(currentSubjectKey);
   const students = currentBatchName
-    ? _allStudents.filter(s=>s.batch===currentBatchName)
+    ? _allStudents.filter(s=>normalizeBatchName(s.batch)===normalizeBatchName(currentBatchName))
     : _allStudents;
   const isExam=w===0;
   const wkMax=settings.attend+settings.hw+settings.disc;
@@ -1102,7 +1124,9 @@ function renderSummaryTable(subjectKey){
   const el = document.getElementById('summaryTable_'+subjectKey);
   if(!el) return;
   const all = getSubjectStudents(subjectKey);
-  const students = currentBatchName ? all.filter(s=>s.batch===currentBatchName) : all;
+  const students = currentBatchName
+    ? all.filter(s=>normalizeBatchName(s.batch)===normalizeBatchName(currentBatchName))
+    : all;
   el.innerHTML = buildSummaryHTML(subjectKey, students);
 }
 
