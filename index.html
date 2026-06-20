@@ -262,6 +262,8 @@ tr:hover td{background:#f8faff;}
       <!-- GRADES -->
       <div class="page" id="page-grades">
         <div style="display:flex;gap:10px;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
+          <label style="font-size:12px;color:var(--text-muted);font-weight:600">الدفعة:</label>
+          <select id="gradeBatchSelect" onchange="onGradeBatchChange()" style="padding:7px 12px;border-radius:var(--radius);border:1.5px solid var(--border);font-size:13px;background:white;min-width:170px;font-family:inherit;"></select>
           <label style="font-size:12px;color:var(--text-muted);font-weight:600">المادة:</label>
           <select id="gradeSubjectSelect" onchange="onGradeSubjectChange()" style="padding:7px 12px;border-radius:var(--radius);border:1.5px solid var(--border);font-size:13px;background:white;min-width:220px;font-family:inherit;"></select>
         </div>
@@ -1555,8 +1557,12 @@ function renderSubjectBatchTabs(){
   const el=document.getElementById('subjectBatchTabs');
   if(!el) return;
   const batches=getAllKnownBatches();
-  if(currentSubjectsBatchFilter!=='all' && !batches.some(b=>sameBatchName(b,currentSubjectsBatchFilter))) currentSubjectsBatchFilter='all';
-  el.innerHTML=`<button class="btn btn-sm ${currentSubjectsBatchFilter==='all'?'btn-primary':''}" onclick="setSubjectBatchFilter('all')">كل الدفعات</button>`+
+  const structuredExists=subjects.some(s=>s.courseKey);
+  if(structuredExists && (currentSubjectsBatchFilter==='all'||!batches.some(b=>sameBatchName(b,currentSubjectsBatchFilter))))
+    currentSubjectsBatchFilter=batches[0]||'all';
+  if(!structuredExists && currentSubjectsBatchFilter!=='all' && !batches.some(b=>sameBatchName(b,currentSubjectsBatchFilter)))
+    currentSubjectsBatchFilter='all';
+  el.innerHTML=(structuredExists?'':`<button class="btn btn-sm ${currentSubjectsBatchFilter==='all'?'btn-primary':''}" onclick="setSubjectBatchFilter('all')">كل الدفعات</button>`)+
     batches.map(b=>`<button class="btn btn-sm ${sameBatchName(currentSubjectsBatchFilter,b)?'btn-primary':''}" onclick="setSubjectBatchFilter('${b.replace(/'/g,"\\'")}')">${b}</button>`).join('');
 }
 function setSubjectBatchFilter(batch){
@@ -1570,8 +1576,10 @@ function getSubjectRowsForBatchFilter(){
     const batchLabel=getSubjectBatchLabel(subj);
     if(!isSubjectSection(subj)) return;
     if(currentSubjectsBatchFilter!=='all' && !sameBatchName(batchLabel,currentSubjectsBatchFilter)) return;
+    const key=normalizeBatchName(batchLabel)+'|'+(subj.courseKey||subj._fbKey||si);
+    if(seen.has(key)) return;
     rows.push({...subj,si,batchLabel,studentIdxs:[...(subj.students||[])]});
-    seen.add(normalizeBatchName(batchLabel)+'|'+(subj._fbKey||si));
+    seen.add(key);
   });
   Object.values(semestersData||{}).forEach(sem=>{
     (sem.batches||[]).forEach(batch=>{
@@ -1579,7 +1587,7 @@ function getSubjectRowsForBatchFilter(){
       (sem.subjects||[]).forEach(subjectKey=>{
         const si=subjects.findIndex(s=>s._fbKey===subjectKey);
         if(si<0) return;
-        const key=normalizeBatchName(batch)+'|'+(subjects[si]._fbKey||si);
+        const key=normalizeBatchName(batch)+'|'+(subjects[si].courseKey||subjects[si]._fbKey||si);
         if(seen.has(key)) return;
         const studentIdxs=(subjects[si].students||[]).filter(idx=>sameBatchName(students[idx]?.batch,batch));
         rows.push({...subjects[si],si,batchLabel:batch,semesterName:sem.name||'',studentIdxs});
@@ -1591,7 +1599,7 @@ function getSubjectRowsForBatchFilter(){
     const enrolledBatches=[...new Set((subj.students||[]).map(idx=>students[idx]?.batch).filter(Boolean))];
     enrolledBatches.forEach(batch=>{
       if(currentSubjectsBatchFilter!=='all' && !sameBatchName(batch,currentSubjectsBatchFilter)) return;
-      const key=normalizeBatchName(batch)+'|'+(subj._fbKey||si);
+      const key=normalizeBatchName(batch)+'|'+(subj.courseKey||subj._fbKey||si);
       if(seen.has(key)) return;
       const studentIdxs=(subj.students||[]).filter(idx=>sameBatchName(students[idx]?.batch,batch));
       if(!studentIdxs.length) return;
@@ -2360,11 +2368,41 @@ async function deleteUser(i) {
 //  GRADES
 // ══════════════════════════════════════════════
 function populateGradeSubjectSelect() {
-  const myIdxs=currentUser.role==='lecturer'?getLecturerSubjects(currentUser.id).map(s=>s.idx):subjects.map((_,i)=>i);
-  document.getElementById('gradeSubjectSelect').innerHTML=myIdxs.map(si=>`<option value="${si}">${subjects[si].name}</option>`).join('');
+  const allowedIdxs=currentUser.role==='lecturer'?getLecturerSubjects(currentUser.id).map(s=>s.idx):subjects.map((_,i)=>i);
+  const structuredExists=allowedIdxs.some(i=>subjects[i]?.courseKey);
+  const operationalIdxs=structuredExists?allowedIdxs.filter(i=>subjects[i]?.courseKey):allowedIdxs;
+  const batchSelect=document.getElementById('gradeBatchSelect');
+  const previousBatch=batchSelect.value||currentGradeBatchFilter;
+  const batches=[];
+  operationalIdxs.forEach(i=>{
+    const batch=subjects[i]?.batch;
+    if(batch&&!batches.some(b=>sameBatchName(b,batch))) batches.push(batch);
+  });
+  batches.sort();
+  batchSelect.innerHTML=batches.map(b=>`<option value="${b}">${b}</option>`).join('');
+  const selectedBatch=batches.find(b=>sameBatchName(b,previousBatch))||batches[0]||'';
+  batchSelect.value=selectedBatch;
+  currentGradeBatchFilter=selectedBatch||'all';
+
+  const seen=new Set();
+  const filtered=operationalIdxs.filter(i=>{
+    const subject=subjects[i];
+    if(selectedBatch&&!sameBatchName(subject.batch,selectedBatch)) return false;
+    const key=subject.courseKey||subject._fbKey||i;
+    if(seen.has(key)) return false;
+    seen.add(key); return true;
+  }).sort((a,b)=>(subjects[a].semesterNo||99)-(subjects[b].semesterNo||99)||subjects[a].name.localeCompare(subjects[b].name,'ar'));
+  const subjectSelect=document.getElementById('gradeSubjectSelect');
+  const previousSubject=subjectSelect.value;
+  subjectSelect.innerHTML=filtered.map(si=>`<option value="${si}">الفصل ${subjects[si].semesterNo||'—'} — ${subjects[si].name}</option>`).join('');
+  if(filtered.map(String).includes(previousSubject)) subjectSelect.value=previousSubject;
+}
+function onGradeBatchChange(){
+  currentGradeBatchFilter=document.getElementById('gradeBatchSelect').value||'all';
+  populateGradeSubjectSelect();
+  loadGradesTable();
 }
 function onGradeSubjectChange(){
-  currentGradeBatchFilter='all';
   loadGradesTable();
 }
 function getGradeBatchOptions(subj){
@@ -2379,6 +2417,7 @@ function setGradeBatchFilter(batch){
 function renderGradeBatchTabs(subj){
   const el=document.getElementById('gradeBatchTabs');
   if(!el) return;
+  if(document.getElementById('gradeBatchSelect')?.value){ el.innerHTML=''; return; }
   const batches=getGradeBatchOptions(subj);
   if(currentGradeBatchFilter!=='all' && !batches.some(b=>sameBatchName(b,currentGradeBatchFilter))) currentGradeBatchFilter='all';
   if(batches.length<=1){
@@ -2394,7 +2433,12 @@ function selectWeek(w,el) {
   loadGradesTable();
 }
 function loadGradesTable() {
-  const si=parseInt(document.getElementById('gradeSubjectSelect').value)||0;
+  const selectedValue=document.getElementById('gradeSubjectSelect').value;
+  if(selectedValue===''){
+    document.getElementById('gradesTableBody').innerHTML='<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد مقررات لهذه الدفعة</td></tr>';
+    return;
+  }
+  const si=Number(selectedValue);
   const subj=subjects[si]; if (!subj) return;
   renderGradeBatchTabs(subj);
   const isExam=currentWeek===0; const wKey=isExam?'exam':`w${currentWeek}`;
@@ -2434,7 +2478,9 @@ function updateGrade(si,stdIdx,week,field,val) {
   else grades[si][stdIdx][week][field]=v;
 }
 async function saveGrades() {
-  const si = parseInt(document.getElementById('gradeSubjectSelect').value)||0;
+  const selectedValue=document.getElementById('gradeSubjectSelect').value;
+  if(selectedValue==='') return showToast('⚠️ لا يوجد مقرر محدد');
+  const si=Number(selectedValue);
   const btn = document.querySelector('#gradeSaveRow .btn-success');
   if(btn){btn.textContent='⏳ جاري الحفظ...';btn.disabled=true;}
   try {
@@ -2465,7 +2511,9 @@ async function saveGrades() {
   if(btn){btn.textContent='💾 حفظ الدرجات';btn.disabled=false;}
 }
 function autoFillDemo() {
-  const si=parseInt(document.getElementById('gradeSubjectSelect').value)||0;
+  const selectedValue=document.getElementById('gradeSubjectSelect').value;
+  if(selectedValue==='') return;
+  const si=Number(selectedValue);
   const isExam=currentWeek===0; const wKey=isExam?'exam':`w${currentWeek}`;
   subjects[si].students.filter(idx=>currentGradeBatchFilter==='all'||sameBatchName(students[idx]?.batch,currentGradeBatchFilter)).forEach(idx=>{
     if (!grades[si]) grades[si]={};
