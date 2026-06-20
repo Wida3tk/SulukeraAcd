@@ -1149,37 +1149,36 @@ async function saveGrades(){
       }
     });
 
-    // لكل طالب: اقرأ السجل الكامل الموجود ثم ادمج التغييرات الجديدة
-    const updates={};
+    // لكل طالب: ادمج التغييرات داخل Transaction حتى لا تكتب جلسة فوق أخرى.
+    const legacyDeletes={};
     for(const [stKey, newFields] of Object.entries(byStudent)){
       const gradeKey=('grade_'+stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
-      // اقرأ الدرجات الحالية من dbData أو Firebase
-      const existing = dbData.grades?.[gradeKey] || getGrade_data(stKey,currentSubjectKey) ||
-        (await fbRef('grades/'+gradeKey).get()).val() || {};
-      // ادمج: الحقول الحالية + الحقول الجديدة
-      const merged = {
-        studentKey: stKey,
-        subjectKey: currentSubjectKey,
-        // الأسابيع الأربعة + الاختبار — احتفظ بالقديم ما لم يُحدَّث
-        w1_attend: existing.w1_attend||0, w1_hw: existing.w1_hw||0, w1_disc: existing.w1_disc||0,
-        w2_attend: existing.w2_attend||0, w2_hw: existing.w2_hw||0, w2_disc: existing.w2_disc||0,
-        w3_attend: existing.w3_attend||0, w3_hw: existing.w3_hw||0, w3_disc: existing.w3_disc||0,
-        w4_attend: existing.w4_attend||0, w4_hw: existing.w4_hw||0, w4_disc: existing.w4_disc||0,
-        exam: isExamEntered(existing) ? (existing.exam||0) : null,
-        examEntered: isExamEntered(existing),
-        ...newFields,  // التغييرات الجديدة تُطغى على القديمة
-        updatedAt:new Date().toISOString()
-      };
-      updates['grades/'+gradeKey] = merged;
+      const fallback=getGrade_data(stKey,currentSubjectKey)||{};
+      const tx=await fbRef('grades/'+gradeKey).transaction(current=>{
+        const existing=current||fallback;
+        return {
+          studentKey:stKey,
+          subjectKey:currentSubjectKey,
+          w1_attend:existing.w1_attend||0, w1_hw:existing.w1_hw||0, w1_disc:existing.w1_disc||0,
+          w2_attend:existing.w2_attend||0, w2_hw:existing.w2_hw||0, w2_disc:existing.w2_disc||0,
+          w3_attend:existing.w3_attend||0, w3_hw:existing.w3_hw||0, w3_disc:existing.w3_disc||0,
+          w4_attend:existing.w4_attend||0, w4_hw:existing.w4_hw||0, w4_disc:existing.w4_disc||0,
+          exam:isExamEntered(existing)?(existing.exam||0):null,
+          examEntered:isExamEntered(existing),
+          ...newFields,
+          updatedAt:new Date().toISOString()
+        };
+      });
+      const merged=tx.snapshot.val();
       const legacyKey=(stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
-      if(legacyKey!==gradeKey) updates['grades/'+legacyKey]=null;
+      if(legacyKey!==gradeKey) legacyDeletes['grades/'+legacyKey]=null;
       // حدّث dbData المحلي فوراً
       if(!dbData.grades) dbData.grades={};
       dbData.grades[gradeKey] = merged;
     }
 
-    if(Object.keys(updates).length>0)
-      await firebase.database().ref('/').update(updates);
+    if(Object.keys(legacyDeletes).length>0)
+      await firebase.database().ref('/').update(legacyDeletes);
 
     toast('✅ تم حفظ الدرجات');
     renderWeekTable(currentWeek);
