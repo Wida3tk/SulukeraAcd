@@ -480,6 +480,16 @@ function getActiveSemesters(){
 function normalizeBatchName(batch){
   return String(batch||'').trim().replace(/\s+/g,' ').toLowerCase();
 }
+function getStudentPlanType(student){
+  if(student?.planType) return student.planType;
+  const pkg=student?.pkg||'';
+  const pkgName=Object.entries(dbData.packages||{}).find(([key,p])=>key===pkg||p.name===pkg)?.[1]?.name||pkg;
+  return String(pkgName).toUpperCase().includes('QASP')?'QASP-S':'QBA';
+}
+function isStudentEligibleForSubject(student,subject){
+  const eligible=Array.isArray(subject?.eligiblePlans)?subject.eligiblePlans:[];
+  return !eligible.length||eligible.includes(getStudentPlanType(student));
+}
 function activeSubjectKeysForBatch(batch){
   const wanted=normalizeBatchName(batch);
   const active=getActiveSemesters().filter(s=>(s.batches||[]).some(b=>normalizeBatchName(b)===wanted));
@@ -863,7 +873,8 @@ function getSubjectStudents(subjectFbKey){
 
   // التسجيلات الصريحة هي المصدر الأول.
   Object.values(dbData.enrollments||{}).forEach(e=>{
-    if(e.subjectKey===subjectFbKey&&e.studentKey&&dbData.students[e.studentKey]){
+    if(e.subjectKey===subjectFbKey&&e.studentKey&&dbData.students[e.studentKey]&&
+       isStudentEligibleForSubject(dbData.students[e.studentKey],dbData.subjects?.[subjectFbKey])){
       addStudent(e.studentKey);
     }
   });
@@ -878,7 +889,7 @@ function getSubjectStudents(subjectFbKey){
   });
   if(subjectBatches.size){
     Object.entries(dbData.students).forEach(([studentKey,student])=>{
-      if(subjectBatches.has(normalizeBatchName(student.batch))) addStudent(studentKey);
+      if(subjectBatches.has(normalizeBatchName(student.batch))&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
     });
   }
   return result;
