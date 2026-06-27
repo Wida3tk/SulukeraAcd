@@ -412,11 +412,9 @@ tr:hover td{background:#f8faff;}
           </div>
           <div id="batchPlanCourses"></div>
         </div>
-        <div class="card" style="border:1px solid #f2b8b5;">
-          <div class="card-title" style="color:var(--danger)">⚠️ إعادة تهيئة الهيكل الأكاديمي</div>
-          <div class="alert alert-danger">ينزّل نسخة احتياطية، ثم يحذف المقررات والتسجيلات والدرجات والفصول القديمة فقط. لن يحذف الطلاب أو حساباتهم أو الدفعات أو المحاضرين.</div>
-          <button class="btn btn-warning" onclick="removeLegacyAcademicData()">تنظيف المقررات القديمة المكررة فقط</button>
-          <button class="btn btn-danger" onclick="resetAcademicStructure()">تنزيل نسخة احتياطية وإعادة التهيئة</button>
+        <div class="card" style="border:1px solid var(--border);">
+          <div class="card-title">🛡️ حماية البيانات المرصودة</div>
+          <div class="alert alert-info">تم إخفاء أدوات حذف/تنظيف الهيكل الأكاديمي من الواجهة لأن النظام يحتوي درجات مرصودة. أي تنظيف لاحق يجب أن يكون بخطة هجرة منفصلة ونسخة احتياطية ومراجعة قبل التنفيذ.</div>
         </div>
       </div>
 
@@ -1270,7 +1268,22 @@ function getLecturerName(id){
   if(!id) return '—';
   return users.find(u=>u.username===id||u.id===id||u._fbKey===id)?.name||id;
 }
-function getLecturerSubjects(uid){return subjects.map((s,i)=>({...s,idx:i})).filter(s=>s.lecturerUserId===uid);}
+function getLecturerIdentityValues(user=currentUser){
+  return new Set([user?.username,user?.id,user?._fbKey,user?.fbKey].filter(Boolean));
+}
+function getLecturerSubjects(uid){
+  const ids=uid?new Set([uid]):getLecturerIdentityValues(currentUser);
+  return subjects.map((s,i)=>({...s,idx:i})).filter(s=>s.lecturerUserId&&ids.has(s.lecturerUserId));
+}
+function getSubjectStudentIdxs(subj){
+  const result=new Set(subj?.students||[]);
+  if(subj?.courseKey&&subj.batch){
+    students.forEach((student,idx)=>{
+      if(sameBatchName(student.batch,subj.batch)&&studentEligibleForOffering(student,subj)) result.add(idx);
+    });
+  }
+  return [...result].filter(idx=>students[idx]);
+}
 function makeEmptyGrade(){return{w1:{attend:0,hw:0,disc:0},w2:{attend:0,hw:0,disc:0},w3:{attend:0,hw:0,disc:0},w4:{attend:0,hw:0,disc:0},exam:null,examEntered:false};}
 async function syncMissingSemesterEnrollments(studentIdx=null){
   const updates={};
@@ -1462,13 +1475,6 @@ function refreshPage(p) {
   if (p==='grades') {
     populateGradeSubjectSelect();
     loadGradesTable();
-    syncMissingSemesterEnrollments().then(added=>{
-      if(added>0){
-        populateGradeSubjectSelect();
-        loadGradesTable();
-        showToast('تم تحديث تسجيل الطلاب في المقررات');
-      }
-    }).catch(e=>console.error('Enrollment sync error:',e));
   }
   if (p==='reports') populateReportStudentSelect();
   if (p==='mygrades') loadMyGrades();
@@ -1611,17 +1617,19 @@ function getSubjectRowsForBatchFilter(){
 }
 function renderSubjectsTable() {
   renderSubjectBatchTabs();
-  const baseSubjects=subjects.map((subj,si)=>({...subj,si})).filter(subj=>!isSubjectSection(subj));
+  const structuredExists=subjects.some(s=>s.courseKey);
+  const baseSubjects=structuredExists?[]:subjects.map((subj,si)=>({...subj,si})).filter(subj=>!isSubjectSection(subj));
   const tbody=document.getElementById('subjectsTableBody');
   if(!baseSubjects.length){
     tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد مواد أصلية</td></tr>';
   } else {
     tbody.innerHTML=baseSubjects.map((subj)=>{
       const si=subj.si;
-      const tots=subj.students.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
+      const rowStudents=getSubjectStudentIdxs(subj);
+      const tots=rowStudents.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
       const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
       return `<tr><td class="mono">${si+1}</td><td><strong>${subj.name}</strong></td>
-        <td>${getLecturerName(subj.lecturerUserId)}</td><td>${subj.students.length}</td><td>${avg}/100</td>
+        <td>${getLecturerName(subj.lecturerUserId)}</td><td>${rowStudents.length}</td><td>${avg}/100</td>
         <td style="display:flex;gap:4px;">${currentUser.role==='admin'
           ?`<button class="btn btn-sm" onclick="openSubjectModal(${si})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteSubject(${si})">🗑️</button>`
           :'<span style="font-size:11px;color:var(--text-muted)">قراءة فقط</span>'}</td></tr>`;
@@ -1636,7 +1644,7 @@ function renderSubjectsTable() {
   }
   sectionBody.innerHTML=visibleSubjects.map((subj)=>{
     const si=subj.si;
-    const rowStudents=subj.studentIdxs||subj.students||[];
+    const rowStudents=subj.studentIdxs||getSubjectStudentIdxs(subj);
     const tots=rowStudents.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
     const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
     const semesterNote=subj.semesterName?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${subj.semesterName}</div>`:'';
@@ -2267,7 +2275,10 @@ function openUserModal(i=-1) {
       s.lecturerUserId===u.username ||
       s.lecturerUserId===u._fbKey
     );
-    return `<option value="${si}" ${isAssigned?'selected':''}>${s.name}</option>`;
+    const label=s.courseKey
+      ? `${s.batch||'—'} — الفصل ${s.semesterNo||'—'} — ${s.name}`
+      : s.name;
+    return `<option value="${si}" ${isAssigned?'selected':''}>${label}</option>`;
   }).join('');
   document.getElementById('userModal').classList.add('open');
 }
@@ -2407,7 +2418,7 @@ function onGradeSubjectChange(){
 }
 function getGradeBatchOptions(subj){
   const batchSet=new Set();
-  (subj?.students||[]).forEach(stdIdx=>addBatchName(batchSet,students[stdIdx]?.batch));
+  getSubjectStudentIdxs(subj).forEach(stdIdx=>addBatchName(batchSet,students[stdIdx]?.batch));
   return [...batchSet].sort();
 }
 function setGradeBatchFilter(batch){
@@ -2447,7 +2458,7 @@ function loadGradesTable() {
   if (isExam) thead.innerHTML=`<tr><th>#</th><th>الطالب</th><th>الدفعة</th><th>الاختبار (/${settings.exam})</th><th>المجموع</th><th>تصنيف</th><th>حالة</th></tr>`;
   else thead.innerHTML=`<tr><th>#</th><th>الطالب</th><th>الدفعة</th><th>حضور(/${settings.attend})</th><th>واجبات(/${settings.hw})</th><th>مناقشة(/${settings.disc})</th><th>مجموع الأسبوع</th><th>الكلي</th></tr>`;
   const wkMax=settings.attend+settings.hw+settings.disc;
-  const visibleStudentIdxs=(subj.students||[]).filter(stdIdx=>currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter));
+  const visibleStudentIdxs=getSubjectStudentIdxs(subj).filter(stdIdx=>currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter));
   if(!visibleStudentIdxs.length){
     document.getElementById('gradesTableBody').innerHTML='<tr><td colspan="'+(isExam?7:8)+'" style="text-align:center;padding:2rem;color:var(--text-muted)">لا يوجد طلاب في هذه الدفعة لهذه المادة</td></tr>';
     return;
@@ -2487,24 +2498,36 @@ async function saveGrades() {
     const subj=subjects[si];
     if(!subj) return;
     const updates={};
-    (subj.students||[]).filter(stdIdx=>currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter)).forEach(stdIdx=>{
+    const isExam=currentWeek===0;
+    const weekKey=isExam?'exam':`w${currentWeek}`;
+    const transactionTasks=getSubjectStudentIdxs(subj).filter(stdIdx=>currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter)).map(stdIdx=>{
       const g=grades[si]?.[stdIdx]; if(!g) return;
       const st=students[stdIdx]; if(!st?._fbKey) return;
       const subjKey=subj._fbKey; if(!subjKey) return;
       const gradeKey=('grade_'+st._fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
       const legacyKey=(st._fbKey+'_'+subjKey).replace(/[.#$[\]]/g,'_');
-      updates[`grades/${gradeKey}`]={
-        studentKey:st._fbKey, subjectKey:subjKey,
-        w1_attend:g.w1?.attend||0, w1_hw:g.w1?.hw||0, w1_disc:g.w1?.disc||0,
-        w2_attend:g.w2?.attend||0, w2_hw:g.w2?.hw||0, w2_disc:g.w2?.disc||0,
-        w3_attend:g.w3?.attend||0, w3_hw:g.w3?.hw||0, w3_disc:g.w3?.disc||0,
-        w4_attend:g.w4?.attend||0, w4_hw:g.w4?.hw||0, w4_disc:g.w4?.disc||0,
-        exam:g.examEntered ? (g.exam||0) : null,
-        examEntered:g.examEntered===true,
-        updatedAt:new Date().toISOString()
-      };
+      const changedFields=isExam
+        ? {exam:g.examEntered?(g.exam||0):null,examEntered:g.examEntered===true}
+        : {
+            [`${weekKey}_attend`]:g[weekKey]?.attend||0,
+            [`${weekKey}_hw`]:g[weekKey]?.hw||0,
+            [`${weekKey}_disc`]:g[weekKey]?.disc||0
+          };
       if(legacyKey!==gradeKey) updates[`grades/${legacyKey}`]=null;
+      return fbRef('grades/'+gradeKey).transaction(current=>({
+        studentKey:st._fbKey,
+        subjectKey:subjKey,
+        w1_attend:current?.w1_attend||0, w1_hw:current?.w1_hw||0, w1_disc:current?.w1_disc||0,
+        w2_attend:current?.w2_attend||0, w2_hw:current?.w2_hw||0, w2_disc:current?.w2_disc||0,
+        w3_attend:current?.w3_attend||0, w3_hw:current?.w3_hw||0, w3_disc:current?.w3_disc||0,
+        w4_attend:current?.w4_attend||0, w4_hw:current?.w4_hw||0, w4_disc:current?.w4_disc||0,
+        exam:current?.exam??null,
+        examEntered:current?.examEntered===true,
+        ...changedFields,
+        updatedAt:new Date().toISOString()
+      }));
     });
+    await Promise.all(transactionTasks.filter(Boolean));
     if(Object.keys(updates).length>0) await firebase.database().ref().update(updates);
     showToast('✅ تم حفظ الدرجات');
   } catch(e){ console.error('Save grades error:',e); showToast('❌ خطأ في الحفظ'); }
@@ -2515,7 +2538,7 @@ function autoFillDemo() {
   if(selectedValue==='') return;
   const si=Number(selectedValue);
   const isExam=currentWeek===0; const wKey=isExam?'exam':`w${currentWeek}`;
-  subjects[si].students.filter(idx=>currentGradeBatchFilter==='all'||sameBatchName(students[idx]?.batch,currentGradeBatchFilter)).forEach(idx=>{
+  getSubjectStudentIdxs(subjects[si]).filter(idx=>currentGradeBatchFilter==='all'||sameBatchName(students[idx]?.batch,currentGradeBatchFilter)).forEach(idx=>{
     if (!grades[si]) grades[si]={};
     if (!grades[si][idx]) grades[si][idx]=makeEmptyGrade();
     if (isExam) { grades[si][idx].exam=Math.floor(Math.random()*(settings.exam+1)); grades[si][idx].examEntered=true; }
@@ -3592,6 +3615,8 @@ function downloadJson(filename,data){
 }
 
 async function removeLegacyAcademicData(){
+  showToast('⛔ تم تعطيل تنظيف المقررات لحماية الدرجات المرصودة');
+  return;
   if(!confirm('سيتم تنزيل نسخة احتياطية ثم حذف المقررات القديمة التي لا تنتمي لخطط الدفعات، مع تسجيلاتها ودرجاتها القديمة. الطلاب والمقررات الجديدة لن تُحذف. المتابعة؟')) return;
   showLoader(true);
   try{
@@ -3627,6 +3652,8 @@ async function removeLegacyAcademicData(){
 }
 
 async function resetAcademicStructure(){
+  showToast('⛔ تم تعطيل إعادة التهيئة لحماية الطلاب والدرجات');
+  return;
   if(!confirm('سيتم تنزيل نسخة احتياطية ثم حذف المقررات والتسجيلات والدرجات والفصول القديمة. الطلاب والحسابات والدفعات لن تُحذف. المتابعة؟')) return;
   showLoader(true);
   try{
