@@ -472,6 +472,10 @@ tr:hover td{background:#f8faff;}
           <div class="card-title">⚠️ الطلاب المتعثرون أكاديمياً</div>
           <div id="failAlertsContent"><div class="alert alert-info">جاري التحميل...</div></div>
         </div>
+        <div class="card card-accent" style="margin-top:1rem;">
+          <div class="card-title">📝 طلبات الطلاب</div>
+          <div id="studentRequestsAlertsContent"><div class="alert alert-info">جاري التحميل...</div></div>
+        </div>
       </div>
 
       <!-- SCHEDULE -->
@@ -638,9 +642,9 @@ tr:hover td{background:#f8faff;}
     </div>
     <div class="form-row">
       <div class="form-group"><label>الدفعة</label>
-        <select id="stdBatchSelect"><option value="">-- اختر --</option></select></div>
-      <div class="form-group"><label>المسار الأكاديمي *</label>
-        <select id="studentPlanType" onchange="refreshStudentSubjectOptions(editingStudentIdx)">
+        <select id="stdBatchSelect" onchange="refreshStudentSubjectOptions(editingStudentIdx); refreshStudentCrossBatchOptions(editingStudentIdx)"><option value="">-- اختر --</option></select></div>
+      <div class="form-group"><label>الرخصة الأكاديمية *</label>
+        <select id="studentPlanType" onchange="refreshStudentSubjectOptions(editingStudentIdx); refreshStudentCrossBatchOptions(editingStudentIdx)">
           <option value="QASP-S">QASP-S — 12 مقرر</option>
           <option value="QBA">QBA — 18 مقرر</option>
         </select>
@@ -655,8 +659,12 @@ tr:hover td{background:#f8faff;}
       <div class="form-group"></div>
     </div>
     <div id="packageBadgeInfo" style="display:none;"></div>
-    <div class="form-group"><label>المقررات (Ctrl+Click لتعدد)</label>
+    <div class="form-group"><label>مقررات الخطة الأساسية (Ctrl+Click لتعدد)</label>
       <select id="studentSubjectsList" multiple style="height:100px;"></select></div>
+    <div class="form-group"><label>مقررات إضافية من دفعات أخرى</label>
+      <select id="studentCrossBatchSubjects" multiple style="height:100px;"></select>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px">تُستخدم للتسجيلات الاستثنائية فقط، وتبقى دفعة الطالب الأصلية كما هي.</div>
+    </div>
   </div>
   <div class="modal-section">
     <div class="modal-section-title">💰 البيانات المالية</div>
@@ -995,17 +1003,21 @@ async function loadAllFromFirebase(){
     semestersData=root.semesters||{};
     activeSemesterKey=Object.entries(semestersData).find(([,s])=>s.status==='active')?.[0]||null;
     curriculumTemplate=root.curriculumTemplate||{};
+    studentRequestsData = root.studentRequests
+      ? Object.entries(root.studentRequests).map(([key, request]) => ({ _fbKey:key, ...request }))
+      : [];
 
-    // 6. Enrollments — map students to subjects
-    if(root.enrollments){
-      Object.values(root.enrollments).forEach(e=>{
-        const si=subjects.findIndex(s=>s._fbKey===e.subjectKey);
-        const stdIdx=students.findIndex(s=>s._fbKey===e.studentKey);
-        if(si>=0 && stdIdx>=0 && !subjects[si].students.includes(stdIdx)){
-          subjects[si].students.push(stdIdx);
-        }
-      });
-    }
+    // 6. Enrollments — map students to course offerings
+    enrollmentsData = root.enrollments
+      ? Object.entries(root.enrollments).map(([key, enrollment]) => ({ _fbKey:key, ...enrollment }))
+      : [];
+    enrollmentsData.forEach(enrollment=>{
+      const si=subjects.findIndex(s=>s._fbKey===enrollment.subjectKey);
+      const stdIdx=students.findIndex(s=>s._fbKey===enrollment.studentKey);
+      if(si>=0 && stdIdx>=0 && !subjects[si].students.includes(stdIdx)){
+        subjects[si].students.push(stdIdx);
+      }
+    });
 
     // 7. Grades
     grades={};
@@ -1195,6 +1207,7 @@ let users=[{id:'u1',name:'مدير النظام',username:'admin',password:null,
 let subjects=[];
 let students=[];
 let grades={};
+let studentRequestsData=[];
 let currentUser=null;
 let currentWeek=1;
 let editingSubjectIdx=-1;
@@ -1212,6 +1225,23 @@ let currentGradeBatchFilter='all';
 //  HELPERS
 // ══════════════════════════════════════════════
 function getStudentFullName(st){if(!st)return'—';return[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ');}
+function getStudentRequestTypeLabel(type){
+  return ({
+    leave:'طلب إجازة',
+    postpone:'طلب تأجيل',
+    grade_review:'طلب مراجعة درجات',
+    academic_support:'طلب دعم أكاديمي'
+  })[type] || 'طلب عام';
+}
+function getStudentRequestStatusMeta(status){
+  if(status==='approved') return {label:'مقبول', className:'badge-pass'};
+  if(status==='completed') return {label:'مكتمل', className:'badge-pass'};
+  if(status==='rejected') return {label:'مرفوض', className:'badge-fail'};
+  return {label:'قيد المراجعة', className:'badge-warn'};
+}
+function getSortedStudentRequests(){
+  return [...studentRequestsData].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+}
 function inferPlanType(pkg){
   const value=String(pkg||'').toUpperCase();
   const pkgName=(packagesData||[]).find(p=>p._fbKey===pkg)?.name||'';
@@ -1283,6 +1313,31 @@ function getSubjectStudentIdxs(subj){
     });
   }
   return [...result].filter(idx=>students[idx]);
+}
+function getStudentEnrollmentRecords(stdIdx){
+  const student = students[stdIdx];
+  if(!student?._fbKey) return [];
+  return enrollmentsData
+    .filter(enrollment=>enrollment.studentKey===student._fbKey)
+    .map(enrollment=>{
+      const subject = subjects.find(s=>s._fbKey===enrollment.subjectKey);
+      return subject ? { ...enrollment, subject } : null;
+    })
+    .filter(Boolean);
+}
+function getStudentCrossBatchSubjectChoices(studentIdx){
+  const student = students[studentIdx];
+  if(!student) return [];
+  return subjects
+    .map((subject, idx)=>({ ...subject, idx }))
+    .filter(subject=>subject._fbKey && subject.courseKey && subject.batch && !sameBatchName(subject.batch, student.batch))
+    .sort((a,b)=>(a.batch||'').localeCompare(b.batch||'', 'ar') || (a.name||'').localeCompare(b.name||'', 'ar'));
+}
+function getSelectedStudentCrossBatchSubjectIdxs(studentIdx){
+  return getStudentEnrollmentRecords(studentIdx)
+    .filter(record=>record.sourceType==='manual_cross_batch' || (record.subject?.batch && !sameBatchName(record.subject.batch, students[studentIdx]?.batch)))
+    .map(record=>subjects.findIndex(subject=>subject._fbKey===record.subjectKey))
+    .filter(idx=>idx>=0);
 }
 function makeEmptyGrade(){return{w1:{attend:0,hw:0,disc:0},w2:{attend:0,hw:0,disc:0},w3:{attend:0,hw:0,disc:0},w4:{attend:0,hw:0,disc:0},exam:null,examEntered:false};}
 async function syncMissingSemesterEnrollments(studentIdx=null){
@@ -1462,7 +1517,7 @@ function goBack() {
 }
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
-  if (pageId==='subjects'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مواد لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مادة جديدة</button>`;
+  if (pageId==='subjects'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مقررات لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مقرر جديد</button>`;
   else if (pageId==='students'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إعادة ضبط كلمات الطلاب</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
   else if (pageId==='users'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
@@ -1826,6 +1881,7 @@ function updateSubjectsForPackage() {
   if(planSelect){
     planSelect.value=String(pkg.name||'').toUpperCase().includes('QASP')?'QASP-S':'QBA';
     refreshStudentSubjectOptions(editingStudentIdx);
+    refreshStudentCrossBatchOptions(editingStudentIdx);
   }
   if(info){
     info.style.display='block';
@@ -1863,6 +1919,21 @@ function refreshStudentSubjectOptions(studentIdx=-1){
   const planType=document.getElementById('studentPlanType')?.value||students[studentIdx]?.planType||'QBA';
   const choices=getStudentSubjectChoices(batch,planType);
   sel.innerHTML=choices.map(s=>'<option value="'+s.idx+'" '+(studentIdx>=0&&subjects[s.idx].students.includes(studentIdx)?'selected':'')+'>'+s.name+(isSubjectSection(s)?' - '+getSubjectBatchLabel(s):'')+'</option>').join('');
+}
+function refreshStudentCrossBatchOptions(studentIdx=-1){
+  const sel=document.getElementById('studentCrossBatchSubjects');
+  if(!sel) return;
+  const currentBatch=document.getElementById('stdBatchSelect')?.value || students[studentIdx]?.batch || '';
+  const currentPlan=document.getElementById('studentPlanType')?.value || students[studentIdx]?.planType || 'QBA';
+  const selectedCrossBatch = studentIdx>=0 ? new Set(getSelectedStudentCrossBatchSubjectIdxs(studentIdx)) : new Set();
+  const choices = subjects
+    .map((subject, idx)=>({ ...subject, idx }))
+    .filter(subject=>subject._fbKey && subject.courseKey && subject.batch && !sameBatchName(subject.batch, currentBatch))
+    .filter(subject=>!subject.eligiblePlans?.length || subject.eligiblePlans.includes(currentPlan))
+    .sort((a,b)=>(a.batch||'').localeCompare(b.batch||'', 'ar') || (a.name||'').localeCompare(b.name||'', 'ar'));
+  sel.innerHTML = choices.map(subject=>
+    `<option value="${subject.idx}" ${selectedCrossBatch.has(subject.idx)?'selected':''}>${subject.name} — ${subject.batch} — ${subject.eligiblePlans?.join(' / ')||currentPlan}</option>`
+  ).join('');
 }
 function renderStudentsTable() {
   populateProgramFilterDropdown();
@@ -1924,8 +1995,15 @@ function openStudentModal(si=-1) {
   if (st?.track) { document.getElementById('stdTrack').value=st.track; updateBatchOptions(st?.batch||''); }
   if (st?.batch) { const bs=document.getElementById('stdBatchSelect'); if(bs) bs.value=st.batch; }
   // Subjects list
-  const sel=document.getElementById('studentSubjectsList');
   refreshStudentSubjectOptions(si);
+  refreshStudentCrossBatchOptions(si);
+  const crossBatchSel=document.getElementById('studentCrossBatchSubjects');
+  if(crossBatchSel){
+    const selectedCrossBatch = si>=0 ? new Set(getSelectedStudentCrossBatchSubjectIdxs(si)) : new Set();
+    Array.from(crossBatchSel.options).forEach(option=>{
+      if(selectedCrossBatch.has(Number(option.value))) option.selected = true;
+    });
+  }
   // Installments
   if (st?.installments&&st.installments.length) {
     document.getElementById('stdInstallmentsCount').value=st.installments.length;
@@ -1993,6 +2071,7 @@ async function saveStudent() {
   let generatedStudentPassword=false;
   if(editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
   const chosenSubjs=Array.from(document.getElementById('studentSubjectsList').selectedOptions).map(o=>parseInt(o.value));
+  const chosenCrossBatchSubjs=Array.from(document.getElementById('studentCrossBatchSubjects').selectedOptions).map(o=>parseInt(o.value));
   if (editingStudentIdx>=0) {
     students[editingStudentIdx]={...students[editingStudentIdx],...stdData};
     if (pass) { const u=users.find(u=>u.username===id&&u.role==='student'); if(u){u.password=pass;u.name=fullName;} }
@@ -2007,10 +2086,17 @@ async function saveStudent() {
     // ── Step 1: Save student record to Firebase (once) ──
     await saveStudentToFirebase(idx2, pass);
 
-    // ── Step 2: التسجيل من خطة الدفعة حسب المسار ──
+    // ── Step 2: إعادة بناء تسجيلات الطالب محليًا بشكل نظيف ──
+    subjects.forEach((subject, si)=>{
+      subject.students=(subject.students||[]).filter(i=>i!==idx2);
+      if(grades[si]?.[idx2] && !subject.students.includes(idx2)) delete grades[si][idx2];
+    });
+
+    // ── Step 3: التسجيل من خطة الدفعة حسب الرخصة ──
     const batchOfferings=subjects.map((s,i)=>({...s,idx:i})).filter(s=>
       s.courseKey&&sameBatchName(s.batch,stdData.batch)
     );
+    const defaultOfferingIdxs = [];
     if(batchOfferings.length){
       batchOfferings.forEach(offering=>{
         const si=offering.idx;
@@ -2018,6 +2104,7 @@ async function saveStudent() {
         subjects[si].students=(subjects[si].students||[]).filter(i=>i!==idx2);
         if(eligible){
           subjects[si].students.push(idx2);
+          defaultOfferingIdxs.push(si);
           if(!grades[si]) grades[si]={};
           if(!grades[si][idx2]) grades[si][idx2]=makeEmptyGrade();
         }
@@ -2027,13 +2114,20 @@ async function saveStudent() {
       chosenSubjs.forEach(si=>{
         if(!isNaN(si) && subjects[si] && !subjects[si].students.includes(idx2)){
           subjects[si].students.push(idx2);
+          defaultOfferingIdxs.push(si);
           if(!grades[si]) grades[si]={};
           if(!grades[si][idx2]) grades[si][idx2]=makeEmptyGrade();
         }
       });
     }
+    const crossBatchOfferingIdxs = chosenCrossBatchSubjs.filter(si=>!isNaN(si) && subjects[si]);
+    crossBatchOfferingIdxs.forEach(si=>{
+      if(!subjects[si].students.includes(idx2)) subjects[si].students.push(idx2);
+      if(!grades[si]) grades[si]={};
+      if(!grades[si][idx2]) grades[si][idx2]=makeEmptyGrade();
+    });
 
-    // ── Step 3: Save enrollments with deterministic keys ──
+    // ── Step 4: Save enrollments with deterministic keys ──
     const st_ref = students[idx2];
     if(st_ref?._fbKey){
       const enrollUpdates={};
@@ -2046,12 +2140,22 @@ async function saveStudent() {
       }
       // Add new enrollments — key = enr_studentFbKey_subjectFbKey (deterministic)
       const seen = new Set();
-      subjects.filter(s=>s.students.includes(idx2)).forEach(subj=>{
+      defaultOfferingIdxs.forEach(si=>{
+        const subj = subjects[si];
+        if(!subj?._fbKey) return;
+        const enrKey = ('enr_'+st_ref._fbKey+'_'+subj._fbKey).replace(/[.#$[\]]/g,'_');
+        if(!seen.has(enrKey)){
+          seen.add(enrKey);
+          enrollUpdates['enrollments/'+enrKey] = {studentKey:st_ref._fbKey, subjectKey:subj._fbKey, sourceType:'default_plan', status:'active'};
+        }
+      });
+      crossBatchOfferingIdxs.forEach(si=>{
+        const subj = subjects[si];
         if(!subj._fbKey) return;
         const enrKey = ('enr_'+st_ref._fbKey+'_'+subj._fbKey).replace(/[.#$[\]]/g,'_');
         if(!seen.has(enrKey)){
           seen.add(enrKey);
-          enrollUpdates['enrollments/'+enrKey] = {studentKey:st_ref._fbKey, subjectKey:subj._fbKey};
+          enrollUpdates['enrollments/'+enrKey] = {studentKey:st_ref._fbKey, subjectKey:subj._fbKey, sourceType:'manual_cross_batch', status:'active'};
         }
       });
       if(Object.keys(enrollUpdates).length>0)
@@ -2111,11 +2215,13 @@ function openStudentProfile(stdIdx) {
 function renderStudentProfile(stdIdx) {
   const st=students[stdIdx];
   const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
+  const enrollmentRecords=getStudentEnrollmentRecords(stdIdx);
+  const crossBatchRecords=enrollmentRecords.filter(record=>record.sourceType==='manual_cross_batch' || (record.subject?.batch && !sameBatchName(record.subject.batch, st.batch)));
   const tots=mySubjs.map(s=>grades[s.idx]?.[stdIdx]?calcTotal(grades[s.idx][stdIdx]):0);
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
   const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
   const hasFail=gradeRows.some(isFailingGrade);
-  const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مادة واحدة'};
+  const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مقرر منفرد'};
   const paidTotal=(st.installments||[]).filter(i=>i.status==='paid').reduce((a,b)=>a+(b.amount||0),0);
   const remaining=(st.totalAmount||0)-paidTotal;
   document.getElementById('studentProfileContent').innerHTML=`
@@ -2161,6 +2267,7 @@ function renderStudentProfile(stdIdx) {
           <div class="info-item"><div class="info-item-label">البرنامج</div><div class="info-item-value">${st.program||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">المسار</div><div class="info-item-value">${st.track||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${st.batch||'—'}</div></div>
+          <div class="info-item"><div class="info-item-label">الرخصة الأكاديمية</div><div class="info-item-value">${st.planType||inferPlanType(st.pkg)}</div></div>
           <div class="info-item"><div class="info-item-label">نوع التسجيل</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">المقررات</div><div class="info-item-value">${mySubjs.length}</div></div>
         </div>
@@ -2170,6 +2277,14 @@ function renderStudentProfile(stdIdx) {
             <div><span style="font-size:20px;font-weight:800;color:${tots[i]>=settings.gradeFail?'var(--primary)':'#c0392b'}">${tots[i]}</span>
             <span class="badge badge-${getGrade(tots[i])}" style="margin-right:6px">${getGrade(tots[i])}</span></div>
           </div>`).join('')}
+        </div>
+        <div style="margin-top:1rem;padding:12px 14px;background:var(--bg);border-radius:var(--radius)">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:8px">🧾 التسجيلات الاستثنائية بين الدفعات</div>
+          ${crossBatchRecords.length ? crossBatchRecords.map(record=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:white;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+              <div><strong>${record.subject?.name||'—'}</strong><div style="font-size:11px;color:var(--text-muted)">دفعة الطرح: ${record.subject?.batch||'—'} · ${record.sourceType==='manual_cross_batch'?'تسجيل استثنائي':'تسجيل مخصص'}</div></div>
+              <span class="badge badge-warn">${record.status==='active'?'نشط':record.status||'نشط'}</span>
+            </div>`).join('') : '<div style="font-size:11px;color:var(--text-muted)">لا توجد تسجيلات استثنائية لهذا الطالب.</div>'}
         </div>
       </div>
     </div>
@@ -3680,6 +3795,7 @@ async function resetAcademicStructure(){
 // ══════════════════════════════════════════════
 let packagesData = [];
 let semestersData = {};   // {key: {name,startDate,endDate,batches,subjects,status}}
+let enrollmentsData = [];
 let activeSemesterKey = null; // الفصل النشط حالياً
 let editingSemesterKey = null;
 
@@ -3923,19 +4039,16 @@ function renderAlertsPage(){
   students.forEach((st,idx)=>{
     (st.installments||[]).forEach(inst=>{
       if(inst.status==='overdue'){
-        overdue.push({student:getStudentFullName(st), id:st.id, 
-          label:inst.label, amount:inst.amount, due:inst.due, idx});
+        overdue.push({student:getStudentFullName(st), id:st.id, label:inst.label, amount:inst.amount, due:inst.due, idx});
       }
     });
-    // Also check pending past due date
     (st.installments||[]).forEach(inst=>{
       if(inst.status==='pending' && inst.due && new Date(inst.due) < new Date()){
-        overdue.push({student:getStudentFullName(st), id:st.id,
-          label:inst.label+' (تجاوز الموعد)', amount:inst.amount, due:inst.due, idx});
+        overdue.push({student:getStudentFullName(st), id:st.id, label:inst.label+' (تجاوز الموعد)', amount:inst.amount, due:inst.due, idx});
       }
     });
   });
-  
+
   const alertsEl = document.getElementById('alertsContent');
   if(alertsEl){
     if(!overdue.length){
@@ -3957,19 +4070,17 @@ function renderAlertsPage(){
         </table></div>`;
     }
   }
-  
+
   // Academic failures
   const failures = [];
   students.forEach((st,idx)=>{
     const mySubjs = subjects.filter(s=>s.students.includes(idx));
-    const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[idx]?calcTotal(grades[si][idx]):0;});
     const failedSubjs = mySubjs.filter(s=>{const si=subjects.indexOf(s); return isFailingGrade(grades[si]?.[idx]);});
     if(failedSubjs.length>0){
-      failures.push({student:getStudentFullName(st), id:st.id, 
-        count:failedSubjs.length, subjects:failedSubjs.map(s=>s.name), idx});
+      failures.push({student:getStudentFullName(st), id:st.id, count:failedSubjs.length, subjects:failedSubjs.map(s=>s.name), idx});
     }
   });
-  
+
   const failEl = document.getElementById('failAlertsContent');
   if(failEl){
     if(!failures.length){
@@ -3978,7 +4089,7 @@ function renderAlertsPage(){
       failEl.innerHTML=`
         <div class="alert alert-warn">⚠️ يوجد ${failures.length} طالب متعثر أكاديمياً</div>
         <div class="table-wrap"><table>
-          <thead><tr><th>الطالب</th><th>الرقم</th><th>عدد المواد الراسب فيها</th><th>المقررات</th><th>إجراء</th></tr></thead>
+          <thead><tr><th>الطالب</th><th>الرقم</th><th>عدد المقررات الراسب فيها</th><th>المقررات</th><th>إجراء</th></tr></thead>
           <tbody>${failures.map(f=>`<tr>
             <td><strong>${f.student}</strong></td>
             <td class="mono">${f.id}</td>
@@ -3989,6 +4100,68 @@ function renderAlertsPage(){
           </tbody>
         </table></div>`;
     }
+  }
+
+  const requestsEl = document.getElementById('studentRequestsAlertsContent');
+  if(requestsEl){
+    const requests = getSortedStudentRequests().map(request=>{
+      const studentIdx = students.findIndex(student=>student._fbKey===request.studentKey);
+      const student = studentIdx >= 0 ? students[studentIdx] : null;
+      return {...request, studentIdx, student, statusMeta:getStudentRequestStatusMeta(request.status)};
+    });
+    const pendingCount = requests.filter(request=>!request.status || request.status==='pending').length;
+    const completedCount = requests.filter(request=>request.status==='approved' || request.status==='completed').length;
+    const rejectedCount = requests.filter(request=>request.status==='rejected').length;
+
+    if(!requests.length){
+      requestsEl.innerHTML='<div class="alert alert-info">لا توجد طلبات مرفوعة من الطلاب حتى الآن</div>';
+    } else {
+      requestsEl.innerHTML=`
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <span class="badge badge-warn">قيد المراجعة: ${pendingCount}</span>
+          <span class="badge badge-pass">منجزة أو مقبولة: ${completedCount}</span>
+          <span class="badge badge-fail">مرفوضة: ${rejectedCount}</span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>الطالب</th><th>الدفعة</th><th>نوع الطلب</th><th>التفاصيل</th><th>تاريخ الرفع</th><th>الحالة</th><th>إجراء</th></tr></thead>
+          <tbody>${requests.map(request=>`<tr>
+            <td><strong>${request.student ? getStudentFullName(request.student) : 'طالب غير مرتبط'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.student?.id || '—'}</div></td>
+            <td><span class="badge badge-student">${request.student?.batch || '—'}</span></td>
+            <td>${getStudentRequestTypeLabel(request.type)}</td>
+            <td style="min-width:260px"><strong>${request.title || '—'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.details || '—'}</div></td>
+            <td>${request.createdAt ? new Date(request.createdAt).toLocaleDateString('ar-SA') : '—'}</td>
+            <td><span class="badge ${request.statusMeta.className}">${request.statusMeta.label}</span></td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap;">
+              ${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">ملف الطالب</button>`:''}
+              <button class="btn btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button>
+              <button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">إنجاز</button>
+              <button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>
+            </td>
+          </tr>`).join('')}</tbody>
+        </table></div>`;
+    }
+  }
+}
+
+async function updateStudentRequestStatus(requestKey, status){
+  const request = studentRequestsData.find(item=>item._fbKey===requestKey);
+  if(!request) return showToast('⚠️ لم يتم العثور على الطلب');
+  const nextStatus = ['approved','completed','rejected'].includes(status) ? status : 'pending';
+  const reviewedAt = new Date().toISOString();
+  try{
+    await fbRef('studentRequests/'+requestKey).update({
+      status:nextStatus,
+      reviewedAt,
+      reviewedBy:currentUser?.username || currentUser?.id || 'admin'
+    });
+    request.status = nextStatus;
+    request.reviewedAt = reviewedAt;
+    request.reviewedBy = currentUser?.username || currentUser?.id || 'admin';
+    renderAlertsPage();
+    showToast('✅ تم تحديث حالة الطلب');
+  }catch(e){
+    console.error('Update student request error:', e);
+    showToast('⚠️ تعذر تحديث حالة الطلب');
   }
 }
 

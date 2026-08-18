@@ -433,8 +433,15 @@ let dbData = {};  // cached Firebase root
 let currentWeek = 1;
 let currentSubjectKey = null;
 let currentBatchName = null;
+let currentAppTab = 'home';
 
 const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:60 };
+const STUDENT_MOTIVATIONS = [
+  'بداية قوية اليوم تصنع نتيجة مختلفة غدًا.',
+  'كل مقرر تنجزه يقربك من هدفك المهني.',
+  'التقدم اليومي الصغير يصنع فرقًا كبيرًا مع نهاية الفصل.',
+  'ترتيبك لوقتك أهم من عدد الساعات التي تدرسها.'
+];
 
 // ══════════════════════════════════════════════
 //  HELPERS
@@ -669,6 +676,200 @@ function showStudentView(){
   document.getElementById('appScreen').style.display='block';
   document.getElementById('appTabs').style.display='block';
 
+  const { fullName } = getCurrentStudentAcademicData();
+  document.getElementById('topbarName').textContent = fullName;
+  document.getElementById('topbarRole').textContent = '👩‍🎓 طالب';
+  document.getElementById('topbarRole').className = 'user-role role-student';
+  configureAppTabs([
+    { id:'home', label:'🏠 الرئيسية' },
+    { id:'courses', label:'📚 مقرراتي' },
+    { id:'grades', label:'📊 درجاتي' },
+    { id:'transcript', label:'📄 كشف الدرجات' },
+    { id:'requests', label:'📝 طلباتي' },
+    { id:'policies', label:'📘 السياسات' },
+    { id:'account', label:'👤 حسابي' },
+    { id:'schedule', label:'📅 جدولي' }
+  ]);
+  switchAppTab('home', document.querySelector('#appTabs .app-tab'));
+}
+
+function renderStudentHomeTab(){
+  const { st, fullName, mySubjects, avg, gradeRows, hasFail } = getCurrentStudentAcademicData();
+  const semester = getCurrentSemesterForBatch(st.batch);
+  const requests = getStudentRequests();
+  const motivation = STUDENT_MOTIVATIONS[new Date().getDate() % STUDENT_MOTIVATIONS.length];
+  const nextClass = Object.values(dbData.schedule?.weekly||{}).find(slot=>!slot.batch || normalizeBatchName(slot.batch)===normalizeBatchName(st.batch));
+  document.getElementById('mainContent').innerHTML = `
+    <div class="student-header">
+      <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
+      <div style="flex:1">
+        <div style="font-size:22px;font-weight:800">حياك الله، ${fullName}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:3px">${st.id} · ${st.batch||'—'} · ${st.planType||'—'}</div>
+        <div style="margin-top:8px;font-size:13px;color:var(--neon)">${motivation}</div>
+      </div>
+      <div class="avg-circle">
+        <div class="avg-num">${avg}</div>
+        <div class="avg-label">المتوسط</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📚 المقررات</div></div>
+      <div class="stat-box"><div class="stat-val">${requests.length}</div><div class="stat-lbl">📝 الطلبات</div></div>
+      <div class="stat-box"><div class="stat-val">${gradeRows.length}</div><div class="stat-lbl">📊 المرصود</div></div>
+      <div class="stat-box"><div class="stat-val">${hasFail?'تنبيه':'مستقر'}</div><div class="stat-lbl">🎯 الحالة</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">✨ لوحة البداية</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">الفصل الحالي</div>
+          <div style="font-size:14px;font-weight:800">${semester?.name||'غير محدد'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">البداية: ${semester?.startDate||'—'} · النهاية: ${semester?.endDate||'—'}</div>
+        </div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">أقرب محاضرة</div>
+          <div style="font-size:14px;font-weight:800">${nextClass?.subject||'لا توجد محاضرات مضافة بعد'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextClass?`${nextClass.day||'—'} · ${nextClass.timeStart||'—'} - ${nextClass.timeEnd||'—'}`:'راجعي الإدارة لإضافة الجدول'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📌 نصائح للدراسة</div>
+      <div style="display:grid;gap:8px;">
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">تابعي <strong>جدولي</strong> يوميًا قبل بداية المحاضرات.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجعي <strong>درجاتي</strong> بعد كل عملية رصد لتتابعي تقدمك أولًا بأول.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">استخدمي <strong>طلباتي</strong> لرفع أي طلب أكاديمي أو مراجعة درجات بشكل رسمي.</div>
+      </div>
+    </div>`;
+}
+
+function renderStudentCoursesTab(){
+  const { st, mySubjects } = getCurrentStudentAcademicData();
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card">
+      <div class="card-title">📚 مقرراتي</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>المقرر</th><th>دفعة الطرح</th><th>المحاضر</th><th>نوع التسجيل</th></tr></thead>
+        <tbody>${mySubjects.map((subject,index)=>`
+          <tr>
+            <td>${index+1}</td>
+            <td><strong>${subject.name}</strong></td>
+            <td>${subject.batch||st.batch||'—'}</td>
+            <td>${getLecturerName(subject.lecturerUserId)}</td>
+            <td><span class="badge ${subject.batch && !sameBatchName(subject.batch, st.batch)?'badge-warn':'badge-pass'}">${subject.batch && !sameBatchName(subject.batch, st.batch)?'استثنائي من دفعة أخرى':'ضمن الخطة'}</span></td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+}
+
+function renderStudentTranscriptTab(){
+  const { st, fullName, mySubjects } = getCurrentStudentAcademicData();
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card">
+      <div class="card-title">📄 كشف الدرجات</div>
+      <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+        <div><strong>${fullName}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${st.id} · ${st.batch||'—'} · ${st.planType||'—'}</div></div>
+        <div style="display:flex;gap:8px;"><button class="btn-out" onclick="window.print()">🖨️ طباعة</button><button class="btn-out" onclick="exportStudentTranscriptCsv()">📤 تصدير CSV</button></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>المقرر</th><th>المحاضر</th><th>المجموع</th><th>التقدير</th><th>الحالة</th></tr></thead>
+        <tbody>${mySubjects.map((subject,index)=>{ const g=getGrade_data(currentUser.fbKey, subject.key); const total=g?calcTotal(g):0; const status=g?getStatus(total):'قيد الرصد'; return `
+          <tr>
+            <td>${index+1}</td>
+            <td>${subject.name}</td>
+            <td>${getLecturerName(subject.lecturerUserId)}</td>
+            <td>${total}/100</td>
+            <td><span class="badge badge-${getGrade(total)}">${getGrade(total)}</span></td>
+            <td><span class="badge ${status==='ناجح'?'badge-pass':status==='راسب'?'badge-fail':'badge-warn'}">${status}</span></td>
+          </tr>`; }).join('')}</tbody>
+      </table></div>
+    </div>`;
+}
+
+function renderStudentRequestsTab(){
+  const requests = getStudentRequests();
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card">
+      <div class="card-title">📝 رفع طلب جديد</div>
+      <div class="field"><label>نوع الطلب</label><select id="studentRequestType"><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option></select></div>
+      <div class="field"><label>عنوان الطلب</label><input type="text" id="studentRequestTitle" placeholder="اكتب عنوانًا مختصرًا"></div>
+      <div class="field"><label>تفاصيل الطلب</label><textarea id="studentRequestDetails" style="width:100%;min-height:110px;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:inherit;"></textarea></div>
+      <button class="btn-login" style="width:auto;padding:11px 18px" onclick="submitStudentRequest()">إرسال الطلب</button>
+    </div>
+    <div class="card">
+      <div class="card-title">📂 الطلبات السابقة</div>
+      ${requests.length?`<div class="table-wrap"><table><thead><tr><th>النوع</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th></tr></thead><tbody>${requests.map(request=>`
+        <tr>
+          <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='grade_review'?'مراجعة درجات':'دعم أكاديمي'}</td>
+          <td><strong>${request.title||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${request.details||''}</div></td>
+          <td>${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</td>
+          <td><span class="badge ${request.status==='approved'?'badge-pass':request.status==='rejected'?'badge-fail':'badge-warn'}">${request.status==='approved'?'مقبول':request.status==='rejected'?'مرفوض':request.status==='completed'?'مكتمل':'قيد المراجعة'}</span></td>
+        </tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد طلبات مرفوعة حتى الآن</div>'}
+    </div>`;
+}
+
+function renderStudentPoliciesTab(){
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card">
+      <div class="card-title">📘 سياسات البرنامج</div>
+      <div style="display:grid;gap:10px;">
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px"><strong>سياسة الحضور:</strong> الالتزام بالمحاضرات جزء أساسي من نجاحك الأكاديمي.</div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px"><strong>سياسة التقييم:</strong> تعتمد الدرجة على أعمال الأسابيع والاختبار النهائي وفق المعايير المعتمدة.</div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px"><strong>سياسة الطلبات:</strong> جميع الطلبات الأكاديمية ترفع من خلال البوابة لضمان التوثيق والمتابعة.</div>
+      </div>
+    </div>`;
+}
+
+function renderStudentAccountTab(){
+  const { st, fullName } = getCurrentStudentAcademicData();
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card">
+      <div class="card-title">👤 حسابي</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field"><label>الاسم</label><input value="${fullName}" readonly></div>
+        <div class="field"><label>الرقم الطلابي</label><input value="${st.id||''}" readonly></div>
+        <div class="field"><label>البريد الإلكتروني</label><input value="${st.email||''}" readonly></div>
+        <div class="field"><label>رقم الجوال</label><input value="${st.phone||''}" readonly></div>
+        <div class="field"><label>الدفعة</label><input value="${st.batch||''}" readonly></div>
+        <div class="field"><label>الرخصة الأكاديمية</label><input value="${st.planType||''}" readonly></div>
+      </div>
+    </div>`;
+}
+
+function exportStudentTranscriptCsv(){
+  const { st, mySubjects } = getCurrentStudentAcademicData();
+  let csv = 'المقرر,المحاضر,المجموع,التقدير,الحالة\n';
+  mySubjects.forEach(subject=>{
+    const grade = getGrade_data(currentUser.fbKey, subject.key);
+    const total = grade ? calcTotal(grade) : 0;
+    csv += [subject.name, getLecturerName(subject.lecturerUserId), total, getGrade(total), grade?getStatus(total):'قيد الرصد'].join(',') + '\n';
+  });
+  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `transcript_${st.id||'student'}.csv`;
+  a.click();
+}
+
+async function submitStudentRequest(){
+  const type = document.getElementById('studentRequestType')?.value;
+  const title = document.getElementById('studentRequestTitle')?.value.trim();
+  const details = document.getElementById('studentRequestDetails')?.value.trim();
+  if(!title || !details) return toast('يرجى تعبئة عنوان الطلب وتفاصيله');
+  const payload = { studentKey: currentUser.fbKey, type, title, details, status:'pending', createdAt:new Date().toISOString() };
+  const requestKey = 'req_'+Date.now();
+  await fbRef('studentRequests/'+requestKey).set(payload);
+  if(!dbData.studentRequests) dbData.studentRequests = {};
+  dbData.studentRequests[requestKey] = payload;
+  toast('تم إرسال الطلب بنجاح');
+  renderStudentRequestsTab();
+}
+
+function renderStudentGradesTab(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appScreen').style.display='block';
+  document.getElementById('appTabs').style.display='block';
+
   const st = currentUser.data;
   const fullName = [st.firstName,st.midName,st.lastName].filter(Boolean).join(' ');
   document.getElementById('topbarName').textContent = fullName;
@@ -820,6 +1021,50 @@ function getLecturerName(uid){
 }
 function subjectDisplayName(subj){
   return subj?.batch ? `${subj.name} - ${subj.batch}` : (subj?.name||'');
+}
+function getStudentDisplayName(student){
+  return [student?.firstName, student?.midName, student?.lastName].filter(Boolean).join(' ') || student?.name || 'الطالب';
+}
+function getCurrentStudentAcademicData(){
+  const st = currentUser.data;
+  const mySubjects = getStudentSubjects(currentUser.fbKey);
+  const totals = mySubjects.map(subject=>{
+    const grade = getGrade_data(currentUser.fbKey, subject.key);
+    return grade ? calcTotal(grade) : 0;
+  });
+  const gradeRows = mySubjects.map(subject=>getGrade_data(currentUser.fbKey, subject.key)).filter(Boolean);
+  const avg = totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
+  return { st, fullName:getStudentDisplayName(st), mySubjects, totals, gradeRows, avg, hasFail:gradeRows.some(isFailingGrade) };
+}
+function getStudentRequests(){
+  if(!currentUser?.fbKey) return [];
+  return Object.entries(dbData.studentRequests||{})
+    .map(([key, request])=>({ key, ...request }))
+    .filter(request=>request.studentKey===currentUser.fbKey)
+    .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+}
+function getCurrentSemesterForBatch(batch){
+  return Object.values(dbData.semesters||{}).find(semester=>
+    (semester.status==='active' || semester.status==='current') &&
+    (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
+  ) || null;
+}
+function renderStudentPortalTab(tab){
+  currentAppTab = tab;
+  if(tab==='home') return renderStudentHomeTab();
+  if(tab==='courses') return renderStudentCoursesTab();
+  if(tab==='grades') return renderStudentGradesTab();
+  if(tab==='transcript') return renderStudentTranscriptTab();
+  if(tab==='requests') return renderStudentRequestsTab();
+  if(tab==='policies') return renderStudentPoliciesTab();
+  if(tab==='account') return renderStudentAccountTab();
+}
+function configureAppTabs(items){
+  const host = document.querySelector('#appTabs > div');
+  if(!host) return;
+  host.innerHTML = items.map((item, index)=>
+    `<button class="app-tab ${index===0?'active':''}" onclick="switchAppTab('${item.id}',this)">${item.label}</button>`
+  ).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -1227,8 +1472,20 @@ async function saveGrades(){
 const DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
 
 function switchAppTab(tab, btn){
-  document.querySelectorAll('.app-tab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  document.querySelectorAll('.app-tab').forEach(button=>button.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(currentUser?.role==='student'){
+    if(tab==='schedule'){
+      document.getElementById('mainContent').style.display='none';
+      document.getElementById('scheduleContent').style.display='block';
+      renderScheduleView();
+    } else {
+      document.getElementById('mainContent').style.display='block';
+      document.getElementById('scheduleContent').style.display='none';
+      renderStudentPortalTab(tab);
+    }
+    return;
+  }
   if(tab==='grades'){
     document.getElementById('mainContent').style.display='block';
     document.getElementById('scheduleContent').style.display='none';
