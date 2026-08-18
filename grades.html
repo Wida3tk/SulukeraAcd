@@ -698,7 +698,10 @@ function renderStudentHomeTab(){
   const semester = getCurrentSemesterForBatch(st.batch);
   const requests = getStudentRequests();
   const motivation = STUDENT_MOTIVATIONS[new Date().getDate() % STUDENT_MOTIVATIONS.length];
-  const nextClass = Object.values(dbData.schedule?.weekly||{}).find(slot=>!slot.batch || normalizeBatchName(slot.batch)===normalizeBatchName(st.batch));
+  const scheduleSlots = getStudentScheduleSlots(st);
+  const nextClass = getNextUpcomingSlot(scheduleSlots);
+  const pendingRequests = requests.filter(request=>!request.status || request.status==='pending').length;
+  const reviewedRequests = requests.filter(request=>request.reviewedAt).length;
   document.getElementById('mainContent').innerHTML = `
     <div class="student-header">
       <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
@@ -714,7 +717,7 @@ function renderStudentHomeTab(){
     </div>
     <div class="stat-row">
       <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📚 المقررات</div></div>
-      <div class="stat-box"><div class="stat-val">${requests.length}</div><div class="stat-lbl">📝 الطلبات</div></div>
+      <div class="stat-box"><div class="stat-val">${pendingRequests}</div><div class="stat-lbl">📝 طلبات مفتوحة</div></div>
       <div class="stat-box"><div class="stat-val">${gradeRows.length}</div><div class="stat-lbl">📊 المرصود</div></div>
       <div class="stat-box"><div class="stat-val">${hasFail?'تنبيه':'مستقر'}</div><div class="stat-lbl">🎯 الحالة</div></div>
     </div>
@@ -732,6 +735,34 @@ function renderStudentHomeTab(){
           <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextClass?`${nextClass.day||'—'} · ${nextClass.timeStart||'—'} - ${nextClass.timeEnd||'—'}`:'راجعي الإدارة لإضافة الجدول'}</div>
         </div>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🚀 متابعة سريعة</div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">إجمالي الطلبات</div>
+          <div style="font-size:16px;font-weight:800">${requests.length}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">تمت مراجعة ${reviewedRequests} طلب</div>
+        </div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">الأولوية الحالية</div>
+          <div style="font-size:13px;font-weight:800">${hasFail?'راجعي المقررات المتعثرة':'استمري على نفس الوتيرة'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">${hasFail?'يوجد تنبيه أكاديمي يحتاج متابعة':'وضعك الأكاديمي الحالي جيد'}</div>
+        </div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">خطة الطالب</div>
+          <div style="font-size:13px;font-weight:800">${semester?.name||'لم يتم تفعيل فصل بعد'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">${st.planType||'—'} · ${st.batch||'—'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 من جدولك هذا الأسبوع</div>
+      ${scheduleSlots.length ? `<div style="display:grid;gap:8px;">${scheduleSlots.slice(0,4).map(slot=>`
+        <div style="padding:11px 13px;background:var(--bg);border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center;">
+          <div><strong>${slot.subject||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${slot.day||'—'} · ${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div></div>
+          <div style="font-size:11px;color:var(--muted)">${slot.room?`🏠 ${slot.room}`:'بدون قاعة'}</div>
+        </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بجدولك حتى الآن</div>'}
     </div>
     <div class="card">
       <div class="card-title">📌 نصائح للدراسة</div>
@@ -1053,6 +1084,52 @@ function getCurrentSemesterForBatch(batch){
     (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
   ) || null;
 }
+function sortScheduleSlots(slots){
+  const dayOrder = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
+  return [...slots].sort((a,b)=>{
+    const dayDiff = dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day);
+    if(dayDiff!==0) return dayDiff;
+    return String(a.timeStart||'').localeCompare(String(b.timeStart||''));
+  });
+}
+function getStudentScheduleSlots(student=currentUser?.data){
+  if(!student) return [];
+  const mySubjectNames = new Set(getStudentSubjects(currentUser.fbKey).map(subject=>subject.name));
+  const weekly = Object.values(dbData.schedule?.weekly||{});
+  return sortScheduleSlots(weekly.filter(slot=>{
+    const sameBatch = !slot.batch || normalizeBatchName(slot.batch)===normalizeBatchName(student.batch);
+    const sameSubject = !slot.subject || mySubjectNames.has(slot.subject);
+    return sameBatch && sameSubject;
+  }));
+}
+function getLecturerScheduleSlots(){
+  const lecturerName = currentUser?.data?.name;
+  const mySubjectNames = new Set(getLecturerSubjects().map(subject=>subject.name));
+  const weekly = Object.values(dbData.schedule?.weekly||{});
+  return sortScheduleSlots(weekly.filter(slot=>
+    (slot.lecturer && lecturerName && slot.lecturer===lecturerName) ||
+    (slot.subject && mySubjectNames.has(slot.subject))
+  ));
+}
+function getNextUpcomingSlot(slots){
+  if(!slots.length) return null;
+  const dayOrder = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
+  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Riyadh'}));
+  const jsDayToAr = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const todayName = jsDayToAr[now.getDay()];
+  const todayIndex = dayOrder.indexOf(todayName);
+  const currentMinutes = now.getHours()*60 + now.getMinutes();
+  const scored = slots.map(slot=>{
+    const slotDayIndex = dayOrder.indexOf(slot.day);
+    const [hour, minute] = String(slot.timeStart||'00:00').split(':').map(Number);
+    let dayOffset = slotDayIndex - todayIndex;
+    if(dayOffset<0) dayOffset += 7;
+    let minutesScore = dayOffset*1440 + (hour*60+minute-currentMinutes);
+    if(minutesScore<0) minutesScore += 7*1440;
+    return {slot, minutesScore};
+  }).sort((a,b)=>a.minutesScore-b.minutesScore);
+  return scored[0]?.slot || null;
+}
 function renderStudentPortalTab(tab){
   currentAppTab = tab;
   if(tab==='home') return renderStudentHomeTab();
@@ -1062,6 +1139,12 @@ function renderStudentPortalTab(tab){
   if(tab==='requests') return renderStudentRequestsTab();
   if(tab==='policies') return renderStudentPoliciesTab();
   if(tab==='account') return renderStudentAccountTab();
+}
+function renderLecturerPortalTab(tab){
+  currentAppTab = tab;
+  if(tab==='home') return renderLecturerHomeTab();
+  if(tab==='courses') return renderLecturerCoursesTab();
+  if(tab==='grades') return renderLecDashboard();
 }
 function configureAppTabs(items){
   const host = document.querySelector('#appTabs > div');
@@ -1083,8 +1166,13 @@ function showLecturerView(){
   document.getElementById('topbarName').textContent = lec.name;
   document.getElementById('topbarRole').textContent = '👨‍🏫 محاضر';
   document.getElementById('topbarRole').className = 'user-role role-lecturer';
-
-  renderLecDashboard();
+  configureAppTabs([
+    { id:'home', label:'🏠 الرئيسية' },
+    { id:'courses', label:'📚 مقرراتي' },
+    { id:'grades', label:'📊 إدخال الدرجات' },
+    { id:'schedule', label:'📅 جدولي' }
+  ]);
+  switchAppTab('home', document.querySelector('#appTabs .app-tab'));
 }
 
 function getLecturerSubjects(){
@@ -1127,6 +1215,45 @@ function getLecturerSubjects(){
   const activeMine=operationalSubjects.filter(s=>activeKeys.includes(s.key));
   // لا نخفي مقررات المحاضر كلها إذا كان إعداد الفصل الحالي ناقصاً.
   return activeMine.length ? activeMine : operationalSubjects;
+}
+function getLecturerAcademicData(){
+  const mySubjects = getLecturerSubjects();
+  const uniqueStudents = new Map();
+  const batchMap = {};
+  let gradedRows = 0;
+  let passedRows = 0;
+  let pendingExamRows = 0;
+  mySubjects.forEach(subject=>{
+    const students = getSubjectStudents(subject.key);
+    students.forEach(student=>{
+      uniqueStudents.set(student.fbKey, student);
+      const grade = getGrade_data(student.fbKey, subject.key);
+      if(grade){
+        gradedRows++;
+        if(isExamEntered(grade) && calcTotal(grade)>=settings.gradeFail) passedRows++;
+        if(!isExamEntered(grade)) pendingExamRows++;
+      } else {
+        pendingExamRows++;
+      }
+      const batchName = student.batch || subject.batch || 'عامة';
+      if(!batchMap[batchName]) batchMap[batchName] = { subjects:new Map(), students:new Map() };
+      batchMap[batchName].subjects.set(subject.key, subject);
+      batchMap[batchName].students.set(student.fbKey, student);
+    });
+    if(!students.length){
+      const batchName = subject.batch || 'عامة';
+      if(!batchMap[batchName]) batchMap[batchName] = { subjects:new Map(), students:new Map() };
+      batchMap[batchName].subjects.set(subject.key, subject);
+    }
+  });
+  return {
+    mySubjects,
+    uniqueStudents:[...uniqueStudents.values()],
+    batchMap,
+    gradedRows,
+    passedRows,
+    pendingExamRows
+  };
 }
 
 function getSubjectStudents(subjectFbKey){
@@ -1269,6 +1396,89 @@ function selectBatch(batchName, btn){
     const firstBtn = area.querySelector('#lecSubjTabs .lec-tab');
     selectLecSubject(batchSubjects[0].key, batchName, firstBtn);
   }
+}
+
+function renderLecturerHomeTab(){
+  const { mySubjects, uniqueStudents, batchMap, pendingExamRows, gradedRows, passedRows } = getLecturerAcademicData();
+  const scheduleSlots = getLecturerScheduleSlots();
+  const nextSlot = getNextUpcomingSlot(scheduleSlots);
+  const batchNames = Object.keys(batchMap).sort();
+  if(!mySubjects.length){
+    document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات مرتبطة بحسابك حتى الآن</div></div>`;
+    return;
+  }
+  document.getElementById('mainContent').innerHTML = `
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📚 المقررات</div></div>
+      <div class="stat-box"><div class="stat-val">${uniqueStudents.length}</div><div class="stat-lbl">👩‍🎓 الطلاب</div></div>
+      <div class="stat-box"><div class="stat-val">${pendingExamRows}</div><div class="stat-lbl">📝 رصد معلّق</div></div>
+      <div class="stat-box"><div class="stat-val">${gradedRows>0&&passedRows>0?Math.round(passedRows/gradedRows*100):0}%</div><div class="stat-lbl">✅ نجاح مرصود</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">✨ لوحة المحاضر</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">أقرب محاضرة</div>
+          <div style="font-size:14px;font-weight:800">${nextSlot?.subject || 'لا توجد محاضرات مرتبطة بجدولك'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextSlot ? `${nextSlot.day||'—'} · ${nextSlot.timeStart||'—'} - ${nextSlot.timeEnd||'—'}` : 'راجعي الإدارة لربط الجدول بالمحاضر أو المقرر'}</div>
+        </div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">دفعاتك الحالية</div>
+          <div style="font-size:14px;font-weight:800">${batchNames.length ? batchNames.join(' · ') : 'بدون دفعات ظاهرة'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${mySubjects.length} مقرر مرتبط بحسابك</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📌 أولوياتك اليوم</div>
+      <div style="display:grid;gap:8px;">
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">ادخلي إلى <strong>إدخال الدرجات</strong> لإكمال الرصد الناقص أو تحديث أعمال الأسابيع.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجعي <strong>مقرراتي</strong> لمعرفة توزيع الطلاب على الدفعات والمقررات.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">تحققي من <strong>جدولي</strong> قبل بدء المحاضرات للتأكد من القاعات والأوقات.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 هذا الأسبوع</div>
+      ${scheduleSlots.length ? `<div style="display:grid;gap:8px;">${scheduleSlots.slice(0,5).map(slot=>`
+        <div style="padding:11px 13px;background:var(--bg);border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center;">
+          <div><strong>${slot.subject||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${slot.day||'—'} · ${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div></div>
+          <div style="font-size:11px;color:var(--muted)">${slot.room?`🏠 ${slot.room}`:'بدون قاعة'}</div>
+        </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بجدولك حتى الآن</div>'}
+    </div>`;
+}
+
+function renderLecturerCoursesTab(){
+  const { mySubjects, batchMap } = getLecturerAcademicData();
+  if(!mySubjects.length){
+    document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات لعرضها</div></div>`;
+    return;
+  }
+  const rows = mySubjects.map((subject, index)=>{
+    const students = getSubjectStudents(subject.key);
+    const batchNames = [...new Set(students.map(student=>student.batch || subject.batch || 'عامة'))];
+    const gradedCount = students.filter(student=>isExamEntered(getGrade_data(student.fbKey, subject.key))).length;
+    return `
+      <tr>
+        <td>${index+1}</td>
+        <td><strong>${subjectDisplayName(subject)}</strong></td>
+        <td>${batchNames.length ? batchNames.join('، ') : '—'}</td>
+        <td>${students.length}</td>
+        <td>${gradedCount}</td>
+        <td>${subject.eligiblePlans?.join(' / ') || 'عام'}</td>
+      </tr>`;
+  }).join('');
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card">
+      <div class="card-title">📚 مقرراتي</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        ${Object.entries(batchMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([batchName, info])=>`
+          <span class="badge badge-student">${batchName}: ${info.students.size} طالب</span>`).join('')}
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>المقرر</th><th>الدفعات</th><th>عدد الطلاب</th><th>المرصود نهائيًا</th><th>الرخصة</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`;
 }
 
 
@@ -1490,13 +1700,16 @@ function switchAppTab(tab, btn){
     }
     return;
   }
-  if(tab==='grades'){
-    document.getElementById('mainContent').style.display='block';
-    document.getElementById('scheduleContent').style.display='none';
-  } else {
-    document.getElementById('mainContent').style.display='none';
-    document.getElementById('scheduleContent').style.display='block';
-    renderScheduleView();
+  if(currentUser?.role==='lecturer'){
+    if(tab==='schedule'){
+      document.getElementById('mainContent').style.display='none';
+      document.getElementById('scheduleContent').style.display='block';
+      renderScheduleView();
+    } else {
+      document.getElementById('mainContent').style.display='block';
+      document.getElementById('scheduleContent').style.display='none';
+      renderLecturerPortalTab(tab);
+    }
   }
 }
 
@@ -1518,8 +1731,15 @@ function getSaudiTime(){
 function renderScheduleView(){
   const el = document.getElementById('scheduleContent');
   const schedule = dbData.schedule || {};
-  const weekly = schedule.weekly || {};
+  let weekly = schedule.weekly || {};
   const units = schedule.units || {};
+  if(currentUser?.role==='student'){
+    const visible = getStudentScheduleSlots(currentUser.data);
+    weekly = Object.fromEntries(visible.map((slot,index)=>['student_'+index, slot]));
+  } else if(currentUser?.role==='lecturer'){
+    const visible = getLecturerScheduleSlots();
+    weekly = Object.fromEntries(visible.map((slot,index)=>['lecturer_'+index, slot]));
+  }
 
   let html = `
     <div style="display:flex;gap:6px;margin-bottom:1.2rem;flex-wrap:wrap;" id="schTabs">
