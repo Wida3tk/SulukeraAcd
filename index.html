@@ -579,6 +579,12 @@ tr:hover td{background:#f8faff;}
             <div class="form-group"><label>🟡 حد C (جيد)</label><input type="number" id="gradeC" value="60" oninput="updateSettingsSummary()"></div>
             <div class="form-group"><label>🔴 حد الرسوب</label><input type="number" id="gradeFail" value="60" oninput="updateSettingsSummary()"></div>
           </div>
+          <div class="card-title" style="margin-top:1rem">🔗 ربط نظام العمليات</div>
+          <div class="alert alert-info">هذه الإعدادات تُستخدم لمزامنة المالية من نظام العمليات إلى الأكاديمية. احتفظي بالرمز داخل حسابات الإدارة فقط.</div>
+          <div class="form-row">
+            <div class="form-group"><label>رابط نظام العمليات</label><input type="url" id="operBaseUrl" placeholder="https://oper.example.com"></div>
+            <div class="form-group"><label>رمز التكامل</label><input type="password" id="operIntegrationToken" placeholder="Integration token"></div>
+          </div>
           <div id="gradeRanges" style="background:var(--bg);border-radius:8px;padding:10px 14px;font-size:12px;margin-top:4px;margin-bottom:1rem;"></div>
           <button class="btn btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
         </div>
@@ -957,7 +963,8 @@ async function loadAllFromFirebase(){
     if(root.settings){
       const s=root.settings;
       settings={attend:s.attend||5,hw:s.hw||5,disc:s.disc||5,exam:s.exam||40,
-        gradeA:s.gradeA||85,gradeB:s.gradeB||70,gradeC:s.gradeC||60,gradeFail:s.gradeFail||60};
+        gradeA:s.gradeA||85,gradeB:s.gradeB||70,gradeC:s.gradeC||60,gradeFail:s.gradeFail||60,
+        operBaseUrl:s.operBaseUrl||'',operIntegrationToken:s.operIntegrationToken||''};
     }
 
     // 2. Programs
@@ -1216,7 +1223,8 @@ async function saveUsersToFirebase(){
 async function saveSettingsToFirebase(){
   await fbRef('settings').set({
     attend:settings.attend, hw:settings.hw, disc:settings.disc, exam:settings.exam,
-    gradeA:settings.gradeA, gradeB:settings.gradeB, gradeC:settings.gradeC, gradeFail:settings.gradeFail
+    gradeA:settings.gradeA, gradeB:settings.gradeB, gradeC:settings.gradeC, gradeFail:settings.gradeFail,
+    operBaseUrl:settings.operBaseUrl||'', operIntegrationToken:settings.operIntegrationToken||''
   });
 }
 
@@ -1224,7 +1232,7 @@ async function saveSettingsToFirebase(){
 // ══════════════════════════════════════════════
 //  DATA
 // ══════════════════════════════════════════════
-let settings={attend:5,hw:5,disc:5,exam:40,gradeA:85,gradeB:70,gradeC:60,gradeFail:60};
+let settings={attend:5,hw:5,disc:5,exam:40,gradeA:85,gradeB:70,gradeC:60,gradeFail:60,operBaseUrl:'',operIntegrationToken:''};
 let programsData=[];
 let users=[{id:'u1',name:'مدير النظام',username:'admin',password:null,passwordHash:'disabled',passwordSalt:'disabled',role:'admin',subjects:[]}];
 let subjects=[];
@@ -1357,6 +1365,7 @@ function renderFinancialPanel(st, options={}){
   const readOnlyNote=options.readOnlyNote||'';
   const badgeClass=financial.source==='oper'?'badge-pass':'badge-warn';
   const snapshot=financial.snapshot;
+  const showSyncAction=canManageFinancials() && (st?.operCustomerId || st?.operOrderId);
   return `
     <div class="card card-accent"><div class="card-title">${title}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
@@ -1365,6 +1374,7 @@ function renderFinancialPanel(st, options={}){
         ${snapshot?.paymentPlan?`<span class="badge badge-admin">خطة السداد: ${snapshot.paymentPlan}</span>`:''}
         ${snapshot?.orderStatus?`<span class="badge badge-lecturer">الحالة: ${snapshot.orderStatus}</span>`:''}
       </div>
+      ${showSyncAction?`<div style="margin-bottom:1rem;"><button class="btn btn-warning btn-sm" onclick="syncStudentFinanceFromOper(${students.indexOf(st)})">🔄 مزامنة المالية من Oper</button></div>`:''}
       ${readOnlyNote?`<div class="alert alert-info">${readOnlyNote}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.2rem">
         <div class="stat" style="margin:0"><div class="stat-icon">💵</div><div class="stat-label">الإجمالي</div><div class="stat-value" style="font-size:20px">${financial.totalAmount.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
@@ -1389,6 +1399,51 @@ function renderFinancialPanel(st, options={}){
           </div>
         </div>`).join(''):'<div class="alert alert-warn">لا توجد أقساط مسجلة حالياً.</div>'}
     </div>`;
+}
+function normalizeOperBaseUrl(url){
+  return String(url||'').trim().replace(/\/+$/,'');
+}
+function getOperFinanceConfig(){
+  return {
+    baseUrl:normalizeOperBaseUrl(settings.operBaseUrl),
+    token:String(settings.operIntegrationToken||'').trim()
+  };
+}
+function getOperFinanceEndpoint(student){
+  const config=getOperFinanceConfig();
+  if(!config.baseUrl || !config.token) throw new Error('إعدادات ربط نظام العمليات غير مكتملة');
+  const url=new URL(config.baseUrl+'/api/integrations/academy-finance');
+  if(student?.operOrderId) url.searchParams.set('orderId', student.operOrderId);
+  if(student?.operCustomerId) url.searchParams.set('customerId', student.operCustomerId);
+  if(!student?.operOrderId && !student?.operCustomerId) throw new Error('معرّف العميل أو الطلب في نظام العمليات مطلوب');
+  return { url:url.toString(), token:config.token };
+}
+async function syncStudentFinanceFromOper(stdIdx){
+  if(!canManageFinancials()) return showToast('⚠️ لا تملكين صلاحية مزامنة المالية');
+  const student=students[stdIdx];
+  if(!student) return showToast('⚠️ تعذر العثور على الطالب');
+  try{
+    const endpoint=getOperFinanceEndpoint(student);
+    const response=await fetch(endpoint.url,{
+      method:'GET',
+      headers:{'x-sulukera-integration-token':endpoint.token}
+    });
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(payload?.error||'فشلت مزامنة Oper');
+    student.financeMode='oper_linked';
+    student.operCustomerId=payload.customerId||student.operCustomerId||'';
+    student.operOrderId=payload.orderId||student.operOrderId||'';
+    student.financeSnapshot=normalizeFinanceSnapshot(payload);
+    student.totalAmount=student.financeSnapshot?.totalAmount||student.totalAmount||0;
+    student.installments=normalizeInstallmentsList(student.financeSnapshot?.installments||student.installments||[]);
+    await saveStudentToFirebase(stdIdx, '');
+    if(document.getElementById('page-student-profile')?.classList.contains('active')) renderStudentProfile(stdIdx);
+    renderStudentsTable();
+    showToast('✅ تمت مزامنة المالية من Oper');
+  }catch(e){
+    console.error('syncStudentFinanceFromOper error:',e);
+    showToast('⚠️ '+(e?.message||'تعذرت مزامنة Oper'));
+  }
 }
 function studentEligibleForOffering(student,subject){
   const plan=student?.planType||inferPlanType(student?.pkg);
@@ -2195,11 +2250,11 @@ async function saveStudent() {
   const financialOnly=isFinanceRole();
   const firstName=document.getElementById('stdFirstName').value.trim();
   const id=document.getElementById('studentIdField').value.trim();
-  if (!firstName||!id) return showToast('⚠️ أدخل الاسم الأول والرقم الطلابي');
+  if ((!financialOnly && !firstName)||!id) return showToast('⚠️ أدخل الاسم الأول والرقم الطلابي');
   const selectedProgram=document.getElementById('stdProgram').value;
   const selectedTrack=document.getElementById('stdTrack').value;
   const selectedBatch=document.getElementById('stdBatchSelect').value.trim();
-  if(!selectedProgram||!selectedTrack||!selectedBatch)
+  if(!financialOnly && (!selectedProgram||!selectedTrack||!selectedBatch))
     return showToast('⚠️ اختاري البرنامج والمسار والدفعة');
   const duplicateIdx=students.findIndex((st,i)=>i!==editingStudentIdx&&(st.id||'').toUpperCase()===id.toUpperCase());
   if(duplicateIdx>=0) return showToast('⚠️ الرقم الطلابي مستخدم مسبقاً');
@@ -2241,7 +2296,7 @@ async function saveStudent() {
   }
   let pass=document.getElementById('studentPass').value;
   let generatedStudentPassword=false;
-  if(editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
+  if(!financialOnly && editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
   const chosenSubjs=Array.from(document.getElementById('studentSubjectsList').selectedOptions).map(o=>parseInt(o.value));
   const chosenCrossBatchSubjs=Array.from(document.getElementById('studentCrossBatchSubjects').selectedOptions).map(o=>parseInt(o.value));
   if(financialOnly){
@@ -3294,6 +3349,10 @@ function loadSettings() {
   document.getElementById('gradeB').value=settings.gradeB;
   document.getElementById('gradeC').value=settings.gradeC;
   document.getElementById('gradeFail').value=settings.gradeFail;
+  const operBaseEl=document.getElementById('operBaseUrl');
+  const operTokenEl=document.getElementById('operIntegrationToken');
+  if(operBaseEl) operBaseEl.value=settings.operBaseUrl||'';
+  if(operTokenEl) operTokenEl.value=settings.operIntegrationToken||'';
 }
 function updateSettingsSummary() {
   const a=parseInt(document.getElementById('setAttend')?.value)||0;
@@ -3316,6 +3375,8 @@ async function saveSettings() {
   settings.gradeB=parseInt(document.getElementById('gradeB').value);
   settings.gradeC=parseInt(document.getElementById('gradeC').value);
   settings.gradeFail=parseInt(document.getElementById('gradeFail').value);
+  settings.operBaseUrl=document.getElementById('operBaseUrl')?.value.trim()||'';
+  settings.operIntegrationToken=document.getElementById('operIntegrationToken')?.value.trim()||'';
   try { await saveSettingsToFirebase(); showToast('✅ تم حفظ الإعدادات'); }
   catch(e){ showToast('✓ تم حفظ الإعدادات محلياً'); }
 }
