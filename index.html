@@ -669,6 +669,11 @@ tr:hover td{background:#f8faff;}
   <div class="modal-section">
     <div class="modal-section-title">💰 البيانات المالية</div>
     <div class="form-row">
+      <div class="form-group"><label>معرّف العميل في نظام العمليات</label><input type="text" id="stdOperCustomerId" placeholder="CUS-..."></div>
+      <div class="form-group"><label>معرّف الطلب في نظام العمليات</label><input type="text" id="stdOperOrderId" placeholder="ORD-..."></div>
+    </div>
+    <div class="alert alert-info" style="margin-top:8px;">عند ربط الطالب بـ <strong>Oper</strong> تصبح المالية مرجعها نظام العمليات، وتبقى القيم المحلية هنا كنسخة احتياطية مؤقتة.</div>
+    <div class="form-row">
       <div class="form-group"><label>المبلغ الإجمالي (ريال)</label><input type="number" id="stdTotalAmount" placeholder="0"></div>
       <div class="form-group"><label>عدد الأقساط</label>
         <select id="stdInstallmentsCount" onchange="updateInstallmentsFields()">
@@ -995,7 +1000,10 @@ async function loadAllFromFirebase(){
         id:s.id||key, pkg:s.pkg||'full',
         planType:s.planType||(String(root.packages?.[s.pkg]?.name||s.pkg||'').toUpperCase().includes('QASP')?'QASP-S':'QBA'),
         totalAmount:parseFloat(s.totalAmount)||0, notes:s.notes||'',
-        installments:(s.installments ? Object.values(s.installments) : [])
+        operCustomerId:s.operCustomerId||'',
+        operOrderId:s.operOrderId||'',
+        financeSnapshot:normalizeFinanceSnapshot(s.financeSnapshot),
+        installments:normalizeInstallmentsList(s.installments ? Object.values(s.installments) : [])
       }));
     }
 
@@ -1067,8 +1075,11 @@ async function saveStudentToFirebase(stdIdx, passw){
     phone:st.phone||'', email:st.email||'', regDate:st.regDate||'',
     program:st.program||'', track:st.track||'', batch:st.batch||'',
     id:st.id, pkg:st.pkg||'', planType:st.planType||inferPlanType(st.pkg),
-    totalAmount:st.totalAmount||0, notes:st.notes||''
+    totalAmount:st.totalAmount||0, notes:st.notes||'',
+    operCustomerId:st.operCustomerId||'',
+    operOrderId:st.operOrderId||''
   };
+  if(st.financeSnapshot) stdData.financeSnapshot = st.financeSnapshot;
 
   // Save installments
   if(st.installments?.length){
@@ -1249,6 +1260,112 @@ function inferPlanType(pkg){
   const value=String(pkg||'').toUpperCase();
   const pkgName=(packagesData||[]).find(p=>p._fbKey===pkg)?.name||'';
   return (value.includes('QASP')||pkgName.toUpperCase().includes('QASP'))?'QASP-S':'QBA';
+}
+function normalizeInstallmentStatus(status){
+  const value=String(status||'').toLowerCase();
+  if(['paid','مدفوع'].includes(value)) return 'paid';
+  if(['overdue','متأخر','متاخر'].includes(value)) return 'overdue';
+  return 'pending';
+}
+function normalizeInstallmentsList(installments){
+  return Array.isArray(installments) ? installments.map((inst,i)=>({
+    label:inst?.label||(`قسط ${i+1}`),
+    amount:parseFloat(inst?.amount)||0,
+    due:inst?.due||inst?.dueDate||inst?.due_date||'',
+    status:normalizeInstallmentStatus(inst?.status),
+    rawStatus:inst?.rawStatus||inst?.displayStatus||inst?.display_status||inst?.status||''
+  })) : [];
+}
+function normalizeFinanceSnapshot(snapshot){
+  if(!snapshot) return null;
+  const totalAmount=parseFloat(snapshot.totalAmount ?? snapshot.total ?? 0) || 0;
+  const paidAmount=parseFloat(snapshot.paidAmount ?? snapshot.paid ?? 0) || 0;
+  const remainingAmount=parseFloat(snapshot.remainingAmount ?? snapshot.remaining ?? Math.max(totalAmount-paidAmount,0)) || 0;
+  return {
+    source:'oper',
+    syncedAt:snapshot.syncedAt||snapshot.updatedAt||snapshot.generatedAt||'',
+    customerId:snapshot.customerId||'',
+    orderId:snapshot.orderId||'',
+    customerName:snapshot.customerName||'',
+    program:snapshot.program||'',
+    track:snapshot.track||'',
+    batch:snapshot.batch||snapshot.cohortLabel||'',
+    paymentPlan:snapshot.paymentPlan||'',
+    orderStatus:snapshot.orderStatus||snapshot.status||'',
+    financeReviewStatus:snapshot.financeReviewStatus||'',
+    paymentBehavior:snapshot.paymentBehavior||null,
+    totalAmount,
+    paidAmount,
+    remainingAmount,
+    installments:normalizeInstallmentsList(snapshot.installments)
+  };
+}
+function getStudentFinancialState(st){
+  const snapshot=normalizeFinanceSnapshot(st?.financeSnapshot);
+  if(snapshot){
+    return {
+      source:'oper',
+      sourceLabel:'نظام العمليات Oper',
+      sourceHint:snapshot.syncedAt?`آخر مزامنة: ${snapshot.syncedAt}`:'مرتبط بنظام العمليات',
+      totalAmount:snapshot.totalAmount,
+      paidAmount:snapshot.paidAmount,
+      remainingAmount:snapshot.remainingAmount,
+      installments:snapshot.installments,
+      snapshot
+    };
+  }
+  const installments=normalizeInstallmentsList(st?.installments);
+  const paidAmount=installments.filter(i=>i.status==='paid').reduce((sum,i)=>sum+(i.amount||0),0);
+  const totalAmount=parseFloat(st?.totalAmount)||0;
+  return {
+    source:'local',
+    sourceLabel:'السجل الأكاديمي المحلي',
+    sourceHint:'بيانات محلية داخل المنظومة الأكاديمية',
+    totalAmount,
+    paidAmount,
+    remainingAmount:Math.max(totalAmount-paidAmount,0),
+    installments,
+    snapshot:null
+  };
+}
+function renderFinancialPanel(st, options={}){
+  const financial=getStudentFinancialState(st);
+  const title=options.title||'💰 البيانات المالية';
+  const readOnlyNote=options.readOnlyNote||'';
+  const badgeClass=financial.source==='oper'?'badge-pass':'badge-warn';
+  const snapshot=financial.snapshot;
+  return `
+    <div class="card card-accent"><div class="card-title">${title}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
+        <span class="badge ${badgeClass}">${financial.sourceLabel}</span>
+        <span class="badge badge-student">${financial.sourceHint}</span>
+        ${snapshot?.paymentPlan?`<span class="badge badge-admin">خطة السداد: ${snapshot.paymentPlan}</span>`:''}
+        ${snapshot?.orderStatus?`<span class="badge badge-lecturer">الحالة: ${snapshot.orderStatus}</span>`:''}
+      </div>
+      ${readOnlyNote?`<div class="alert alert-info">${readOnlyNote}</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.2rem">
+        <div class="stat" style="margin:0"><div class="stat-icon">💵</div><div class="stat-label">الإجمالي</div><div class="stat-value" style="font-size:20px">${financial.totalAmount.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
+        <div class="stat" style="margin:0"><div class="stat-icon">✅</div><div class="stat-label">المدفوع</div><div class="stat-value" style="font-size:20px;color:var(--success)">${financial.paidAmount.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
+        <div class="stat" style="margin:0"><div class="stat-icon">${financial.remainingAmount>0?'⏳':'🎉'}</div><div class="stat-label">المتبقي</div><div class="stat-value" style="font-size:20px;color:${financial.remainingAmount>0?'var(--danger)':'var(--success)'}">${financial.remainingAmount.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
+      </div>
+      ${snapshot?`
+        <div class="info-grid" style="margin-bottom:1rem;">
+          <div class="info-item"><div class="info-item-label">معرّف العميل</div><div class="info-item-value mono">${snapshot.customerId||'—'}</div></div>
+          <div class="info-item"><div class="info-item-label">معرّف الطلب</div><div class="info-item-value mono">${snapshot.orderId||'—'}</div></div>
+          <div class="info-item"><div class="info-item-label">البرنامج / المسار</div><div class="info-item-value">${[snapshot.program,snapshot.track].filter(Boolean).join(' / ')||'—'}</div></div>
+          <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${snapshot.batch||'—'}</div></div>
+        </div>
+        ${snapshot.paymentBehavior?.summary?`<div style="margin-bottom:1rem;padding:10px 14px;background:var(--bg);border-radius:var(--radius);font-size:12px;color:var(--text-muted)">${snapshot.paymentBehavior.summary}</div>`:''}
+      `:''}
+      ${financial.installments.length?financial.installments.map(inst=>`
+        <div class="installment-card ${inst.status}">
+          <div><div style="font-weight:700">${inst.label}</div><div style="font-size:11px;color:var(--text-muted)">الاستحقاق: ${inst.due||'—'}</div></div>
+          <div style="text-align:left">
+            <div style="font-size:16px;font-weight:800">${(inst.amount||0).toLocaleString()} ر.س</div>
+            <span class="badge ${inst.status==='paid'?'badge-pass':inst.status==='overdue'?'badge-fail':'badge-warn'}">${inst.rawStatus|| (inst.status==='paid'?'✓ مدفوع':inst.status==='overdue'?'⚠️ متأخر':'⏳ انتظار')}</span>
+          </div>
+        </div>`).join(''):'<div class="alert alert-warn">لا توجد أقساط مسجلة حالياً.</div>'}
+    </div>`;
 }
 function studentEligibleForOffering(student,subject){
   const plan=student?.planType||inferPlanType(student?.pkg);
@@ -1991,6 +2108,8 @@ function openStudentModal(si=-1) {
   }
   document.getElementById('stdNotes').value=st?.notes||'';
   document.getElementById('studentPlanType').value=st?.planType||inferPlanType(st?.pkg);
+  document.getElementById('stdOperCustomerId').value=st?.operCustomerId||'';
+  document.getElementById('stdOperOrderId').value=st?.operOrderId||'';
   document.getElementById('stdTotalAmount').value=st?.totalAmount||'';
   // Program → Track → Batch (cascading)
   populateProgramSelect(st?.program||'');
@@ -2067,9 +2186,14 @@ async function saveStudent() {
     batch:selectedBatch,
     id, pkg:document.getElementById('studentPackage').value,
     planType:document.getElementById('studentPlanType').value,
+    operCustomerId:document.getElementById('stdOperCustomerId').value.trim(),
+    operOrderId:document.getElementById('stdOperOrderId').value.trim(),
     totalAmount:parseFloat(document.getElementById('stdTotalAmount').value)||0,
     installments, notes:document.getElementById('stdNotes').value.trim()
   };
+  if((stdData.operCustomerId||stdData.operOrderId) && editingStudentIdx>=0 && students[editingStudentIdx]?.financeSnapshot){
+    stdData.financeSnapshot = students[editingStudentIdx].financeSnapshot;
+  }
   let pass=document.getElementById('studentPass').value;
   let generatedStudentPassword=false;
   if(editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
@@ -2225,8 +2349,8 @@ function renderStudentProfile(stdIdx) {
   const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
   const hasFail=gradeRows.some(isFailingGrade);
   const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مقرر منفرد'};
-  const paidTotal=(st.installments||[]).filter(i=>i.status==='paid').reduce((a,b)=>a+(b.amount||0),0);
-  const remaining=(st.totalAmount||0)-paidTotal;
+  const financialState=getStudentFinancialState(st);
+  const remaining=financialState.remainingAmount;
   document.getElementById('studentProfileContent').innerHTML=`
     <div class="student-profile-header">
       <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
@@ -2295,21 +2419,7 @@ function renderStudentProfile(stdIdx) {
       ${renderProfileGrades(stdIdx, mySubjs)}
     </div>
     <div class="profile-panel" id="panel-financial">
-      <div class="card card-accent"><div class="card-title">💰 البيانات المالية</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.2rem">
-          <div class="stat" style="margin:0"><div class="stat-icon">💵</div><div class="stat-label">الإجمالي</div><div class="stat-value" style="font-size:20px">${(st.totalAmount||0).toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-          <div class="stat" style="margin:0"><div class="stat-icon">✅</div><div class="stat-label">المدفوع</div><div class="stat-value" style="font-size:20px;color:var(--success)">${paidTotal.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-          <div class="stat" style="margin:0"><div class="stat-icon">${remaining>0?'⏳':'🎉'}</div><div class="stat-label">المتبقي</div><div class="stat-value" style="font-size:20px;color:${remaining>0?'var(--danger)':'var(--success)'}">${remaining.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-        </div>
-        ${(st.installments||[]).map(inst=>`
-          <div class="installment-card ${inst.status}">
-            <div><div style="font-weight:700">${inst.label}</div><div style="font-size:11px;color:var(--text-muted)">الاستحقاق: ${inst.due||'—'}</div></div>
-            <div style="text-align:left">
-              <div style="font-size:16px;font-weight:800">${(inst.amount||0).toLocaleString()} ر.س</div>
-              <span class="badge ${inst.status==='paid'?'badge-pass':inst.status==='overdue'?'badge-fail':'badge-warn'}">${inst.status==='paid'?'✓ مدفوع':inst.status==='overdue'?'⚠️ متأخر':'⏳ انتظار'}</span>
-            </div>
-          </div>`).join('')}
-      </div>
+      ${renderFinancialPanel(st,{title:'💰 البيانات المالية'})}
     </div>`;
 }
 function renderProfileGrades(stdIdx, mySubjs) {
@@ -2776,9 +2886,7 @@ function loadMyGrades() {
   const stdIdx=currentUser.studentIdx; const st=students[stdIdx];
   if (!st) { document.getElementById('myGradesContent').innerHTML='<div class="alert alert-danger">⚠️ لم يتم ربط حسابك</div>'; return; }
   const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
-  const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مادة واحدة'};
-  const paidTotal=(st.installments||[]).filter(i=>i.status==='paid').reduce((a,b)=>a+(b.amount||0),0);
-  const remaining=(st.totalAmount||0)-paidTotal;
+  const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مقرر منفرد'};
   document.getElementById('myGradesContent').innerHTML=`
     <div class="student-profile-header">
       <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
@@ -2820,18 +2928,7 @@ function loadMyGrades() {
     </div>
     <div class="profile-panel" id="panel-my-grades">${renderProfileGrades(stdIdx, mySubjs)}</div>
     <div class="profile-panel" id="panel-my-financial">
-      <div class="card card-accent"><div class="card-title">💰 بياناتك المالية</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.2rem">
-          <div class="stat" style="margin:0"><div class="stat-icon">💵</div><div class="stat-label">الإجمالي</div><div class="stat-value" style="font-size:18px">${(st.totalAmount||0).toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-          <div class="stat" style="margin:0"><div class="stat-icon">✅</div><div class="stat-label">المدفوع</div><div class="stat-value" style="font-size:18px;color:var(--success)">${paidTotal.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-          <div class="stat" style="margin:0"><div class="stat-icon">${remaining>0?'⏳':'🎉'}</div><div class="stat-label">المتبقي</div><div class="stat-value" style="font-size:18px;color:${remaining>0?'var(--danger)':'var(--success)'}">${remaining.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-        </div>
-        ${(st.installments||[]).map(inst=>`<div class="installment-card ${inst.status}">
-          <div><div style="font-weight:700">${inst.label}</div><div style="font-size:11px;color:var(--text-muted)">${inst.due||'—'}</div></div>
-          <div style="text-align:left"><div style="font-size:15px;font-weight:800">${(inst.amount||0).toLocaleString()} ر.س</div>
-          <span class="badge ${inst.status==='paid'?'badge-pass':inst.status==='overdue'?'badge-fail':'badge-warn'}">${inst.status==='paid'?'✓ مدفوع':inst.status==='overdue'?'⚠️ متأخر':'⏳ انتظار'}</span></div>
-        </div>`).join('')}
-      </div>
+      ${renderFinancialPanel(st,{title:'💰 بياناتك المالية',readOnlyNote:'هذه البيانات للعرض فقط، وأي تعديل مالي يتم من الإدارة.'})}
     </div>`;
 }
 
