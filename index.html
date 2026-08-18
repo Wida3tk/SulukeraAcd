@@ -1239,6 +1239,9 @@ function getStudentRequestStatusMeta(status){
   if(status==='rejected') return {label:'مرفوض', className:'badge-fail'};
   return {label:'قيد المراجعة', className:'badge-warn'};
 }
+function getRequestAdminNoteInputId(requestKey){
+  return `request_admin_note_${String(requestKey).replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+}
 function getSortedStudentRequests(){
   return [...studentRequestsData].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
 }
@@ -4123,12 +4126,16 @@ function renderAlertsPage(){
           <span class="badge badge-fail">مرفوضة: ${rejectedCount}</span>
         </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>الطالب</th><th>الدفعة</th><th>نوع الطلب</th><th>التفاصيل</th><th>تاريخ الرفع</th><th>الحالة</th><th>إجراء</th></tr></thead>
+          <thead><tr><th>الطالب</th><th>الدفعة</th><th>نوع الطلب</th><th>التفاصيل</th><th>ملاحظة الإدارة</th><th>تاريخ الرفع</th><th>الحالة</th><th>إجراء</th></tr></thead>
           <tbody>${requests.map(request=>`<tr>
             <td><strong>${request.student ? getStudentFullName(request.student) : 'طالب غير مرتبط'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.student?.id || '—'}</div></td>
             <td><span class="badge badge-student">${request.student?.batch || '—'}</span></td>
             <td>${getStudentRequestTypeLabel(request.type)}</td>
             <td style="min-width:260px"><strong>${request.title || '—'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.details || '—'}</div></td>
+            <td style="min-width:230px">
+              <textarea id="${getRequestAdminNoteInputId(request._fbKey)}" placeholder="اكتبي ملاحظة تظهر للطالب عند مراجعة الطلب" style="width:100%;min-height:84px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;">${request.adminNote || ''}</textarea>
+              ${request.reviewedAt?`<div style="font-size:10px;color:var(--text-muted);margin-top:6px">آخر مراجعة: ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')} ${request.reviewedBy?`· ${request.reviewedBy}`:''}</div>`:''}
+            </td>
             <td>${request.createdAt ? new Date(request.createdAt).toLocaleDateString('ar-SA') : '—'}</td>
             <td><span class="badge ${request.statusMeta.className}">${request.statusMeta.label}</span></td>
             <td style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -4148,13 +4155,16 @@ async function updateStudentRequestStatus(requestKey, status){
   if(!request) return showToast('⚠️ لم يتم العثور على الطلب');
   const nextStatus = ['approved','completed','rejected'].includes(status) ? status : 'pending';
   const reviewedAt = new Date().toISOString();
+  const adminNote = document.getElementById(getRequestAdminNoteInputId(requestKey))?.value.trim() || '';
   try{
     await fbRef('studentRequests/'+requestKey).update({
       status:nextStatus,
+      adminNote,
       reviewedAt,
       reviewedBy:currentUser?.username || currentUser?.id || 'admin'
     });
     request.status = nextStatus;
+    request.adminNote = adminNote;
     request.reviewedAt = reviewedAt;
     request.reviewedBy = currentUser?.username || currentUser?.id || 'admin';
     renderAlertsPage();

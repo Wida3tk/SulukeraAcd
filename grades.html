@@ -798,12 +798,16 @@ function renderStudentRequestsTab(){
     </div>
     <div class="card">
       <div class="card-title">📂 الطلبات السابقة</div>
-      ${requests.length?`<div class="table-wrap"><table><thead><tr><th>النوع</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th></tr></thead><tbody>${requests.map(request=>`
+      ${requests.length?`<div class="table-wrap"><table><thead><tr><th>النوع</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th><th>متابعة الإدارة</th></tr></thead><tbody>${requests.map(request=>`
         <tr>
           <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='grade_review'?'مراجعة درجات':'دعم أكاديمي'}</td>
           <td><strong>${request.title||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${request.details||''}</div></td>
           <td>${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</td>
           <td><span class="badge ${request.status==='approved'?'badge-pass':request.status==='rejected'?'badge-fail':'badge-warn'}">${request.status==='approved'?'مقبول':request.status==='rejected'?'مرفوض':request.status==='completed'?'مكتمل':'قيد المراجعة'}</span></td>
+          <td style="min-width:220px">
+            ${request.adminNote?`<div style="font-size:12px;font-weight:700">${request.adminNote}</div>`:'<div style="font-size:11px;color:var(--muted)">لا توجد ملاحظة من الإدارة حتى الآن</div>'}
+            ${request.reviewedAt?`<div style="font-size:10px;color:var(--muted);margin-top:4px">تمت المراجعة في ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')}${request.reviewedBy?` · بواسطة ${request.reviewedBy}`:''}</div>`:''}
+          </td>
         </tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد طلبات مرفوعة حتى الآن</div>'}
     </div>`;
 }
@@ -856,7 +860,7 @@ async function submitStudentRequest(){
   const title = document.getElementById('studentRequestTitle')?.value.trim();
   const details = document.getElementById('studentRequestDetails')?.value.trim();
   if(!title || !details) return toast('يرجى تعبئة عنوان الطلب وتفاصيله');
-  const payload = { studentKey: currentUser.fbKey, type, title, details, status:'pending', createdAt:new Date().toISOString() };
+  const payload = { studentKey: currentUser.fbKey, type, title, details, status:'pending', adminNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
   const requestKey = 'req_'+Date.now();
   await fbRef('studentRequests/'+requestKey).set(payload);
   if(!dbData.studentRequests) dbData.studentRequests = {};
