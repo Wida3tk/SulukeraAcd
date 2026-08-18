@@ -702,6 +702,10 @@ function renderStudentHomeTab(){
   const nextClass = getNextUpcomingSlot(scheduleSlots);
   const pendingRequests = requests.filter(request=>!request.status || request.status==='pending').length;
   const reviewedRequests = requests.filter(request=>request.reviewedAt).length;
+  const urgentFocus = hasFail ? 'راجعي المقررات التي عليها تنبيه أكاديمي ثم ارفعي طلب دعم إذا احتجتِ.' : 'ثبّتي إيقاعك هذا الأسبوع وراجعي الدرجات بعد كل عملية رصد.';
+  const semesterDaysText = semester?.startDate || semester?.endDate
+    ? `${semester?.startDate||'—'} إلى ${semester?.endDate||'—'}`
+    : 'لم يتم تحديد بداية ونهاية الفصل بعد';
   document.getElementById('mainContent').innerHTML = `
     <div class="student-header">
       <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
@@ -737,6 +741,32 @@ function renderStudentHomeTab(){
       </div>
     </div>
     <div class="card">
+      <div class="card-title">🌟 مركز الترحيب</div>
+      <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:1rem;">
+        <div style="padding:14px 16px;background:linear-gradient(135deg, rgba(13,64,252,0.08), rgba(85,215,255,0.12));border-radius:12px;border:1px solid rgba(13,64,252,0.18);">
+          <div style="font-size:15px;font-weight:800;margin-bottom:8px">مسارك الحالي داخل المنظومة</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.9">
+            أنت الآن ضمن دفعة <strong>${st.batch||'—'}</strong> على رخصة <strong>${st.planType||'—'}</strong>،
+            والفصل الحالي هو <strong>${semester?.name||'غير محدد'}</strong>.
+          </div>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.9">
+            بداية ونهاية الفصل:
+            <strong>${semesterDaysText}</strong>
+          </div>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.9">
+            الأولوية الحالية:
+            <strong>${urgentFocus}</strong>
+          </div>
+        </div>
+        <div style="display:grid;gap:8px;">
+          <button class="btn-out" onclick="switchAppTab('grades', document.querySelectorAll('.app-tab')[2])">📊 افتحي الدرجات</button>
+          <button class="btn-out" onclick="switchAppTab('requests', document.querySelectorAll('.app-tab')[4])">📝 ارفعي طلبًا</button>
+          <button class="btn-out" onclick="switchAppTab('transcript', document.querySelectorAll('.app-tab')[3])">📄 كشف الدرجات</button>
+          <button class="btn-out" onclick="switchAppTab('schedule', document.querySelectorAll('.app-tab')[7])">📅 راجعي الجدول</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-title">🚀 متابعة سريعة</div>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
@@ -763,6 +793,20 @@ function renderStudentHomeTab(){
           <div><strong>${slot.subject||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${slot.day||'—'} · ${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div></div>
           <div style="font-size:11px;color:var(--muted)">${slot.room?`🏠 ${slot.room}`:'بدون قاعة'}</div>
         </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بجدولك حتى الآن</div>'}
+    </div>
+    <div class="card">
+      <div class="card-title">📘 سياسات سريعة</div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px;line-height:1.8">
+          <strong>الحضور</strong><br>الالتزام بالمحاضرات جزء أساسي من نجاحك واستحقاقك للرصد الأسبوعي.
+        </div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px;line-height:1.8">
+          <strong>الطلبات</strong><br>كل طلب يرفع من داخل البوابة لضمان التوثيق والمتابعة الرسمية.
+        </div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px;line-height:1.8">
+          <strong>الدرجات</strong><br>راجعي الدرجات دوريًا وإذا ظهر خلل استخدمي طلب مراجعة الدرجات مباشرة.
+        </div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">📌 نصائح للدراسة</div>
@@ -851,6 +895,7 @@ function renderStudentPoliciesTab(){
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px"><strong>سياسة الحضور:</strong> الالتزام بالمحاضرات جزء أساسي من نجاحك الأكاديمي.</div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px"><strong>سياسة التقييم:</strong> تعتمد الدرجة على أعمال الأسابيع والاختبار النهائي وفق المعايير المعتمدة.</div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px"><strong>سياسة الطلبات:</strong> جميع الطلبات الأكاديمية ترفع من خلال البوابة لضمان التوثيق والمتابعة.</div>
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px"><strong>سياسة المراجعة:</strong> عند وجود ملاحظة على الرصد أو احتياج أكاديمي، ارفعي طلبًا موثقًا من تبويب طلباتي بدل التواصل غير الرسمي.</div>
       </div>
     </div>`;
 }
@@ -1255,6 +1300,23 @@ function getLecturerAcademicData(){
     pendingExamRows
   };
 }
+function getLecturerPendingGradeAlerts(){
+  const alerts = [];
+  getLecturerSubjects().forEach(subject=>{
+    const students = getSubjectStudents(subject.key);
+    const pendingStudents = students.filter(student=>!isExamEntered(getGrade_data(student.fbKey, subject.key)));
+    if(pendingStudents.length){
+      alerts.push({
+        subjectKey: subject.key,
+        subjectName: subjectDisplayName(subject),
+        batch: subject.batch || [...new Set(pendingStudents.map(student=>student.batch).filter(Boolean))].join('، ') || 'عامة',
+        pendingCount: pendingStudents.length,
+        studentNames: pendingStudents.slice(0,4).map(student=>[student.firstName,student.midName,student.lastName].filter(Boolean).join(' ')),
+      });
+    }
+  });
+  return alerts.sort((a,b)=>b.pendingCount-a.pendingCount);
+}
 
 function getSubjectStudents(subjectFbKey){
   if(!dbData.students) return [];
@@ -1403,6 +1465,7 @@ function renderLecturerHomeTab(){
   const scheduleSlots = getLecturerScheduleSlots();
   const nextSlot = getNextUpcomingSlot(scheduleSlots);
   const batchNames = Object.keys(batchMap).sort();
+  const pendingAlerts = getLecturerPendingGradeAlerts();
   if(!mySubjects.length){
     document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات مرتبطة بحسابك حتى الآن</div></div>`;
     return;
@@ -1436,6 +1499,19 @@ function renderLecturerHomeTab(){
         <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجعي <strong>مقرراتي</strong> لمعرفة توزيع الطلاب على الدفعات والمقررات.</div>
         <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">تحققي من <strong>جدولي</strong> قبل بدء المحاضرات للتأكد من القاعات والأوقات.</div>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🚨 تنبيهات الرصد الناقص</div>
+      ${pendingAlerts.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>المقرر</th><th>الدفعة</th><th>عدد الطلاب غير المرصود لهم نهائيًا</th><th>أمثلة من الطلاب</th></tr></thead>
+        <tbody>${pendingAlerts.map(alert=>`
+          <tr>
+            <td><strong>${alert.subjectName}</strong></td>
+            <td>${alert.batch||'—'}</td>
+            <td>${alert.pendingCount}</td>
+            <td style="font-size:11px;color:var(--muted)">${alert.studentNames.join('، ')}${alert.pendingCount>alert.studentNames.length?` +${alert.pendingCount-alert.studentNames.length}`:''}</td>
+          </tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty">لا توجد تنبيهات رصد ناقص حاليًا</div>'}
     </div>
     <div class="card">
       <div class="card-title">📅 هذا الأسبوع</div>
