@@ -203,6 +203,7 @@ tr:hover td{background:#f8faff;}
       <button class="login-role-tab active" onclick="setLoginRole('admin',this)">🔐 الإدارة</button>
       <button class="login-role-tab" onclick="setLoginRole('lecturer',this)">👨‍🏫 محاضر</button>
       <button class="login-role-tab" onclick="setLoginRole('student',this)">👩‍🎓 طالب</button>
+      <button class="login-role-tab" onclick="setLoginRole('finance',this)">💰 مالية</button>
     </div>
     <div class="form-group"><label id="usernameLabel">اسم المستخدم</label><input type="text" id="loginUsername" placeholder="أدخل اسم المستخدم"></div>
     <div class="form-group"><label>كلمة المرور</label><input type="password" id="loginPassword" placeholder="أدخل كلمة المرور" onkeydown="if(event.key==='Enter')doLogin()"></div>
@@ -669,6 +670,15 @@ tr:hover td{background:#f8faff;}
   <div class="modal-section">
     <div class="modal-section-title">💰 البيانات المالية</div>
     <div class="form-row">
+      <div class="form-group"><label>نمط السجل المالي</label>
+        <select id="stdFinanceMode">
+          <option value="local_manual">محلي داخل الأكاديمية</option>
+          <option value="oper_linked">مرتبط بنظام العمليات</option>
+        </select>
+      </div>
+      <div class="form-group"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>معرّف العميل في نظام العمليات</label><input type="text" id="stdOperCustomerId" placeholder="CUS-..."></div>
       <div class="form-group"><label>معرّف الطلب في نظام العمليات</label><input type="text" id="stdOperOrderId" placeholder="ORD-..."></div>
     </div>
@@ -696,11 +706,11 @@ tr:hover td{background:#f8faff;}
   <h3 id="userModalTitle">👤 إضافة مستخدم</h3>
   <div class="form-row">
     <div class="form-group"><label>الاسم الكامل *</label><input type="text" id="userFullName"></div>
-    <div class="form-group"><label>الدور</label><select id="userRole"><option value="lecturer">👨‍🏫 محاضر</option><option value="admin">🔐 إدارة</option></select></div>
+    <div class="form-group"><label>الدور</label><select id="userRole" onchange="toggleUserSubjectsField()"><option value="lecturer">👨‍🏫 محاضر</option><option value="finance">💰 مالية</option><option value="admin">🔐 إدارة</option></select></div>
   </div>
   <div class="form-group"><label>اسم المستخدم *</label><input type="text" id="userUsername"></div>
   <div class="form-group"><label>كلمة المرور *</label><input type="password" id="userPassword"></div>
-  <div class="form-group"><label>المقررات المرتبطة بالمحاضر</label><select id="userSubjects" multiple style="height:80px;"></select></div>
+  <div class="form-group" id="userSubjectsGroup"><label>المقررات المرتبطة بالمحاضر</label><select id="userSubjects" multiple style="height:80px;"></select></div>
   <div class="modal-actions"><button class="btn btn-primary" onclick="saveUser()">✓ حفظ</button><button class="btn" onclick="closeModal('userModal')">إلغاء</button></div>
 </div></div>
 
@@ -999,6 +1009,7 @@ async function loadAllFromFirebase(){
         program:s.program||'', track:s.track||'', batch:s.batch||'',
         id:s.id||key, pkg:s.pkg||'full',
         planType:s.planType||(String(root.packages?.[s.pkg]?.name||s.pkg||'').toUpperCase().includes('QASP')?'QASP-S':'QBA'),
+        financeMode:s.financeMode||inferFinanceMode(s),
         totalAmount:parseFloat(s.totalAmount)||0, notes:s.notes||'',
         operCustomerId:s.operCustomerId||'',
         operOrderId:s.operOrderId||'',
@@ -1075,6 +1086,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     phone:st.phone||'', email:st.email||'', regDate:st.regDate||'',
     program:st.program||'', track:st.track||'', batch:st.batch||'',
     id:st.id, pkg:st.pkg||'', planType:st.planType||inferPlanType(st.pkg),
+    financeMode:st.financeMode||inferFinanceMode(st),
     totalAmount:st.totalAmount||0, notes:st.notes||'',
     operCustomerId:st.operCustomerId||'',
     operOrderId:st.operOrderId||''
@@ -1235,6 +1247,11 @@ let currentGradeBatchFilter='all';
 // ══════════════════════════════════════════════
 //  HELPERS
 // ══════════════════════════════════════════════
+function isAdminRole(){ return currentUser?.role==='admin'; }
+function isFinanceRole(){ return currentUser?.role==='finance'; }
+function canManageAcademicAdmin(){ return isAdminRole(); }
+function canManageFinancials(){ return isAdminRole() || isFinanceRole(); }
+function canEditStudentRecord(){ return canManageAcademicAdmin() || canManageFinancials(); }
 function getStudentFullName(st){if(!st)return'—';return[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ');}
 function getStudentRequestTypeLabel(type){
   return ({
@@ -1260,6 +1277,11 @@ function inferPlanType(pkg){
   const value=String(pkg||'').toUpperCase();
   const pkgName=(packagesData||[]).find(p=>p._fbKey===pkg)?.name||'';
   return (value.includes('QASP')||pkgName.toUpperCase().includes('QASP'))?'QASP-S':'QBA';
+}
+function inferFinanceMode(student){
+  if(student?.financeMode) return student.financeMode;
+  if(student?.operCustomerId || student?.operOrderId || student?.financeSnapshot) return 'oper_linked';
+  return 'local_manual';
 }
 function normalizeInstallmentStatus(status){
   const value=String(status||'').toLowerCase();
@@ -1302,6 +1324,7 @@ function normalizeFinanceSnapshot(snapshot){
 }
 function getStudentFinancialState(st){
   const snapshot=normalizeFinanceSnapshot(st?.financeSnapshot);
+  const financeMode=inferFinanceMode(st);
   if(snapshot){
     return {
       source:'oper',
@@ -1318,9 +1341,9 @@ function getStudentFinancialState(st){
   const paidAmount=installments.filter(i=>i.status==='paid').reduce((sum,i)=>sum+(i.amount||0),0);
   const totalAmount=parseFloat(st?.totalAmount)||0;
   return {
-    source:'local',
-    sourceLabel:'السجل الأكاديمي المحلي',
-    sourceHint:'بيانات محلية داخل المنظومة الأكاديمية',
+    source:financeMode==='oper_linked'?'oper_pending':'local',
+    sourceLabel:financeMode==='oper_linked'?'مرتبط بـ Oper بدون مزامنة':'السجل الأكاديمي المحلي',
+    sourceHint:financeMode==='oper_linked'?'تم ربط السجل بنظام العمليات وتنتظر المزامنة':'بيانات محلية داخل المنظومة الأكاديمية',
     totalAmount,
     paidAmount,
     remainingAmount:Math.max(totalAmount-paidAmount,0),
@@ -1504,6 +1527,7 @@ function setLoginRole(role,btn){
   const ph=document.getElementById('loginUsername');
   const hint=document.getElementById('loginHint');
   if(role==='admin'){lbl.textContent='اسم المستخدم';ph.placeholder='أدخل اسم المستخدم';hint.innerHTML='<strong>الإدارة:</strong> المستخدم: <strong>admin</strong> | المرور: <strong>admin123</strong>';}
+  else if(role==='finance'){lbl.textContent='اسم المستخدم';ph.placeholder='مثال: finance.maryam';hint.innerHTML='<strong>المالية:</strong> أدخل بيانات حسابك المالي';}
   else if(role==='lecturer'){lbl.textContent='اسم المستخدم';ph.placeholder='مثال: dr.ahmed';hint.innerHTML='<strong>محاضر:</strong> أدخل بيانات حسابك';}
   else{lbl.textContent='الرقم الطلابي';ph.placeholder='مثال: SUL-001';hint.innerHTML='<strong>طالب:</strong> أدخل رقمك الطلابي وكلمة المرور';}
   document.getElementById('loginError').style.display='none';
@@ -1548,7 +1572,7 @@ async function _finishLogin() {
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appShell').style.display='block';
   document.getElementById('sidebarUserName').textContent=currentUser.name;
-  const roleNames={admin:'مدير النظام',lecturer:'محاضر',student:'طالب'};
+  const roleNames={admin:'مدير النظام',finance:'موظف المالية',lecturer:'محاضر',student:'طالب'};
   document.getElementById('sidebarUserRole').textContent=roleNames[currentUser.role];
   document.getElementById('loginUsername').value='';
   document.getElementById('loginPassword').value='';
@@ -1565,7 +1589,7 @@ async function _finishLogin() {
     showToast('⚠️ خطأ في تحميل البيانات — وضع محلي');
   }
   renderNav();
-  navTo(currentUser.role==='student'?'mygrades':'dashboard', null);
+  navTo(currentUser.role==='student'?'mygrades':currentUser.role==='finance'?'students':'dashboard', null);
   // لا تُجرى أي هجرة بيانات تلقائية عند الدخول؛ تغيير مفاتيح الطلاب يحتاج
   // تحديث التسجيلات والدرجات معاً ولا يجوز تنفيذه بصمت.
 }
@@ -1599,6 +1623,9 @@ const navConfig = {
     {id:'dashboard',icon:'🏠',label:'لوحة التحكم'},
     {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
     {id:'reports',icon:'📋',label:'تقارير الطلاب'},
+  ],
+  finance: [
+    {id:'students',icon:'💰',label:'الملفات المالية للطلاب'},
   ],
   student: [
     {id:'mygrades',icon:'📊',label:'بياناتي ودرجاتي'},
@@ -1637,9 +1664,9 @@ function goBack() {
 }
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
-  if (pageId==='subjects'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مقررات لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مقرر جديد</button>`;
-  else if (pageId==='students'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إعادة ضبط كلمات الطلاب</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
-  else if (pageId==='users'&&currentUser.role==='admin') el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
+  if (pageId==='subjects'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مقررات لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مقرر جديد</button>`;
+  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إعادة ضبط كلمات الطلاب</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='users'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
 }
 function refreshPage(p) {
@@ -2084,9 +2111,22 @@ function updateInstallmentsFields() {
   }
   document.getElementById('installmentsContainer').innerHTML=html;
 }
+function setStudentModalFinancialOnly(isFinancialOnly) {
+  const fieldIds=['stdFirstName','stdMidName','stdLastName','stdPhone','stdEmail','stdRegDate','studentPass','stdProgram','stdTrack','stdBatchSelect','studentPlanType','studentPackage','studentSubjectsList','studentCrossBatchSubjects'];
+  fieldIds.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.disabled=!!isFinancialOnly;
+  });
+  const idField=document.getElementById('studentIdField');
+  if(idField) idField.readOnly=true;
+  const notes=document.getElementById('stdNotes');
+  if(notes) notes.disabled=!!isFinancialOnly;
+}
 function openStudentModal(si=-1) {
+  if(!canEditStudentRecord()) return showToast('⚠️ لا تملكين صلاحية تعديل سجلات الطلاب');
   editingStudentIdx=si;
-  document.getElementById('studentModalTitle').textContent=si>=0?'✏️ تعديل سجل الطالب':'👩‍🎓 إضافة طالب';
+  const financialOnly=isFinanceRole();
+  document.getElementById('studentModalTitle').textContent=financialOnly?'💰 تحديث السجل المالي':si>=0?'✏️ تعديل سجل الطالب':'👩‍🎓 إضافة طالب';
   const st=si>=0?students[si]:null;
   const idField=document.getElementById('studentIdField');
   idField.value=si>=0?(st?.id||''):generateStudentId();
@@ -2108,6 +2148,7 @@ function openStudentModal(si=-1) {
   }
   document.getElementById('stdNotes').value=st?.notes||'';
   document.getElementById('studentPlanType').value=st?.planType||inferPlanType(st?.pkg);
+  document.getElementById('stdFinanceMode').value=st?.financeMode||inferFinanceMode(st);
   document.getElementById('stdOperCustomerId').value=st?.operCustomerId||'';
   document.getElementById('stdOperOrderId').value=st?.operOrderId||'';
   document.getElementById('stdTotalAmount').value=st?.totalAmount||'';
@@ -2146,9 +2187,12 @@ function openStudentModal(si=-1) {
     document.getElementById('installmentsContainer').innerHTML=html;
   } else { document.getElementById('stdInstallmentsCount').value='1'; updateInstallmentsFields(); }
   document.getElementById('packageBadgeInfo').style.display='none';
+  setStudentModalFinancialOnly(financialOnly);
   document.getElementById('studentModal').classList.add('open');
 }
 async function saveStudent() {
+  if(!canEditStudentRecord()) return showToast('⚠️ لا تملكين صلاحية تعديل السجل');
+  const financialOnly=isFinanceRole();
   const firstName=document.getElementById('stdFirstName').value.trim();
   const id=document.getElementById('studentIdField').value.trim();
   if (!firstName||!id) return showToast('⚠️ أدخل الاسم الأول والرقم الطلابي');
@@ -2186,6 +2230,7 @@ async function saveStudent() {
     batch:selectedBatch,
     id, pkg:document.getElementById('studentPackage').value,
     planType:document.getElementById('studentPlanType').value,
+    financeMode:document.getElementById('stdFinanceMode').value||'local_manual',
     operCustomerId:document.getElementById('stdOperCustomerId').value.trim(),
     operOrderId:document.getElementById('stdOperOrderId').value.trim(),
     totalAmount:parseFloat(document.getElementById('stdTotalAmount').value)||0,
@@ -2199,6 +2244,29 @@ async function saveStudent() {
   if(editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
   const chosenSubjs=Array.from(document.getElementById('studentSubjectsList').selectedOptions).map(o=>parseInt(o.value));
   const chosenCrossBatchSubjs=Array.from(document.getElementById('studentCrossBatchSubjects').selectedOptions).map(o=>parseInt(o.value));
+  if(financialOnly){
+    if(editingStudentIdx<0) return showToast('⚠️ إضافة طالب جديد متاحة للإدارة فقط');
+    const currentStudent=students[editingStudentIdx];
+    students[editingStudentIdx]={
+      ...currentStudent,
+      financeMode:stdData.financeMode,
+      operCustomerId:stdData.operCustomerId,
+      operOrderId:stdData.operOrderId,
+      totalAmount:stdData.totalAmount,
+      installments:stdData.installments,
+      financeSnapshot:stdData.financeMode==='oper_linked' ? currentStudent.financeSnapshot : null
+    };
+    try{
+      await saveStudentToFirebase(editingStudentIdx, '');
+      showToast('✅ تم حفظ التحديث المالي');
+    }catch(e){
+      console.error('Save finance-only error:',e);
+      await loadAllFromFirebase();
+      showToast('⚠️ تعذر حفظ التحديث المالي');
+    }
+    closeModal('studentModal'); renderStudentsTable();
+    return;
+  }
   if (editingStudentIdx>=0) {
     students[editingStudentIdx]={...students[editingStudentIdx],...stdData};
     if (pass) { const u=users.find(u=>u.username===id&&u.role==='student'); if(u){u.password=pass;u.name=fullName;} }
@@ -2337,6 +2405,10 @@ function openStudentProfile(stdIdx) {
     <button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">✏️ تعديل</button>
     <button class="btn btn-sm" onclick="changeStudentPassword(${stdIdx})">🔐 كلمة المرور</button>
     <button class="btn btn-primary btn-sm" onclick="openGradeReportModal(${stdIdx})">📄 كشف الدرجات</button>`;
+  document.getElementById('topbarActions').innerHTML=`
+    ${canEditStudentRecord()?`<button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">${isFinanceRole()?'💰 تحديث المالية':'✏️ تعديل'}</button>`:''}
+    ${canManageAcademicAdmin()?`<button class="btn btn-sm" onclick="changeStudentPassword(${stdIdx})">🔐 كلمة المرور</button>`:''}
+    <button class="btn btn-primary btn-sm" onclick="openGradeReportModal(${stdIdx})">📄 كشف الدرجات</button>`;
   renderStudentProfile(stdIdx);
 }
 function renderStudentProfile(stdIdx) {
@@ -2458,10 +2530,10 @@ function switchProfileTab(tab,el) {
 //  USERS
 // ══════════════════════════════════════════════
 function renderUsersTable() {
-  const roleNames={admin:'🔐 إدارة',lecturer:'👨‍🏫 محاضر',student:'👩‍🎓 طالب'};
-  const roleClasses={admin:'badge-admin',lecturer:'badge-lecturer',student:'badge-student'};
+  const roleNames={admin:'🔐 إدارة',finance:'💰 مالية',lecturer:'👨‍🏫 محاضر',student:'👩‍🎓 طالب'};
+  const roleClasses={admin:'badge-admin',finance:'badge-warn',lecturer:'badge-lecturer',student:'badge-student'};
   // Only show admin and lecturers — students have their own page
-  const displayUsers = users.filter(u=>u.role==='admin'||u.role==='lecturer');
+  const displayUsers = users.filter(u=>u.role==='admin'||u.role==='lecturer'||u.role==='finance');
   document.getElementById('usersTableBody').innerHTML=displayUsers.map((u,i)=>{
     const origIdx = users.indexOf(u);
     // ابحث بكل أشكال المعرّف الممكنة
@@ -2473,7 +2545,7 @@ function renderUsersTable() {
            s.lecturerUserId===u.username ||
            s.lecturerUserId===u._fbKey)
         ).map(s=>s.name).join('، ') || '—'
-      : 'جميع المقررات';
+      : u.role==='finance' ? 'صلاحيات مالية فقط' : 'جميع المقررات';
     return `<tr><td class="mono">${i+1}</td><td><strong>${u.name}</strong></td>
       <td class="mono" style="color:var(--primary)">${u.username}</td>
       <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${roleNames[u.role]||u.role}</span></td>
@@ -2509,13 +2581,23 @@ function openUserModal(i=-1) {
     return `<option value="${si}" ${isAssigned?'selected':''}>${label}</option>`;
   }).join('');
   document.getElementById('userModal').classList.add('open');
+  toggleUserSubjectsField();
+}
+function toggleUserSubjectsField(){
+  const role=document.getElementById('userRole')?.value||'lecturer';
+  const group=document.getElementById('userSubjectsGroup');
+  const select=document.getElementById('userSubjects');
+  if(!group||!select) return;
+  const isLecturer=role==='lecturer';
+  group.style.display=isLecturer?'block':'none';
+  select.disabled=!isLecturer;
 }
 async function saveUser() {
   const name=document.getElementById('userFullName').value.trim();
   const username=document.getElementById('userUsername').value.trim();
   const password=document.getElementById('userPassword').value;
   const role=document.getElementById('userRole').value;
-  const subjs=Array.from(document.getElementById('userSubjects').selectedOptions).map(o=>parseInt(o.value));
+  const subjs=role==='lecturer'?Array.from(document.getElementById('userSubjects').selectedOptions).map(o=>parseInt(o.value)):[];
   if (!name||!username) return showToast('⚠️ أدخل الاسم واسم المستخدم');
   if(users.some((u,i)=>i!==editingUserIdx&&u.username.toLowerCase()===username.toLowerCase()))
     return showToast('⚠️ اسم المستخدم مستخدم مسبقاً');
@@ -4052,7 +4134,10 @@ function renderStudentsTableFiltered(filtered){
     const avg = tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
     const gradeRows=mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[stdIdx];}).filter(Boolean);
     const hasFail = gradeRows.some(isFailingGrade);
-    const hasOverdue = (st.installments||[]).some(i=>i.status==='overdue');
+    const financialState = getStudentFinancialState(st);
+    const hasOverdue = (financialState.installments||[]).some(i=>i.status==='overdue');
+    const canEdit = canEditStudentRecord();
+    const canDelete = canManageAcademicAdmin();
     return `<tr>
       <td class="mono">${stdIdx+1}</td>
       <td><strong style="cursor:pointer;color:var(--primary)" onclick="openStudentProfile(${stdIdx})">${getStudentFullName(st)}</strong></td>
@@ -4064,8 +4149,8 @@ function renderStudentsTableFiltered(filtered){
       <td><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn btn-sm btn-primary" onclick="openStudentProfile(${stdIdx})">👁️</button>
-        <button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteStudent(${stdIdx})">🗑️</button>
+        ${canEdit?`<button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">${isFinanceRole()?'💰':'✏️'}</button>`:''}
+        ${canDelete?`<button class="btn btn-danger btn-sm" onclick="deleteStudent(${stdIdx})">🗑️</button>`:''}
       </td>
     </tr>`;
   }).join('');
