@@ -702,10 +702,38 @@ function renderStudentHomeTab(){
   const nextClass = getNextUpcomingSlot(scheduleSlots);
   const pendingRequests = requests.filter(request=>!request.status || request.status==='pending').length;
   const reviewedRequests = requests.filter(request=>request.reviewedAt).length;
+  const crossBatchCourses = mySubjects.filter(subject=>subject.batch && !sameBatchName(subject.batch, st.batch)).length;
+  const ungradedCourses = mySubjects.filter(subject=>!getGrade_data(currentUser.fbKey, subject.key)).length;
   const urgentFocus = hasFail ? 'راجعي المقررات التي عليها تنبيه أكاديمي ثم ارفعي طلب دعم إذا احتجتِ.' : 'ثبّتي إيقاعك هذا الأسبوع وراجعي الدرجات بعد كل عملية رصد.';
   const semesterDaysText = semester?.startDate || semester?.endDate
     ? `${semester?.startDate||'—'} إلى ${semester?.endDate||'—'}`
     : 'لم يتم تحديد بداية ونهاية الفصل بعد';
+  const studentAlerts = [
+    hasFail ? {
+      title:'تنبيه أكاديمي',
+      body:'لديك مقرر أو أكثر بحاجة إلى متابعة. افتحي الدرجات وراجعي مواضع التعثر مبكرًا.',
+      action:'📊 افتحي الدرجات',
+      tab:'grades'
+    } : null,
+    pendingRequests ? {
+      title:'طلبات قيد المراجعة',
+      body:`يوجد ${pendingRequests} طلب ${pendingRequests===1?'مفتوح':'مفتوحة'} بانتظار المتابعة من الإدارة.`,
+      action:'📝 تابعي طلباتك',
+      tab:'requests'
+    } : null,
+    ungradedCourses ? {
+      title:'مقررات بانتظار الرصد',
+      body:`يوجد ${ungradedCourses} مقرر لم يتم رصد درجاته بعد بشكل كامل.`,
+      action:'📄 راجعي كشف الدرجات',
+      tab:'transcript'
+    } : null,
+    crossBatchCourses ? {
+      title:'تسجيلات من دفعات أخرى',
+      body:`لديك ${crossBatchCourses} مقرر مسجل استثنائيًا من دفعة أخرى، تأكدي من جدوله بشكل مستمر.`,
+      action:'📚 افتحي مقرراتي',
+      tab:'courses'
+    } : null
+  ].filter(Boolean);
   document.getElementById('mainContent').innerHTML = `
     <div class="student-header">
       <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
@@ -793,6 +821,17 @@ function renderStudentHomeTab(){
           <div><strong>${slot.subject||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${slot.day||'—'} · ${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div></div>
           <div style="font-size:11px;color:var(--muted)">${slot.room?`🏠 ${slot.room}`:'بدون قاعة'}</div>
         </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بجدولك حتى الآن</div>'}
+    </div>
+    <div class="card">
+      <div class="card-title">🔔 تنبيهاتك الحالية</div>
+      ${studentAlerts.length ? `<div style="display:grid;gap:10px;">${studentAlerts.map(alert=>`
+        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div>
+            <div style="font-size:13px;font-weight:800">${alert.title}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">${alert.body}</div>
+          </div>
+          <button class="btn-out" onclick="switchAppTab('${alert.tab}', getAppTabButtonById('${alert.tab}'))">${alert.action}</button>
+        </div>`).join('')}</div>` : '<div class="empty">لا توجد تنبيهات على حسابك حاليًا</div>'}
     </div>
     <div class="card">
       <div class="card-title">📘 سياسات سريعة</div>
@@ -1317,6 +1356,22 @@ function getLecturerPendingGradeAlerts(){
   });
   return alerts.sort((a,b)=>b.pendingCount-a.pendingCount);
 }
+function getAppTabButtonById(tabId){
+  return Array.from(document.querySelectorAll('.app-tab')).find(button=>button.getAttribute('onclick')?.includes(`'${tabId}'`)) || null;
+}
+function openLecturerGradeAlert(subjectKey, batchName){
+  const gradesBtn = getAppTabButtonById('grades');
+  switchAppTab('grades', gradesBtn);
+  setTimeout(()=>{
+    const batchBtn = Array.from(document.querySelectorAll('#batchTabs .lec-tab')).find(button=>button.textContent.includes(batchName));
+    if(batchBtn) batchBtn.click();
+    setTimeout(()=>{
+      const subject = dbData.subjects?.[subjectKey];
+      const subjectBtn = Array.from(document.querySelectorAll('#lecSubjTabs .lec-tab')).find(button=>button.textContent.includes(subject?.name||''));
+      if(subjectBtn) subjectBtn.click();
+    }, 50);
+  }, 50);
+}
 
 function getSubjectStudents(subjectFbKey){
   if(!dbData.students) return [];
@@ -1503,13 +1558,14 @@ function renderLecturerHomeTab(){
     <div class="card">
       <div class="card-title">🚨 تنبيهات الرصد الناقص</div>
       ${pendingAlerts.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>المقرر</th><th>الدفعة</th><th>عدد الطلاب غير المرصود لهم نهائيًا</th><th>أمثلة من الطلاب</th></tr></thead>
+        <thead><tr><th>المقرر</th><th>الدفعة</th><th>عدد الطلاب غير المرصود لهم نهائيًا</th><th>أمثلة من الطلاب</th><th>إجراء سريع</th></tr></thead>
         <tbody>${pendingAlerts.map(alert=>`
           <tr>
             <td><strong>${alert.subjectName}</strong></td>
             <td>${alert.batch||'—'}</td>
             <td>${alert.pendingCount}</td>
             <td style="font-size:11px;color:var(--muted)">${alert.studentNames.join('، ')}${alert.pendingCount>alert.studentNames.length?` +${alert.pendingCount-alert.studentNames.length}`:''}</td>
+            <td><button class="btn-out" onclick="openLecturerGradeAlert('${alert.subjectKey}','${alert.batch||''}')">📊 افتح الرصد</button></td>
           </tr>`).join('')}</tbody>
       </table></div>` : '<div class="empty">لا توجد تنبيهات رصد ناقص حاليًا</div>'}
     </div>
