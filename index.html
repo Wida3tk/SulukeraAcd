@@ -1218,18 +1218,14 @@ async function saveStudentAdminSheetToFirebase(record){
   const sheetKey='sheet_'+String(studentKey).replace(/[^a-zA-Z0-9_-]/g,'_');
   const payload={
     studentKey,
-    platformStatus:record.platformStatus||'pending',
-    platformNotes:record.platformNotes||'',
-    studentFileStatus:record.studentFileStatus||'pending',
-    studentFileNotes:record.studentFileNotes||'',
-    relatedFilesStatus:record.relatedFilesStatus||'pending',
-    relatedFilesNotes:record.relatedFilesNotes||'',
-    certificateFinanceStatus:record.certificateFinanceStatus||'pending',
-    certificateFinanceNotes:record.certificateFinanceNotes||'',
-    certificateSendStatus:record.certificateSendStatus||'pending',
-    certificateSendNotes:record.certificateSendNotes||'',
+    traineeStatus:record.traineeStatus||'active',
+    traineeStatusNotes:record.traineeStatusNotes||'',
+    completionStatus:record.completionStatus||'in_progress',
+    completionStatusNotes:record.completionStatusNotes||'',
+    certificateStatus:record.certificateStatus||'not_eligible',
+    certificateStatusNotes:record.certificateStatusNotes||'',
     customerRelationsNotes:record.customerRelationsNotes||'',
-    generalNotes:record.generalNotes||'',
+    adminNotes:record.adminNotes||'',
     updatedAt:record.updatedAt||new Date().toISOString(),
     updatedBy:record.updatedBy||currentUser?.username||currentUser?.name||'system'
   };
@@ -3272,53 +3268,52 @@ function renderStudentAcademicProgressSheet(stdIdx, st, mySubjs){
 }
 function renderStudentAdminSheet(stdIdx, st){
   const sheet=getStudentAdminSheet(st?._fbKey) || {};
-  const financial=getStudentFinancialState(st);
-  const installmentMonths=(financial.installments||[]).map(inst=>{
-    const month=inst.due?String(inst.due).slice(0,7):'غير محدد';
-    return {month, amount:inst.amount||0, status:inst.status||'pending'};
-  });
-  const statusField=(id,label,value,noteValue,noteLabel='ملاحظات')=>`
+  const statusField=(id,label,value,options,noteValue,noteLabel='ملاحظات')=>`
     <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:14px;">
       <div style="font-size:13px;font-weight:800;color:var(--primary-dark);margin-bottom:10px">${label}</div>
       <select id="${id}" style="margin-bottom:10px;">
-        <option value="pending" ${value==='pending'?'selected':''}>قيد المتابعة</option>
-        <option value="in_progress" ${value==='in_progress'?'selected':''}>جارٍ العمل</option>
-        <option value="completed" ${value==='completed'?'selected':''}>مكتمل</option>
-        <option value="blocked" ${value==='blocked'?'selected':''}>متوقف</option>
+        ${options.map(option=>`<option value="${option.value}" ${value===option.value?'selected':''}>${option.label}</option>`).join('')}
       </select>
       <textarea id="${id}_notes" placeholder="${noteLabel}" style="min-height:88px">${escapeHtml(noteValue||'')}</textarea>
     </div>`;
+  const traineeStatusOptions=[
+    {value:'active',label:'مستمر'},
+    {value:'paused',label:'مؤجل'},
+    {value:'withdrawn',label:'منسحب'},
+    {value:'stopped',label:'متوقف'}
+  ];
+  const completionStatusOptions=[
+    {value:'in_progress',label:'مستمر في الدراسة'},
+    {value:'completed_courses',label:'أنهى المقررات'},
+    {value:'academically_completed',label:'مكتمل أكاديميًا'},
+    {value:'at_risk',label:'متعثر'}
+  ];
+  const certificateStatusOptions=[
+    {value:'not_eligible',label:'غير مستحق بعد'},
+    {value:'under_review',label:'بانتظار المراجعة'},
+    {value:'approved',label:'معتمد'},
+    {value:'blocked',label:'موقوف لوجود نواقص'}
+  ];
   return `
     <div class="card card-accent">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="card-title" style="margin-bottom:0;border:none;padding-bottom:0">بطاقة المتدرب الإدارية</div>
         <button class="btn btn-primary btn-sm" onclick="saveStudentAdminSheetFromProfile(${stdIdx})">حفظ البطاقة</button>
       </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">متابعة داخلية للإدارة والمالية بدل الرجوع إلى الشيت الخارجي.</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">متابعة داخلية مختصرة لحالة المتدرب والإنجاز والشهادة بدل الرجوع إلى ملف خارجي.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px;">
-        ${statusField('studentSheet_platformStatus','المنصة',sheet.platformStatus,sheet.platformNotes,'ملاحظات المنصة')}
-        ${statusField('studentSheet_studentFileStatus','ملف المتدرب',sheet.studentFileStatus,sheet.studentFileNotes,'ملاحظات ملف المتدرب')}
-        ${statusField('studentSheet_relatedFilesStatus','ملفات ذات صلة',sheet.relatedFilesStatus,sheet.relatedFilesNotes,'ملاحظات الملفات')}
-        ${statusField('studentSheet_certificateFinanceStatus','الشهادة ماليًا',sheet.certificateFinanceStatus,sheet.certificateFinanceNotes,'ملاحظات الشهادة ماليًا')}
-        ${statusField('studentSheet_certificateSendStatus','إرسال الشهادة',sheet.certificateSendStatus,sheet.certificateSendNotes,'ملاحظات إرسال الشهادة')}
+        ${statusField('studentSheet_traineeStatus','حالة المتدرب',sheet.traineeStatus||'active',traineeStatusOptions,sheet.traineeStatusNotes,'ملاحظات حالة المتدرب')}
+        ${statusField('studentSheet_completionStatus','حالة الإنجاز',sheet.completionStatus||'in_progress',completionStatusOptions,sheet.completionStatusNotes,'ملاحظات الإنجاز')}
+        ${statusField('studentSheet_certificateStatus','حالة الشهادة',sheet.certificateStatus||'not_eligible',certificateStatusOptions,sheet.certificateStatusNotes,'ملاحظات الشهادة')}
         <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:14px;">
-          <div style="font-size:13px;font-weight:800;color:var(--primary-dark);margin-bottom:10px">علاقات العملاء</div>
+          <div style="font-size:13px;font-weight:800;color:var(--primary-dark);margin-bottom:10px">ملاحظات علاقات العملاء</div>
           <textarea id="studentSheet_customerRelationsNotes" placeholder="ملاحظات التواصل والمتابعة" style="min-height:176px">${escapeHtml(sheet.customerRelationsNotes||'')}</textarea>
         </div>
       </div>
       <div style="margin-top:14px;background:white;border:1px solid var(--border);border-radius:14px;padding:14px;">
-        <div style="font-size:13px;font-weight:800;color:var(--primary-dark);margin-bottom:10px">ملاحظات عامة</div>
-        <textarea id="studentSheet_generalNotes" placeholder="أي ملاحظات إدارية إضافية" style="min-height:110px">${escapeHtml(sheet.generalNotes||'')}</textarea>
+        <div style="font-size:13px;font-weight:800;color:var(--primary-dark);margin-bottom:10px">ملاحظات إدارية</div>
+        <textarea id="studentSheet_adminNotes" placeholder="أي ملاحظات إدارية إضافية" style="min-height:110px">${escapeHtml(sheet.adminNotes||'')}</textarea>
       </div>
-    </div>
-    <div class="card card-accent">
-      <div class="card-title">المستحقات المالية وخطة السداد</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px;">
-        <div class="stat" style="margin:0"><div class="stat-icon">💵</div><div class="stat-label">الإجمالي</div><div class="stat-value" style="font-size:22px">${financial.totalAmount.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-        <div class="stat" style="margin:0"><div class="stat-icon">✅</div><div class="stat-label">المدفوع</div><div class="stat-value" style="font-size:22px;color:var(--success)">${financial.paidAmount.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-        <div class="stat" style="margin:0"><div class="stat-icon">⏳</div><div class="stat-label">المتبقي</div><div class="stat-value" style="font-size:22px;color:${financial.remainingAmount>0?'var(--danger)':'var(--success)'}">${financial.remainingAmount.toLocaleString()}</div><div class="stat-sub">ريال</div></div>
-      </div>
-      ${installmentMonths.length?`<div class="table-wrap"><table><thead><tr><th>الشهر</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>${installmentMonths.map(item=>`<tr><td>${item.month}</td><td>${item.amount.toLocaleString()} ر.س</td><td><span class="badge ${item.status==='paid'?'badge-pass':item.status==='overdue'?'badge-fail':'badge-warn'}">${item.status==='paid'?'مدفوع':item.status==='overdue'?'متأخر':'بانتظار السداد'}</span></td></tr>`).join('')}</tbody></table></div>`:'<div class="alert alert-info">لا توجد خطة سداد مسجلة لهذا المتدرب حاليًا.</div>'}
     </div>`;
 }
 async function saveStudentAdminSheetFromProfile(stdIdx){
@@ -3326,18 +3321,14 @@ async function saveStudentAdminSheetFromProfile(stdIdx){
   if(!st?._fbKey) return showToast('تعذر تحديد المتدرب');
   const payload={
     studentKey:st._fbKey,
-    platformStatus:document.getElementById('studentSheet_platformStatus')?.value||'pending',
-    platformNotes:document.getElementById('studentSheet_platformStatus_notes')?.value.trim()||'',
-    studentFileStatus:document.getElementById('studentSheet_studentFileStatus')?.value||'pending',
-    studentFileNotes:document.getElementById('studentSheet_studentFileStatus_notes')?.value.trim()||'',
-    relatedFilesStatus:document.getElementById('studentSheet_relatedFilesStatus')?.value||'pending',
-    relatedFilesNotes:document.getElementById('studentSheet_relatedFilesStatus_notes')?.value.trim()||'',
-    certificateFinanceStatus:document.getElementById('studentSheet_certificateFinanceStatus')?.value||'pending',
-    certificateFinanceNotes:document.getElementById('studentSheet_certificateFinanceStatus_notes')?.value.trim()||'',
-    certificateSendStatus:document.getElementById('studentSheet_certificateSendStatus')?.value||'pending',
-    certificateSendNotes:document.getElementById('studentSheet_certificateSendStatus_notes')?.value.trim()||'',
+    traineeStatus:document.getElementById('studentSheet_traineeStatus')?.value||'active',
+    traineeStatusNotes:document.getElementById('studentSheet_traineeStatus_notes')?.value.trim()||'',
+    completionStatus:document.getElementById('studentSheet_completionStatus')?.value||'in_progress',
+    completionStatusNotes:document.getElementById('studentSheet_completionStatus_notes')?.value.trim()||'',
+    certificateStatus:document.getElementById('studentSheet_certificateStatus')?.value||'not_eligible',
+    certificateStatusNotes:document.getElementById('studentSheet_certificateStatus_notes')?.value.trim()||'',
     customerRelationsNotes:document.getElementById('studentSheet_customerRelationsNotes')?.value.trim()||'',
-    generalNotes:document.getElementById('studentSheet_generalNotes')?.value.trim()||'',
+    adminNotes:document.getElementById('studentSheet_adminNotes')?.value.trim()||'',
     updatedAt:new Date().toISOString(),
     updatedBy:currentUser?.username||currentUser?.name||'system'
   };
@@ -3349,7 +3340,7 @@ async function saveStudentAdminSheetFromProfile(stdIdx){
       targetKey:st._fbKey,
       targetLabel:getStudentFullName(st),
       studentKey:st._fbKey,
-      details:'تم حفظ حالات المتابعة الإدارية والمالية للمتدرب'
+      details:'تم حفظ حالة المتدرب والإنجاز والشهادة والملاحظات الإدارية'
     });
     showToast('تم حفظ البطاقة الإدارية');
   }catch(e){
