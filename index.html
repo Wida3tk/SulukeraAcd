@@ -2579,6 +2579,10 @@ function refreshStudentSubjectOptions(studentIdx=-1){
   const batch=document.getElementById('stdBatchSelect')?.value || students[studentIdx]?.batch || '';
   const planType=document.getElementById('studentPlanType')?.value||students[studentIdx]?.planType||'QBA';
   const choices=getStudentSubjectChoices(batch,planType);
+  if(!choices.length){
+    sel.innerHTML='<option value="" disabled>لا توجد مقررات جاهزة لهذه الدفعة حالياً</option>';
+    return;
+  }
   sel.innerHTML=choices.map(s=>'<option value="'+s.idx+'" '+(studentIdx>=0&&subjects[s.idx].students.includes(studentIdx)?'selected':'')+'>'+s.name+(isSubjectSection(s)?' - '+getSubjectBatchLabel(s):'')+'</option>').join('');
 }
 function refreshStudentCrossBatchOptions(studentIdx=-1){
@@ -3021,6 +3025,14 @@ async function saveStudent() {
   if(!financialOnly && editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }
   const chosenSubjs=Array.from(document.getElementById('studentSubjectsList').selectedOptions).map(o=>parseInt(o.value));
   const chosenCrossBatchSubjs=Array.from(document.getElementById('studentCrossBatchSubjects').selectedOptions).map(o=>parseInt(o.value));
+  const eligibleBatchOfferings=subjects.filter(subject=>
+    subject?.courseKey &&
+    sameBatchName(subject.batch,stdData.batch) &&
+    studentEligibleForOffering(stdData,subject)
+  );
+  if(!financialOnly && !eligibleBatchOfferings.length && !chosenCrossBatchSubjs.length){
+    return showToast('⚠️ هذه الدفعة لا تملك مقررات جاهزة حالياً. اربطي الطالب أو الطالبة بمقررات من دفعة أخرى قبل الحفظ.');
+  }
   if(financialOnly){
     if(editingStudentIdx<0) return showToast('⚠️ إضافة طالب جديد متاحة للإدارة فقط');
     const currentStudent=students[editingStudentIdx];
@@ -3266,7 +3278,7 @@ function renderStudentAcademicProgressSheet(stdIdx, st, mySubjs){
       </div>
     </div>`;
 }
-function renderStudentAdminSheet(stdIdx, st){
+function renderStudentAdminSheetLegacy(stdIdx, st){
   const sheet=getStudentAdminSheet(st?._fbKey) || {};
   const statusField=(id,label,value,options,noteValue,noteLabel='ملاحظات')=>`
     <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:14px;">
