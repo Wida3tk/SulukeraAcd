@@ -6,6 +6,7 @@
 <title>منظومة سلوكيرا الأكاديمية</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{--primary:#0D40FC;--primary-dark:#001442;--primary-light:#55D7FF;--neon:#55D7FF;--bg:#f0f4ff;--surface:#ffffff;--border:#d0dcf8;--text:#020716;--text-muted:#4a5580;--text-light:#8090bb;--danger:#c0392b;--danger-light:#fdf0ef;--success:#1a7a3c;--success-light:#eafaf0;--warning:#b35c00;--warning-light:#fff5e6;--radius:10px;--radius-lg:14px;--shadow:0 2px 12px rgba(13,64,252,0.08);--shadow-md:0 4px 20px rgba(13,64,252,0.13);}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -308,6 +309,9 @@ tr:hover td{background:#f8faff;}
           <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم الثلاثي</th><th>الرقم</th><th>البريد</th><th>البرنامج</th><th>الدفعة</th><th>المتوسط</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="studentsTableBody"></tbody></table></div>
         </div>
       </div>
+
+      <!-- ACADEMIC ADVISOR -->
+      <div class="page" id="page-academicadvisor"><div id="academicAdvisorContent"></div></div>
 
       <!-- STUDENT PROFILE -->
       <div class="page" id="page-student-profile"><div id="studentProfileContent"></div></div>
@@ -720,6 +724,23 @@ tr:hover td{background:#f8faff;}
   </div>
 </div></div>
 
+<!-- MODAL: STUDENT IMPORT -->
+<div class="modal-overlay" id="studentImportModal"><div class="modal" style="width:880px;">
+  <h3>استيراد الطلاب من Excel</h3>
+  <div class="alert alert-info">ارفعي ملف Excel أو CSV، وسأعرض لك معاينة قبل اعتماد الإدخال. الأعمدة الأساسية المدعومة: الاسم، البريد، الجوال، تاريخ التسجيل، البرنامج، المسار، الدفعة، الرخصة، المبلغ الإجمالي.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
+    <button class="btn btn-primary" onclick="triggerStudentImportFile()">اختيار الملف</button>
+    <button class="btn" onclick="downloadStudentImportTemplate()">تحميل قالب جاهز</button>
+    <input type="file" id="studentImportFile" accept=".xlsx,.xls,.csv" onchange="handleStudentImportFile(event)" style="display:none;">
+  </div>
+  <div id="studentImportSummary" class="alert alert-warn">لم يتم اختيار ملف بعد.</div>
+  <div id="studentImportPreview" style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--bg);"></div>
+  <div class="modal-actions">
+    <button class="btn btn-primary" onclick="confirmStudentImport()">اعتماد الاستيراد</button>
+    <button class="btn" onclick="closeModal('studentImportModal')">إغلاق</button>
+  </div>
+</div></div>
+
 <!-- MODAL: USER -->
 <div class="modal-overlay" id="userModal"><div class="modal">
   <h3 id="userModalTitle">👤 إضافة مستخدم</h3>
@@ -1051,6 +1072,9 @@ async function loadAllFromFirebase(){
     activityLogsData = root.activityLogs
       ? Object.entries(root.activityLogs).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
+    advisorCasesData = root.advisorCases
+      ? Object.entries(root.advisorCases).map(([key, item]) => ({ _fbKey:key, ...item }))
+      : [];
 
     // 6. Enrollments — map students to course offerings
     enrollmentsData = root.enrollments
@@ -1141,6 +1165,27 @@ async function saveStudentToFirebase(stdIdx, passw){
       role:'student'
     }, passw));
   }
+}
+
+async function saveAdvisorCaseToFirebase(record){
+  const studentKey=record?.studentKey;
+  if(!studentKey) return null;
+  const advisorKey='advisor_'+String(studentKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+  const payload={
+    studentKey,
+    status:record.status||'review',
+    priority:record.priority||'normal',
+    note:record.note||'',
+    nextAction:record.nextAction||'',
+    updatedAt:record.updatedAt||new Date().toISOString(),
+    updatedBy:record.updatedBy||currentUser?.username||currentUser?.name||'system'
+  };
+  await fbRef('advisorCases/'+advisorKey).set(payload);
+  const existingIdx=advisorCasesData.findIndex(item=>item.studentKey===studentKey);
+  const saved={_fbKey:advisorKey,...payload};
+  if(existingIdx>=0) advisorCasesData[existingIdx]=saved;
+  else advisorCasesData.unshift(saved);
+  return saved;
 }
 
 // حذف طالب
@@ -1299,6 +1344,9 @@ let grades={};
 let studentRequestsData=[];
 let lecturerFollowUpsData=[];
 let activityLogsData=[];
+let advisorCasesData=[];
+let studentImportPreviewRows=[];
+let selectedAdvisorStudentIdx=-1;
 let currentUser=null;
 let currentWeek=1;
 let editingSubjectIdx=-1;
@@ -1352,6 +1400,89 @@ function getRecentActivityLogs(limit=20){
 }
 function getStudentActivityLogs(studentKey, limit=12){
   return getRecentActivityLogs(200).filter(item=>item.studentKey===studentKey).slice(0, limit);
+}
+function getAdvisorCase(studentKey){
+  return advisorCasesData.find(item=>item.studentKey===studentKey) || null;
+}
+function getAdvisorStatusMeta(status){
+  const map={
+    review:{label:'يحتاج مراجعة',className:'badge-warn'},
+    follow_up:{label:'متابعة مطلوبة',className:'badge-admin'},
+    urgent:{label:'عاجل',className:'badge-fail'},
+    completed:{label:'مكتمل',className:'badge-pass'}
+  };
+  return map[status] || {label:'بدون تصنيف',className:'badge-student'};
+}
+function getAdvisorPriorityLabel(priority){
+  return ({low:'منخفضة',normal:'متوسطة',high:'عالية'})[priority] || 'متوسطة';
+}
+function getStudentAverage(stdIdx){
+  const mySubjs = subjects.filter(s=>s.students.includes(stdIdx));
+  const totals = mySubjs.map(s=>{
+    const si=subjects.indexOf(s);
+    return grades[si]?.[stdIdx] ? calcTotal(grades[si][stdIdx]) : 0;
+  }).filter(v=>v>0);
+  return totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
+}
+function getStudentAdvisorSummary(stdIdx){
+  const st=students[stdIdx];
+  const mySubjs=subjects.filter(s=>s.students.includes(stdIdx));
+  const gradeRows=mySubjs.map(s=>grades[subjects.indexOf(s)]?.[stdIdx]).filter(Boolean);
+  const financial=getStudentFinancialState(st);
+  const pendingRequests=studentRequestsData.filter(req=>req.studentKey===st?._fbKey && !['approved','rejected','completed'].includes(req.status)).length;
+  const failingCount=gradeRows.filter(isFailingGrade).length;
+  return {
+    average:getStudentAverage(stdIdx),
+    courseCount:mySubjs.length,
+    failingCount,
+    pendingRequests,
+    remainingAmount:financial.remainingAmount||0,
+    financialStatus:financial.remainingAmount>0?'التزامات مالية قائمة':'مكتمل ماليًا',
+    academicStatus:failingCount>0?'بحاجة لدعم أكاديمي':(mySubjs.length?'مستقر أكاديميًا':'بانتظار التسجيل في المقررات')
+  };
+}
+function getImportCellValue(row, keys){
+  for(const key of keys){
+    const foundKey=Object.keys(row).find(col=>String(col||'').trim().toLowerCase()===key.toLowerCase());
+    if(foundKey && row[foundKey]!==undefined && row[foundKey]!==null && String(row[foundKey]).trim()!=='') return String(row[foundKey]).trim();
+  }
+  return '';
+}
+function splitFullName(fullName){
+  const parts=String(fullName||'').trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName:parts[0]||'',
+    midName:parts.length>2?parts.slice(1,-1).join(' '):(parts[1]||''),
+    lastName:parts.length>2?parts[parts.length-1]:(parts[2]||'')
+  };
+}
+function normalizeImportedStudentRow(row, index){
+  const fullName=getImportCellValue(row,['الاسم الثلاثي','اسم الطالب','الاسم الكامل','الاسم','student_name','full_name','name']);
+  const names=splitFullName(fullName);
+  const studentId=getImportCellValue(row,['الرقم الطلابي','student_id','id']) || generateStudentId();
+  const planType=(getImportCellValue(row,['الرخصة الأكاديمية','الرخصة','plan_type','license'])||'QBA').toUpperCase().includes('QASP')?'QASP-S':'QBA';
+  const totalAmount=parseFloat(getImportCellValue(row,['المبلغ الإجمالي','الرسوم','total_amount','amount']))||0;
+  return {
+    rowNumber:index+2,
+    student:{
+      id:studentId,
+      firstName:getImportCellValue(row,['الاسم الأول','first_name'])||names.firstName,
+      midName:getImportCellValue(row,['اسم الأب','الاسم الثاني','middle_name'])||names.midName,
+      lastName:getImportCellValue(row,['اسم العائلة','الاسم الأخير','last_name'])||names.lastName,
+      email:getImportCellValue(row,['البريد الإلكتروني','البريد','email']),
+      phone:getImportCellValue(row,['رقم الجوال','الجوال','phone','mobile']),
+      regDate:getImportCellValue(row,['تاريخ التسجيل','reg_date','registration_date']) || new Date().toISOString().split('T')[0],
+      program:getImportCellValue(row,['البرنامج','program']),
+      track:getImportCellValue(row,['المسار','track']),
+      batch:getImportCellValue(row,['الدفعة','batch']),
+      pkg:getImportCellValue(row,['الباقة','package']),
+      planType,
+      financeMode:'local_manual',
+      totalAmount,
+      notes:getImportCellValue(row,['ملاحظات','notes'])
+    },
+    valid:Boolean(fullName || (names.firstName && names.lastName))
+  };
 }
 
 function getStudentRequestTypeLabel(type){
@@ -1866,6 +1997,7 @@ const navConfig = {
     {id:'dashboard',icon:'🏠',label:'لوحة التحكم'},
     {id:'subjects',icon:'📖',label:'المواد الدراسية'},
     {id:'students',icon:'👩‍🎓',label:'الطلاب'},
+    {id:'academicadvisor',icon:'🧭',label:'المرشد الأكاديمي'},
     {id:'cards',icon:'🪪',label:'بطاقات الطلاب'},
     {id:'users',icon:'👥',label:'المستخدمون'},
     {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
@@ -1897,7 +2029,7 @@ function renderNav() {
   ).join('');
 }
 const pageTitles={
-  dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',
+  dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
   grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', semesters:'الفصول الدراسية',
   settings:'الإعدادات',mygrades:'بياناتي ودرجاتي'
@@ -1923,7 +2055,7 @@ function goBack() {
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
   if (pageId==='subjects'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مقررات لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مقرر جديد</button>`;
-  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إعادة ضبط كلمات الطلاب</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-sm" onclick="openStudentImportModal()">استيراد Excel</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إعادة ضبط كلمات الطلاب</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
   else if (pageId==='users'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
 }
@@ -1931,6 +2063,7 @@ function refreshPage(p) {
   if (p==='dashboard') renderDashboard();
   if (p==='subjects') renderSubjectsTable();
   if (p==='students') renderStudentsTable();
+  if (p==='academicadvisor') renderAcademicAdvisorPage();
   if (p==='users') renderUsersTable();
   if (p==='grades') {
     populateGradeSubjectSelect();
@@ -2398,6 +2531,269 @@ function renderStudentsTable() {
   populateProgramFilterDropdown();
   populateBatchFilterDropdown();
   filterStudents();
+}
+
+function getFilteredAdvisorRows(){
+  const query=(document.getElementById('advisorSearchInput')?.value||'').toLowerCase().trim();
+  const batchFilter=document.getElementById('advisorBatchFilter')?.value||'';
+  const statusFilter=document.getElementById('advisorStatusFilter')?.value||'';
+  return students.map((student,idx)=>{
+    const summary=getStudentAdvisorSummary(idx);
+    const advisorCase=getAdvisorCase(student._fbKey) || {status:'review',priority:'normal',note:'',nextAction:''};
+    return {student,idx,summary,advisorCase};
+  }).filter(item=>{
+    if(query){
+      const haystack=[
+        getStudentFullName(item.student),
+        item.student.id||'',
+        item.student.email||'',
+        item.student.batch||''
+      ].join(' ').toLowerCase();
+      if(!haystack.includes(query)) return false;
+    }
+    if(batchFilter && !sameBatchName(item.student.batch,batchFilter)) return false;
+    if(statusFilter && item.advisorCase.status!==statusFilter) return false;
+    return true;
+  }).sort((a,b)=>(b.summary.failingCount-a.summary.failingCount) || (b.summary.pendingRequests-a.summary.pendingRequests) || (a.student.batch||'').localeCompare(b.student.batch||'', 'ar'));
+}
+function renderAcademicAdvisorPage(){
+  const container=document.getElementById('academicAdvisorContent');
+  if(!container) return;
+  const currentSearch=document.getElementById('advisorSearchInput')?.value||'';
+  const currentBatch=document.getElementById('advisorBatchFilter')?.value||'';
+  const currentStatus=document.getElementById('advisorStatusFilter')?.value||'';
+  const rows=getFilteredAdvisorRows();
+  if(selectedAdvisorStudentIdx<0 && rows.length) selectedAdvisorStudentIdx=rows[0].idx;
+  const reviewCount=rows.filter(item=>(item.advisorCase.status||'review')==='review').length;
+  const urgentCount=rows.filter(item=>item.advisorCase.status==='urgent').length;
+  const followUpCount=rows.filter(item=>item.advisorCase.status==='follow_up').length;
+  const pendingRequests=rows.reduce((sum,item)=>sum+item.summary.pendingRequests,0);
+  const batchOptions=getAllKnownBatches().map(batch=>`<option value="${batch}">${batch}</option>`).join('');
+  container.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1rem;">
+      <div class="stat"><div class="stat-icon">🎓</div><div class="stat-label">إجمالي الطلاب</div><div class="stat-value">${students.length}</div><div class="stat-sub">في النظام</div></div>
+      <div class="stat"><div class="stat-icon">📝</div><div class="stat-label">ملفات للمراجعة</div><div class="stat-value">${reviewCount}</div><div class="stat-sub">بحاجة متابعة أولية</div></div>
+      <div class="stat"><div class="stat-icon">🚨</div><div class="stat-label">حالات عاجلة</div><div class="stat-value">${urgentCount}</div><div class="stat-sub">أولوية عالية</div></div>
+      <div class="stat"><div class="stat-icon">📨</div><div class="stat-label">طلبات معلقة</div><div class="stat-value">${pendingRequests}</div><div class="stat-sub">من بوابة الطالب</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.65fr) minmax(320px,0.95fr);gap:1rem;align-items:start;">
+      <div class="card card-accent">
+        <div class="card-title">لوحة المرشد الأكاديمي</div>
+        <div class="alert alert-info">هذه الصفحة خاصة بالإدارة فقط لمتابعة الحالات والملاحظات والتقدم الأكاديمي والمالي، ولا تظهر للطالب أو المحاضر.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
+          <input type="text" id="advisorSearchInput" placeholder="بحث بالاسم أو الرقم أو البريد" oninput="renderAcademicAdvisorPage()" style="flex:1;min-width:220px;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;">
+          <select id="advisorBatchFilter" onchange="renderAcademicAdvisorPage()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
+            <option value="">كل الدفعات</option>${batchOptions}
+          </select>
+          <select id="advisorStatusFilter" onchange="renderAcademicAdvisorPage()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
+            <option value="">كل الحالات</option>
+            <option value="review">يحتاج مراجعة</option>
+            <option value="follow_up">متابعة مطلوبة</option>
+            <option value="urgent">عاجل</option>
+            <option value="completed">مكتمل</option>
+          </select>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>الطالب</th><th>الدفعة</th><th>التقدم</th><th>الأكاديمية</th><th>المالية</th><th>حالة المرشد</th><th>إجراء</th></tr></thead><tbody>
+          ${rows.length?rows.map(item=>{
+            const statusMeta=getAdvisorStatusMeta(item.advisorCase.status||'review');
+            return `<tr>
+              <td><strong>${getStudentFullName(item.student)}</strong><div style="font-size:11px;color:var(--text-muted)">${item.student.id||'—'}${item.student.email?` • ${item.student.email}`:''}</div></td>
+              <td><span class="badge badge-student">${item.student.batch||'—'}</span></td>
+              <td>${item.summary.average?item.summary.average+'/100':'—'}<div style="font-size:11px;color:var(--text-muted)">${item.summary.courseCount} مقرر</div></td>
+              <td><span class="badge ${item.summary.failingCount>0?'badge-fail':'badge-pass'}">${item.summary.academicStatus}</span></td>
+              <td><span class="badge ${item.summary.remainingAmount>0?'badge-warn':'badge-pass'}">${item.summary.financialStatus}</span></td>
+              <td><span class="badge ${statusMeta.className}">${statusMeta.label}</span></td>
+              <td style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="selectAdvisorStudent(${item.idx})">متابعة</button><button class="btn btn-sm btn-primary" onclick="openStudentProfile(${item.idx})">الملف</button></td>
+            </tr>`;
+          }).join(''):`<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد بيانات مطابقة</td></tr>`}
+        </tbody></table></div>
+      </div>
+      <div class="card card-accent">${renderAdvisorDetailsPanel()}</div>
+    </div>
+  `;
+  const search=document.getElementById('advisorSearchInput');
+  const batch=document.getElementById('advisorBatchFilter');
+  const status=document.getElementById('advisorStatusFilter');
+  if(search) search.value=currentSearch || search.dataset.value || '';
+  if(batch) batch.value=currentBatch || batch.dataset.value || '';
+  if(status) status.value=currentStatus || status.dataset.value || '';
+}
+function renderAdvisorDetailsPanel(){
+  if(selectedAdvisorStudentIdx<0 || !students[selectedAdvisorStudentIdx]){
+    return `<div class="card-title">تفاصيل الحالة</div><div class="alert alert-warn">اختاري طالبًا من الجدول لفتح بطاقة المتابعة.</div>`;
+  }
+  const student=students[selectedAdvisorStudentIdx];
+  const summary=getStudentAdvisorSummary(selectedAdvisorStudentIdx);
+  const advisorCase=getAdvisorCase(student._fbKey) || {status:'review',priority:'normal',note:'',nextAction:''};
+  const statusMeta=getAdvisorStatusMeta(advisorCase.status||'review');
+  const recentLogs=getStudentActivityLogs(student._fbKey, 5);
+  return `
+    <div class="card-title">بطاقة متابعة خاصة</div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:1rem;">
+      <div><div style="font-size:18px;font-weight:800">${getStudentFullName(student)}</div><div style="font-size:12px;color:var(--text-muted)">${student.id||'—'} • ${student.batch||'بدون دفعة'}</div></div>
+      <span class="badge ${statusMeta.className}">${statusMeta.label}</span>
+    </div>
+    <div class="info-grid" style="margin-bottom:1rem;">
+      <div class="info-item"><div class="info-item-label">المتوسط</div><div class="info-item-value">${summary.average?summary.average+'/100':'—'}</div></div>
+      <div class="info-item"><div class="info-item-label">المقررات</div><div class="info-item-value">${summary.courseCount}</div></div>
+      <div class="info-item"><div class="info-item-label">الطلبات المعلقة</div><div class="info-item-value">${summary.pendingRequests}</div></div>
+      <div class="info-item"><div class="info-item-label">المتبقي المالي</div><div class="info-item-value">${summary.remainingAmount.toLocaleString()} ر.س</div></div>
+    </div>
+    <div class="form-group"><label>حالة المتابعة</label>
+      <select id="advisorCaseStatus">
+        <option value="review" ${(advisorCase.status||'review')==='review'?'selected':''}>يحتاج مراجعة</option>
+        <option value="follow_up" ${advisorCase.status==='follow_up'?'selected':''}>متابعة مطلوبة</option>
+        <option value="urgent" ${advisorCase.status==='urgent'?'selected':''}>عاجل</option>
+        <option value="completed" ${advisorCase.status==='completed'?'selected':''}>مكتمل</option>
+      </select>
+    </div>
+    <div class="form-group"><label>الأولوية</label>
+      <select id="advisorCasePriority">
+        <option value="low" ${advisorCase.priority==='low'?'selected':''}>منخفضة</option>
+        <option value="normal" ${(advisorCase.priority||'normal')==='normal'?'selected':''}>متوسطة</option>
+        <option value="high" ${advisorCase.priority==='high'?'selected':''}>عالية</option>
+      </select>
+    </div>
+    <div class="form-group"><label>ملاحظة داخلية</label><textarea id="advisorCaseNote" placeholder="ملاحظات خاصة بالمرشد الأكاديمي فقط...">${escapeHtml(advisorCase.note||'')}</textarea></div>
+    <div class="form-group"><label>الإجراء القادم</label><input type="text" id="advisorCaseNextAction" value="${escapeHtml(advisorCase.nextAction||'')}" placeholder="مثال: مراجعة الملف، التواصل، تقييم الاجتياز"></div>
+    <div class="modal-actions" style="justify-content:flex-start;margin-top:0;">
+      <button class="btn btn-primary" onclick="saveAdvisorCase()">حفظ المتابعة</button>
+      <button class="btn" onclick="openStudentProfile(${selectedAdvisorStudentIdx})">فتح ملف الطالب</button>
+    </div>
+    <div style="margin-top:1rem;">
+      <div style="font-weight:700;margin-bottom:8px;">آخر النشاط</div>
+      ${recentLogs.length?recentLogs.map(log=>`<div style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);margin-bottom:8px;"><div style="font-weight:700;font-size:12px">${log.action||'تحديث'}</div><div style="font-size:11px;color:var(--text-muted)">${log.details||'—'}</div><div style="font-size:10px;color:var(--text-light);margin-top:4px">${log.createdAt||''}</div></div>`).join(''):'<div class="alert alert-info">لا يوجد نشاط حديث لهذا الطالب.</div>'}
+    </div>
+  `;
+}
+function selectAdvisorStudent(stdIdx){
+  selectedAdvisorStudentIdx=stdIdx;
+  const search=document.getElementById('advisorSearchInput');
+  const batch=document.getElementById('advisorBatchFilter');
+  const status=document.getElementById('advisorStatusFilter');
+  if(search) search.dataset.value=search.value;
+  if(batch) batch.dataset.value=batch.value;
+  if(status) status.dataset.value=status.value;
+  renderAcademicAdvisorPage();
+}
+async function saveAdvisorCase(){
+  const student=students[selectedAdvisorStudentIdx];
+  if(!student?._fbKey) return showToast('تعذر تحديد الطالب');
+  const record={
+    studentKey:student._fbKey,
+    status:document.getElementById('advisorCaseStatus')?.value||'review',
+    priority:document.getElementById('advisorCasePriority')?.value||'normal',
+    note:document.getElementById('advisorCaseNote')?.value?.trim()||'',
+    nextAction:document.getElementById('advisorCaseNextAction')?.value?.trim()||'',
+    updatedAt:new Date().toISOString(),
+    updatedBy:currentUser?.username||currentUser?.name||'system'
+  };
+  await saveAdvisorCaseToFirebase(record);
+  await saveActivityLog({
+    action:'تحديث متابعة أكاديمية',
+    targetType:'advisor_case',
+    targetKey:student._fbKey,
+    targetLabel:getStudentFullName(student),
+    studentKey:student._fbKey,
+    details:`تم تحديث حالة المرشد إلى ${getAdvisorStatusMeta(record.status).label}`
+  });
+  renderAcademicAdvisorPage();
+  showToast('تم حفظ ملاحظة المرشد الأكاديمي');
+}
+function openStudentImportModal(){
+  studentImportPreviewRows=[];
+  const summary=document.getElementById('studentImportSummary');
+  const preview=document.getElementById('studentImportPreview');
+  const fileInput=document.getElementById('studentImportFile');
+  if(summary) summary.innerHTML='ارفعي الملف وسيتم تحليل البيانات ثم عرض المعاينة قبل الحفظ.';
+  if(preview) preview.innerHTML='';
+  if(fileInput) fileInput.value='';
+  document.getElementById('studentImportModal').classList.add('open');
+}
+function triggerStudentImportFile(){
+  document.getElementById('studentImportFile')?.click();
+}
+function downloadStudentImportTemplate(){
+  const csv='\uFEFFالاسم الثلاثي,البريد الإلكتروني,رقم الجوال,تاريخ التسجيل,البرنامج,المسار,الدفعة,الرخصة الأكاديمية,المبلغ الإجمالي,ملاحظات\nاسم الطالب,student@example.com,0500000000,2026-08-22,البرنامج,المسار,Q1-26,QBA,15000,ملاحظة';
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='sulukera_students_import_template.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function handleStudentImportFile(event){
+  const file=event?.target?.files?.[0];
+  if(!file) return;
+  if(typeof XLSX==='undefined') return showToast('مكتبة Excel غير متاحة الآن');
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const data=e.target.result;
+      const workbook=XLSX.read(data,{type:'array'});
+      const firstSheet=workbook.Sheets[workbook.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(firstSheet,{defval:''});
+      studentImportPreviewRows=rows.map((row,index)=>normalizeImportedStudentRow(row,index)).filter(item=>item.valid);
+      renderStudentImportPreview(file.name, rows.length);
+    }catch(error){
+      console.error('handleStudentImportFile error:', error);
+      showToast('تعذر قراءة ملف Excel');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function renderStudentImportPreview(fileName, totalRows){
+  const summary=document.getElementById('studentImportSummary');
+  const preview=document.getElementById('studentImportPreview');
+  if(summary) summary.className='alert alert-info';
+  if(summary) summary.innerHTML=`الملف: <strong>${escapeHtml(fileName)}</strong> — تمت قراءة ${totalRows} صف، والجاهز للاستيراد ${studentImportPreviewRows.length} طالب.`;
+  if(!preview) return;
+  if(!studentImportPreviewRows.length){
+    preview.innerHTML='<div class="alert alert-warn">لم يتم العثور على صفوف صالحة للاستيراد.</div>';
+    return;
+  }
+  preview.innerHTML=`<table><thead><tr><th>#</th><th>الاسم</th><th>الرقم</th><th>البريد</th><th>الدفعة</th><th>الرخصة</th><th>الإجمالي</th></tr></thead><tbody>${studentImportPreviewRows.slice(0,50).map(item=>`<tr><td>${item.rowNumber}</td><td>${getStudentFullName(item.student)}</td><td class="mono">${item.student.id}</td><td>${item.student.email||'—'}</td><td>${item.student.batch||'—'}</td><td>${item.student.planType}</td><td>${(item.student.totalAmount||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>${studentImportPreviewRows.length>50?`<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">تم عرض أول 50 صف فقط من أصل ${studentImportPreviewRows.length}.</div>`:''}`;
+}
+async function confirmStudentImport(){
+  if(!studentImportPreviewRows.length) return showToast('لا توجد بيانات جاهزة للاستيراد');
+  showLoader(true);
+  try{
+    let imported=0;
+    let skipped=0;
+    const reservedIds=new Set(students.map(st=>st.id).filter(Boolean));
+    for(const item of studentImportPreviewRows){
+      let resolvedId=item.student.id;
+      if(!resolvedId || reservedIds.has(resolvedId)){
+        resolvedId=generateStudentId();
+        while(reservedIds.has(resolvedId)) resolvedId=generateStudentId();
+      }
+      item.student.id=resolvedId;
+      const exists=students.some(st=>(st.id&&st.id===item.student.id) || ((st.email||'') && (item.student.email||'') && (st.email||'').toLowerCase()===(item.student.email||'').toLowerCase()));
+      if(exists){ skipped++; continue; }
+      const studentRecord={...item.student, installments:[], financeSnapshot:null};
+      students.push(studentRecord);
+      reservedIds.add(studentRecord.id);
+      const newIdx=students.length-1;
+      await saveStudentToFirebase(newIdx, '');
+      imported++;
+    }
+    await saveActivityLog({
+      action:'استيراد طلاب من Excel',
+      targetType:'students_import',
+      targetKey:'bulk_import',
+      targetLabel:'استيراد طلاب',
+      details:`تم استيراد ${imported} طالب وتخطي ${skipped} سجل مكرر`
+    });
+    await loadAllFromFirebase();
+    renderStudentsTable();
+    closeModal('studentImportModal');
+    showToast(`تم استيراد ${imported} طالب`);
+  }catch(error){
+    console.error('confirmStudentImport error:', error);
+    showToast('حدث خطأ أثناء استيراد الطلاب');
+  }finally{
+    showLoader(false);
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -4749,7 +5145,8 @@ function getAcademicBackupSnapshot(){
     scheduleData,
     studentRequestsData,
     lecturerFollowUpsData,
-    activityLogsData
+    activityLogsData,
+    advisorCasesData
   };
 }
 async function exportFullAcademicBackup(){
