@@ -772,6 +772,28 @@ tr:hover td{background:#f8faff;}
   </div>
 </div></div>
 
+<!-- MODAL: STUDENT GRADE EDITOR -->
+<div class="modal-overlay" id="studentGradeEditorModal"><div class="modal" style="width:760px;">
+  <h3>تحديث درجة المقرر</h3>
+  <div id="studentGradeEditorSummary" class="alert alert-info">سيظهر هنا ملخص المقرر والطالب.</div>
+  <div class="form-row">
+    <div class="form-group"><label>الأسبوع 1</label><div class="form-row"><input type="number" id="gradeEditor_w1_attend" placeholder="حضور"><input type="number" id="gradeEditor_w1_hw" placeholder="واجب"><input type="number" id="gradeEditor_w1_disc" placeholder="مشاركة"></div></div>
+    <div class="form-group"><label>الأسبوع 2</label><div class="form-row"><input type="number" id="gradeEditor_w2_attend" placeholder="حضور"><input type="number" id="gradeEditor_w2_hw" placeholder="واجب"><input type="number" id="gradeEditor_w2_disc" placeholder="مشاركة"></div></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>الأسبوع 3</label><div class="form-row"><input type="number" id="gradeEditor_w3_attend" placeholder="حضور"><input type="number" id="gradeEditor_w3_hw" placeholder="واجب"><input type="number" id="gradeEditor_w3_disc" placeholder="مشاركة"></div></div>
+    <div class="form-group"><label>الأسبوع 4</label><div class="form-row"><input type="number" id="gradeEditor_w4_attend" placeholder="حضور"><input type="number" id="gradeEditor_w4_hw" placeholder="واجب"><input type="number" id="gradeEditor_w4_disc" placeholder="مشاركة"></div></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>الاختبار النهائي</label><input type="number" id="gradeEditor_exam" placeholder="من 40"></div>
+    <div class="form-group"><label>ملخص النتيجة</label><div id="studentGradeEditorResult" style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);min-height:44px;display:flex;align-items:center;font-weight:700;">—</div></div>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-primary" onclick="saveStudentGradeFromProfile()">حفظ الدرجة</button>
+    <button class="btn" onclick="closeModal('studentGradeEditorModal')">إغلاق</button>
+  </div>
+</div></div>
+
 
 <!-- MODAL: PACKAGE SUBJECTS -->
 <div class="modal-overlay" id="pkgSubjectsModal"><div class="modal" style="width:580px;">
@@ -1347,6 +1369,7 @@ let activityLogsData=[];
 let advisorCasesData=[];
 let studentImportPreviewRows=[];
 let selectedAdvisorStudentIdx=-1;
+let currentStudentGradeEditor=null;
 let currentUser=null;
 let currentWeek=1;
 let editingSubjectIdx=-1;
@@ -1714,6 +1737,12 @@ function isFailingGrade(g){
 }
 function getGradeStatus(g){
   return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
+}
+function getStudentCourseResultMeta(g){
+  if(!g || !isExamEntered(g)) return {label:'قيد الرصد', className:'badge-warn'};
+  return calcTotal(g)>=settings.gradeFail
+    ? {label:'اجتياز', className:'badge-pass'}
+    : {label:'تعثر', className:'badge-fail'};
 }
 function pc(t){return t>=70?'high':t>=50?'mid':'low';}
 function getLecturerName(id){
@@ -3145,6 +3174,151 @@ function openStudentProfile(stdIdx) {
     <button class="btn btn-primary btn-sm" onclick="openGradeReportModal(${stdIdx})">📄 كشف الدرجات</button>`;
   renderStudentProfile(stdIdx);
 }
+function renderStudentAcademicProgressSheet(stdIdx, st, mySubjs){
+  const rows=mySubjs.map((subject,order)=>{
+    const grade=grades[subject.idx]?.[stdIdx]||null;
+    const total=grade?calcTotal(grade):0;
+    const result=getStudentCourseResultMeta(grade);
+    return {
+      order:order+1,
+      subject,
+      grade,
+      total,
+      letter:grade&&isExamEntered(grade)?getGrade(total):'—',
+      lecturerName:getLecturerName(subject.lecturerUserId),
+      result
+    };
+  });
+  const completedCount=rows.filter(row=>row.result.label==='اجتياز').length;
+  const strugglingCount=rows.filter(row=>row.result.label==='تعثر').length;
+  const pendingCount=rows.filter(row=>row.result.label==='قيد الرصد').length;
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;">
+      <div class="stat" style="margin:0"><div class="stat-icon">📚</div><div class="stat-label">إجمالي المقررات</div><div class="stat-value" style="font-size:24px">${rows.length}</div><div class="stat-sub">في السجل الأكاديمي</div></div>
+      <div class="stat" style="margin:0"><div class="stat-icon">✅</div><div class="stat-label">مقررات مجتازة</div><div class="stat-value" style="font-size:24px;color:var(--success)">${completedCount}</div><div class="stat-sub">بعد اعتماد الدرجة</div></div>
+      <div class="stat" style="margin:0"><div class="stat-icon">⚠️</div><div class="stat-label">مقررات متعثرة</div><div class="stat-value" style="font-size:24px;color:var(--danger)">${strugglingCount}</div><div class="stat-sub">تحتاج متابعة</div></div>
+      <div class="stat" style="margin:0"><div class="stat-icon">🕓</div><div class="stat-label">قيد الرصد</div><div class="stat-value" style="font-size:24px;color:var(--warning)">${pendingCount}</div><div class="stat-sub">لم تعتمد نهائيًا بعد</div></div>
+    </div>
+    <div class="card card-accent" style="margin-top:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="card-title" style="margin-bottom:0;border:none;padding-bottom:0">سجل التقدم الأكاديمي</div>
+        <div style="font-size:11px;color:var(--text-muted)">كل مقرر مع الدرجة النهائية وحالة الاجتياز أو التعثر</div>
+      </div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>#</th><th>المقرر</th><th>مقدم المقرر</th><th>الدرجة النهائية</th><th>التقدير</th><th>الحالة</th><th>نوع التسجيل</th><th>إجراء</th></tr></thead>
+          <tbody>${rows.map(row=>`
+            <tr>
+              <td class="mono">${row.order}</td>
+              <td><strong>${row.subject.name}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${row.subject.batch||st.batch||'—'}${row.subject.semesterNo?` · الفصل ${row.subject.semesterNo}`:''}</div></td>
+              <td>${row.lecturerName||'—'}</td>
+              <td><strong style="font-size:16px;color:${row.result.label==='تعثر'?'var(--danger)':'var(--primary-dark)'}">${row.grade&&isExamEntered(row.grade)?row.total:'—'}</strong>${row.grade&&isExamEntered(row.grade)?'<span style="font-size:11px;color:var(--text-muted)"> / 100</span>':''}</td>
+              <td><span class="badge ${row.letter==='—'?'badge-student':'badge-'+row.letter}">${row.letter}</span></td>
+              <td><span class="badge ${row.result.className}">${row.result.label}</span></td>
+              <td><span class="badge ${row.subject.batch && !sameBatchName(row.subject.batch, st.batch)?'badge-admin':'badge-student'}">${row.subject.batch && !sameBatchName(row.subject.batch, st.batch)?'استثنائي بين الدفعات':'ضمن الخطة'}</span></td>
+              <td style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${canManageAcademicAdmin()||currentUser?.role==='lecturer'?`<button class="btn btn-sm" onclick="openStudentGradeEditor(${stdIdx},${row.subject.idx})">تعديل الدرجة</button>`:''}
+                <button class="btn btn-sm btn-primary" onclick="openGradeReportModal(${stdIdx})">كشف الدرجات</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+function updateStudentGradeEditorResult(){
+  if(!currentStudentGradeEditor) return;
+  const value=(id,max)=>{
+    const raw=parseFloat(document.getElementById(id)?.value);
+    return Number.isFinite(raw) ? Math.max(0, Math.min(max, raw)) : 0;
+  };
+  const draft={
+    w1:{attend:value('gradeEditor_w1_attend',settings.attend),hw:value('gradeEditor_w1_hw',settings.hw),disc:value('gradeEditor_w1_disc',settings.disc)},
+    w2:{attend:value('gradeEditor_w2_attend',settings.attend),hw:value('gradeEditor_w2_hw',settings.hw),disc:value('gradeEditor_w2_disc',settings.disc)},
+    w3:{attend:value('gradeEditor_w3_attend',settings.attend),hw:value('gradeEditor_w3_hw',settings.hw),disc:value('gradeEditor_w3_disc',settings.disc)},
+    w4:{attend:value('gradeEditor_w4_attend',settings.attend),hw:value('gradeEditor_w4_hw',settings.hw),disc:value('gradeEditor_w4_disc',settings.disc)},
+    exam:value('gradeEditor_exam',settings.exam),
+    examEntered:document.getElementById('gradeEditor_exam')?.value!==''
+  };
+  const total=calcTotal(draft);
+  const meta=getStudentCourseResultMeta(draft);
+  document.getElementById('studentGradeEditorResult').innerHTML=`النتيجة الحالية: <span class="badge ${meta.className}" style="margin:0 8px;">${meta.label}</span> <strong>${draft.examEntered?total:'—'}</strong>${draft.examEntered?'/100':''}`;
+}
+function openStudentGradeEditor(stdIdx, si){
+  const student=students[stdIdx];
+  const subject=subjects[si];
+  if(!student || !subject) return;
+  const grade=grades[si]?.[stdIdx] || makeEmptyGrade();
+  currentStudentGradeEditor={stdIdx,si};
+  document.getElementById('studentGradeEditorSummary').innerHTML=`${getStudentFullName(student)} · <strong>${subject.name}</strong> · ${student.batch||'—'}`;
+  ['w1','w2','w3','w4'].forEach(week=>{
+    ['attend','hw','disc'].forEach(field=>{
+      const el=document.getElementById(`gradeEditor_${week}_${field}`);
+      if(el){
+        el.value=grade?.[week]?.[field] ?? '';
+        el.oninput=updateStudentGradeEditorResult;
+      }
+    });
+  });
+  const examEl=document.getElementById('gradeEditor_exam');
+  if(examEl){
+    examEl.value=grade?.exam ?? '';
+    examEl.oninput=updateStudentGradeEditorResult;
+  }
+  updateStudentGradeEditorResult();
+  document.getElementById('studentGradeEditorModal').classList.add('open');
+}
+async function saveStudentGradeFromProfile(){
+  if(!currentStudentGradeEditor) return showToast('تعذر تحديد الدرجة');
+  const {stdIdx,si}=currentStudentGradeEditor;
+  const student=students[stdIdx];
+  const subject=subjects[si];
+  if(!student?._fbKey || !subject?._fbKey) return showToast('تعذر تحديد السجل');
+  if(!grades[si]) grades[si]={};
+  if(!grades[si][stdIdx]) grades[si][stdIdx]=makeEmptyGrade();
+  const normalize=(id,max)=>{
+    const raw=document.getElementById(id)?.value;
+    if(raw==='') return 0;
+    return Math.max(0, Math.min(max, parseFloat(raw)||0));
+  };
+  grades[si][stdIdx]={
+    w1:{attend:normalize('gradeEditor_w1_attend',settings.attend),hw:normalize('gradeEditor_w1_hw',settings.hw),disc:normalize('gradeEditor_w1_disc',settings.disc)},
+    w2:{attend:normalize('gradeEditor_w2_attend',settings.attend),hw:normalize('gradeEditor_w2_hw',settings.hw),disc:normalize('gradeEditor_w2_disc',settings.disc)},
+    w3:{attend:normalize('gradeEditor_w3_attend',settings.attend),hw:normalize('gradeEditor_w3_hw',settings.hw),disc:normalize('gradeEditor_w3_disc',settings.disc)},
+    w4:{attend:normalize('gradeEditor_w4_attend',settings.attend),hw:normalize('gradeEditor_w4_hw',settings.hw),disc:normalize('gradeEditor_w4_disc',settings.disc)},
+    exam:document.getElementById('gradeEditor_exam')?.value===''?null:normalize('gradeEditor_exam',settings.exam),
+    examEntered:document.getElementById('gradeEditor_exam')?.value!==''
+  };
+  const gradeKey=('grade_'+student._fbKey+'_'+subject._fbKey).replace(/[.#$[\]]/g,'_');
+  try{
+    await fbRef('grades/'+gradeKey).transaction(current=>({
+      studentKey:student._fbKey,
+      subjectKey:subject._fbKey,
+      w1_attend:grades[si][stdIdx].w1.attend, w1_hw:grades[si][stdIdx].w1.hw, w1_disc:grades[si][stdIdx].w1.disc,
+      w2_attend:grades[si][stdIdx].w2.attend, w2_hw:grades[si][stdIdx].w2.hw, w2_disc:grades[si][stdIdx].w2.disc,
+      w3_attend:grades[si][stdIdx].w3.attend, w3_hw:grades[si][stdIdx].w3.hw, w3_disc:grades[si][stdIdx].w3.disc,
+      w4_attend:grades[si][stdIdx].w4.attend, w4_hw:grades[si][stdIdx].w4.hw, w4_disc:grades[si][stdIdx].w4.disc,
+      exam:grades[si][stdIdx].exam,
+      examEntered:grades[si][stdIdx].examEntered===true,
+      updatedAt:new Date().toISOString()
+    }));
+    await saveActivityLog({
+      action:'تحديث درجة من ملف المتدرب',
+      targetType:'student_grade',
+      targetKey:gradeKey,
+      targetLabel:`${getStudentFullName(student)} · ${subject.name}`,
+      studentKey:student._fbKey,
+      subjectKey:subject._fbKey,
+      details:`تم تحديث الدرجة النهائية للمقرر إلى ${grades[si][stdIdx].examEntered?calcTotal(grades[si][stdIdx]):'قيد الرصد'}`
+    });
+    closeModal('studentGradeEditorModal');
+    renderStudentProfile(stdIdx);
+    showToast('تم حفظ الدرجة بنجاح');
+  }catch(e){
+    console.error('saveStudentGradeFromProfile error:',e);
+    showToast('تعذر حفظ الدرجة');
+  }
+}
 function renderStudentProfile(stdIdx) {
   const st=students[stdIdx];
   const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
@@ -3206,6 +3380,7 @@ function renderStudentProfile(stdIdx) {
           <div class="info-item"><div class="info-item-label">نوع الباقة</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">المقررات</div><div class="info-item-value">${mySubjs.length}</div></div>
         </div>
+        <div style="margin-top:1rem">${renderStudentAcademicProgressSheet(stdIdx, st, mySubjs)}</div>
         <div style="margin-top:1rem">${mySubjs.map((s,i)=>`
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">
             <div><strong>${s.name}</strong><div style="font-size:11px;color:var(--text-muted)">${getLecturerName(s.lecturerUserId)}</div></div>
