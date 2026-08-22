@@ -2041,7 +2041,7 @@ function navTo(pageId, el) {
   const pg=document.getElementById('page-'+pageId);
   if (pg) { pg.classList.add('active'); refreshPage(pageId); }
   document.getElementById('pageTitle').textContent=pageTitles[pageId]||'';
-  document.getElementById('pageSubtitle').textContent=currentUser?`مرحبًا، ${currentUser.name}`:'';
+  document.getElementById('pageSubtitle').textContent=currentUser?`أهلًا بك، ${currentUser.name}`:'';
   document.getElementById('btnBack').style.display=(pageId==='student-profile')?'flex':'none';
   renderTopbarActions(pageId);
 }
@@ -2096,7 +2096,7 @@ function renderDashboard() {
       <div class="student-profile-header" style="background:linear-gradient(135deg,#0b254e,#0D40FC,#55D7FF);margin-bottom:1rem;">
         <div class="student-avatar" style="background:rgba(255,255,255,0.16);font-size:28px;">${(currentUser.name||'م')[0]}</div>
         <div style="flex:1">
-          <div style="font-size:24px;font-weight:900">مرحبًا، ${currentUser.name}</div>
+          <div style="font-size:24px;font-weight:900">أهلًا بك، ${currentUser.name}</div>
           <div style="font-size:13px;color:rgba(255,255,255,0.78);margin-top:5px">هذه شاشة المتابعة اليومية للمقررات والطلاب المسندين لك.</div>
           <div style="font-size:13px;color:white;margin-top:10px;max-width:700px">ابدأ من مقرراتك الحالية، راقب ما تم إنجازه، وارجع فورًا لرصد أي مقرر يحتاج متابعة أو استكمال.</div>
         </div>
@@ -3203,7 +3203,7 @@ function renderStudentProfile(stdIdx) {
           <div class="info-item"><div class="info-item-label">المسار</div><div class="info-item-value">${st.track||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${st.batch||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">الرخصة الأكاديمية</div><div class="info-item-value">${st.planType||inferPlanType(st.pkg)}</div></div>
-          <div class="info-item"><div class="info-item-label">نوع التسجيل</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
+          <div class="info-item"><div class="info-item-label">نوع الباقة</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">المقررات</div><div class="info-item-value">${mySubjs.length}</div></div>
         </div>
         <div style="margin-top:1rem">${mySubjs.map((s,i)=>`
@@ -3828,17 +3828,17 @@ function printReport() { window.print(); }
 //  MY GRADES (student view)
 // ══════════════════════════════════════════════
 const STUDY_TIPS = [
-  'ابدأ أسبوعك بمراجعة جدول المحاضرات والمقررات المطلوب منك متابعتها.',
-  'قسّم المذاكرة إلى جلسات قصيرة ومنتظمة بدل التأجيل حتى آخر وقت.',
-  'عند وجود تعثر في أي مقرر، يمكن رفع طلب دعم أكاديمي أو التواصل مع مقدم المقرر مبكرًا.',
-  'احتفظ بملخص قصير بعد كل محاضرة، فهذا يسهل المراجعة النهائية كثيرًا.',
-  'من الأفضل متابعة الإشعارات والطلبات المفتوحة من الحساب باستمرار حتى لا يفوت أي إجراء.'
+  'ابدأ الأسبوع بمراجعة جدول المحاضرات والمقررات المطلوبة خلال الأيام القادمة.',
+  'قسّم المذاكرة إلى جلسات قصيرة ومنتظمة بدل تأجيلها إلى نهاية الأسبوع.',
+  'عند الحاجة إلى دعم في أي مقرر، ارفع طلبًا من البوابة أو تواصل مبكرًا مع مقدم المقرر.',
+  'دوّن ملخصًا مختصرًا بعد كل محاضرة لتسهيل المراجعة قبل الاختبارات.',
+  'راجع الإشعارات والطلبات المفتوحة من الحساب باستمرار حتى لا يفوتك أي إجراء.'
 ];
 const PROGRAM_POLICIES_DEFAULT = [
-  'الالتزام بحضور المحاضرات ومتابعة الواجبات جزء أساسي من التقدم الأكاديمي.',
-  'أي طلب تأجيل أو إجازة أو مراجعة درجات يجب رفعه من بوابة الطالب ليتم اعتماده رسميًا.',
-  'درجات الطالب وبياناته تعرض للقراءة فقط، وأي تعديل يتم عن طريق الإدارة أو المحاضر وفق الصلاحية.',
-  'يلتزم الطالب بمتابعة حالة طلباته وإشعاراته الأكاديمية والمالية من داخل حسابه.'
+  'الالتزام بحضور المحاضرات ومتابعة المتطلبات الأكاديمية جزء أساسي من التقدم في البرنامج.',
+  'طلبات التأجيل أو الإجازة أو مراجعة الدرجات تُرفع من بوابة الطالب لاعتمادها رسميًا.',
+  'البيانات الأكاديمية والدرجات المعروضة في الحساب للقراءة فقط، وأي تعديل يتم عبر الجهة المخولة.',
+  'متابعة حالة الطلبات والتنبيهات الأكاديمية والمالية مسؤولية أساسية من داخل الحساب.'
 ];
 function getActiveSemesterSummaryForStudent(batch){
   const activeEntry=Object.entries(semestersData||{}).find(([,sem])=>sem.status==='active' && (!batch || (sem.batches||[]).some(b=>sameBatchName(b,batch))));
@@ -3853,11 +3853,11 @@ function getStudentPortalNotifications(st, stdIdx, mySubjs){
   const items=[];
   const financial=getStudentFinancialState(st);
   if(financial.remainingAmount>0){
-    items.push({tone:'warn', title:'رصيد مالي متبقٍ', body:`المتبقي على حسابك ${financial.remainingAmount.toLocaleString()} ر.س، ويمكن متابعة حالة الأقساط من تبويب المالية.`});
+    items.push({tone:'warn', title:'مبلغ مالي متبقٍ', body:`المتبقي في السجل المالي ${financial.remainingAmount.toLocaleString()} ر.س، ويمكن متابعة تفاصيل الأقساط من صفحة المالية.`});
   }
   const failed=mySubjs.filter(subj=>isFailingGrade(grades[subj.idx]?.[stdIdx]));
   if(failed.length){
-    items.push({tone:'fail', title:'تنبيه أكاديمي', body:`لديك ${failed.length} مقرر يحتاج متابعة: ${failed.map(subj=>subj.name).join('، ')}.`});
+    items.push({tone:'fail', title:'تنبيه أكاديمي', body:`يوجد ${failed.length} مقرر يحتاج إلى متابعة: ${failed.map(subj=>subj.name).join('، ')}.`});
   }
   const pendingRequests=getStudentPortalRequests(st?._fbKey).filter(request=>!request.status || request.status==='pending');
   if(pendingRequests.length){
@@ -3872,7 +3872,7 @@ function getStudentPortalNotifications(st, stdIdx, mySubjs){
     });
   });
   if(!items.length){
-    items.push({tone:'success', title:'وضعك مستقر', body:'لا توجد تنبيهات حرجة حاليًا. استمر على نفس الوتيرة وراجع جدولك بانتظام.'});
+    items.push({tone:'success', title:'الوضع مستقر', body:'لا توجد تنبيهات مهمة حاليًا. استمر في متابعة الجدول والمقررات بانتظام.'});
   }
   return items.slice(0,6);
 }
@@ -3881,18 +3881,63 @@ function getStudentWeeklySchedule(st, mySubjs){
   return Object.values(scheduleData.weekly||{}).filter(slot=>subjectNames.has(slot.subject)).sort((a,b)=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day) || String(a.timeStart||'').localeCompare(String(b.timeStart||'')));
 }
 function renderStudentScheduleCards(slots){
-  if(!slots.length) return '<div class="alert alert-info">لم يتم اعتماد جدول المحاضرات لهذه الدفعة بعد.</div>';
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">${slots.map(slot=>`
-    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow);border-top:4px solid ${slot.color||'var(--primary)'};">
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">${slot.day}</div>
-      <div style="font-size:15px;font-weight:800;color:var(--primary-dark)">${slot.subject}</div>
-      <div style="font-size:12px;color:var(--text);margin-top:6px">${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">${slot.lecturer?`مقدم المقرر: ${slot.lecturer}`:'سيتم تحديث اسم مقدم المقرر لاحقًا'}${slot.room?` · القاعة: ${slot.room}`:''}</div>
-    </div>`).join('')}</div>`;
+  if(!slots.length) return '<div class="alert alert-info">لم يتم اعتماد جدول المحاضرات لهذه الدفعة حتى الآن.</div>';
+  const byDay={};
+  slots.forEach(slot=>{
+    const day=slot.day||'غير محدد';
+    if(!byDay[day]) byDay[day]=[];
+    byDay[day].push(slot);
+  });
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;">
+      <div style="padding:14px;border-radius:16px;background:linear-gradient(135deg,#eef4ff,#dfeaff);border:1px solid #d3e1ff;">
+        <div style="font-size:11px;color:#456">إجمالي المحاضرات</div>
+        <div style="font-size:28px;font-weight:900;color:#0D40FC;margin-top:6px">${slots.length}</div>
+        <div style="font-size:11px;color:#456">في الجدول الحالي</div>
+      </div>
+      <div style="padding:14px;border-radius:16px;background:linear-gradient(135deg,#f7fbff,#edf6ff);border:1px solid #d7e9ff;">
+        <div style="font-size:11px;color:#456">عدد الأيام</div>
+        <div style="font-size:28px;font-weight:900;color:#001442;margin-top:6px">${Object.keys(byDay).length}</div>
+        <div style="font-size:11px;color:#456">أيام دراسية</div>
+      </div>
+      <div style="padding:14px;border-radius:16px;background:linear-gradient(135deg,#fffaf0,#fff2d9);border:1px solid #ffe3ad;">
+        <div style="font-size:11px;color:#7a5200">أول محاضرة</div>
+        <div style="font-size:18px;font-weight:900;color:#b35c00;margin-top:8px">${slots[0]?.day||'—'}</div>
+        <div style="font-size:11px;color:#7a5200">${slots[0]?.timeStart||'—'}${slots[0]?.timeEnd?` - ${slots[0].timeEnd}`:''}</div>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-bottom:14px;">
+      <table>
+        <thead><tr><th>اليوم</th><th>الوقت</th><th>المقرر</th><th>مقدم المقرر</th><th>الموقع</th></tr></thead>
+        <tbody>${slots.map(slot=>`
+          <tr>
+            <td><span class="badge badge-student">${slot.day||'—'}</span></td>
+            <td><strong>${slot.timeStart||'—'}${slot.timeEnd?` - ${slot.timeEnd}`:''}</strong></td>
+            <td><div style="display:flex;align-items:center;gap:8px;"><span style="width:10px;height:10px;border-radius:50%;background:${slot.color||'var(--primary)'};display:inline-block;"></span><strong>${slot.subject||'—'}</strong></div></td>
+            <td>${slot.lecturer||'سيتم التحديث لاحقًا'}</td>
+            <td>${slot.room||'سيتم التحديث لاحقًا'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">${Object.entries(byDay).map(([day,daySlots])=>`
+      <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-size:14px;font-weight:800;color:var(--primary-dark)">${day}</div>
+          <span class="badge badge-admin">${daySlots.length} محاضرة</span>
+        </div>
+        ${daySlots.map(slot=>`
+          <div style="padding:10px 12px;background:var(--bg);border-radius:12px;margin-bottom:8px;border-right:4px solid ${slot.color||'var(--primary)'};">
+            <div style="font-size:13px;font-weight:700">${slot.subject||'—'}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${slot.timeStart||'—'}${slot.timeEnd?` - ${slot.timeEnd}`:''}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${slot.lecturer?`مقدم المقرر: ${slot.lecturer}`:'سيتم تحديث اسم مقدم المقرر لاحقًا'}${slot.room?` · الموقع: ${slot.room}`:''}</div>
+          </div>`).join('')}
+      </div>`).join('')}
+    </div>`;
 }
 function renderStudentUnitsTimeline(){
   const units=Object.values(scheduleData.units||{}).sort((a,b)=>(a.order||0)-(b.order||0));
-  if(!units.length) return '<div class="alert alert-info">سيظهر هنا مسار الكورس الكامل وبداية كل وحدة بمجرد اعتماده من الإدارة.</div>';
+  if(!units.length) return '<div class="alert alert-info">سيظهر هنا تسلسل الكورس الكامل وتواريخ الوحدات بعد اعتمادها من الإدارة.</div>';
   return `<div style="display:grid;gap:10px;">${units.map((unit,idx)=>`
     <div style="display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:start;">
       <div style="width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--primary),#55D7FF);color:white;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;">${unit.order||idx+1}</div>
@@ -3928,10 +3973,10 @@ function activateStudentPortalTab(tab){
 }
 function renderStudentQuickActions(){
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;">
-    <button class="btn btn-primary" onclick="activateStudentPortalTab('my-requests')">رفع طلب جديد</button>
-    <button class="btn" onclick="activateStudentPortalTab('my-transcript')">عرض كشف الدرجات</button>
-    <button class="btn" onclick="activateStudentPortalTab('my-financial')">عرض المالية</button>
-    <button class="btn" onclick="document.getElementById('panel-my-home')?.scrollIntoView({behavior:'smooth',block:'start'})">العودة للرئيسية</button>
+    <button class="btn btn-primary" onclick="activateStudentPortalTab('my-requests')">رفع طلب</button>
+    <button class="btn" onclick="activateStudentPortalTab('my-transcript')">كشف الدرجات</button>
+    <button class="btn" onclick="activateStudentPortalTab('my-financial')">المالية</button>
+    <button class="btn" onclick="document.getElementById('panel-my-home')?.scrollIntoView({behavior:'smooth',block:'start'})">الرئيسية</button>
   </div>`;
 }
 function renderStudentFinanceSummaryCard(st){
@@ -3975,12 +4020,12 @@ function renderStudentPortalHighlights(st, mySubjs){
     <div style="padding:16px;border-radius:18px;background:linear-gradient(135deg,#f3f7ff,#e8f0ff);border:1px solid #d9e6ff;">
       <div style="font-size:11px;color:#456">المقررات الحالية</div>
       <div style="font-size:30px;font-weight:900;color:#0D40FC;margin-top:6px">${activeCourses}</div>
-      <div style="font-size:11px;color:#456">مقرر نشط في الحساب</div>
+      <div style="font-size:11px;color:#456">مقرر ظاهر في الحساب</div>
     </div>
     <div style="padding:16px;border-radius:18px;background:linear-gradient(135deg,#fffaf0,#fff1d6);border:1px solid #ffe3ad;">
       <div style="font-size:11px;color:#7a5200">طلبات قيد المراجعة</div>
       <div style="font-size:30px;font-weight:900;color:#b35c00;margin-top:6px">${pendingRequests}</div>
-      <div style="font-size:11px;color:#7a5200">طلبات تحتاج متابعة</div>
+      <div style="font-size:11px;color:#7a5200">طلبات بانتظار الرد</div>
     </div>
     <div style="padding:16px;border-radius:18px;background:linear-gradient(135deg,#fff5f5,#ffe6e6);border:1px solid #ffd0d0;">
       <div style="font-size:11px;color:#8b1e1e">أقرب استحقاق مالي</div>
@@ -3993,7 +4038,7 @@ function renderStudentPortalRequests(st){
   const requests=getStudentPortalRequests(st?._fbKey);
   return `
     <div class="card card-accent" style="margin-bottom:1rem;">
-      <div class="card-title">📝 رفع طلب جديد</div>
+      <div class="card-title">📝 رفع طلب</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group" style="margin:0">
           <label>نوع الطلب</label>
@@ -4005,13 +4050,13 @@ function renderStudentPortalRequests(st){
           </select>
         </div>
         <div class="form-group" style="margin:0">
-          <label>عنوان مختصر</label>
+          <label>عنوان الطلب</label>
           <input type="text" id="studentPortalRequestTitle" placeholder="مثال: طلب مراجعة مقرر إدارة السلوك">
         </div>
       </div>
       <div class="form-group" style="margin-top:12px">
         <label>تفاصيل الطلب</label>
-        <textarea id="studentPortalRequestDetails" placeholder="اكتب تفاصيل الطلب بشكل واضح..." style="min-height:110px"></textarea>
+        <textarea id="studentPortalRequestDetails" placeholder="اكتب تفاصيل الطلب بشكل واضح ومباشر..." style="min-height:110px"></textarea>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-start">
         <button class="btn btn-primary" onclick="submitStudentPortalRequest()">رفع الطلب</button>
@@ -4135,7 +4180,7 @@ async function loadMyGrades() {
     <div class="student-profile-header" style="background:linear-gradient(135deg,var(--primary-dark),var(--primary),#55D7FF);">
       <div class="student-avatar" style="background:rgba(255,255,255,0.16);font-size:28px;">${(st.firstName||'؟')[0]}</div>
       <div style="flex:1">
-        <div style="font-size:24px;font-weight:900">مرحبًا، ${getStudentFullName(st)}</div>
+        <div style="font-size:24px;font-weight:900">أهلًا بك، ${getStudentFullName(st)}</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.78);margin-top:5px">${st.id} · ${st.program||'—'} · ${st.batch||'—'}</div>
         <div style="font-size:13px;color:white;margin-top:10px;max-width:680px">${motivationalText}</div>
       </div>
@@ -4158,12 +4203,12 @@ async function loadMyGrades() {
           ${renderStudentPortalNotifications(notifications)}
         </div>
         <div class="card card-accent" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
-          <div class="card-title">📌 ملخص سريع</div>
+          <div class="card-title">📌 ملخص الحساب</div>
           <div class="info-grid">
             <div class="info-item"><div class="info-item-label">البرنامج</div><div class="info-item-value">${st.program||'—'}</div></div>
             <div class="info-item"><div class="info-item-label">المسار</div><div class="info-item-value">${st.track||'—'}</div></div>
             <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${st.batch||'—'}</div></div>
-            <div class="info-item"><div class="info-item-label">نوع التسجيل</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
+            <div class="info-item"><div class="info-item-label">نوع الباقة</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
             <div class="info-item"><div class="info-item-label">المقررات</div><div class="info-item-value">${mySubjs.length}</div></div>
             <div class="info-item"><div class="info-item-label">الفصل</div><div class="info-item-value">${semester?.name||'—'}</div></div>
           </div>
@@ -4190,7 +4235,7 @@ async function loadMyGrades() {
           <div style="display:grid;gap:10px;">${PROGRAM_POLICIES_DEFAULT.map(policy=>`
             <div style="padding:10px 12px;background:var(--bg);border-radius:12px;font-size:12px;color:var(--text)">${policy}</div>`).join('')}
           </div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:10px">يمكن استبدال هذه السياسات بالنص الرسمي النهائي عند اعتماده.</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:10px">يمكن استبدال هذه السياسات بالنص الرسمي النهائي بعد اعتماده.</div>
         </div>
       </div>
       <div class="card card-accent" style="margin-bottom:14px;background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
@@ -4199,7 +4244,7 @@ async function loadMyGrades() {
       </div>
       <div class="card card-accent" style="background:linear-gradient(135deg,#ffffff,#fbfcff);border:1px solid #e2ebff;">
         <div class="card-title">🧭 مسار الكورس والفصل</div>
-        ${semester?`<div class="alert alert-info">الفصل: <strong>${semester.name||'—'}</strong>${semester.startDate?` · البداية: ${semester.startDate}`:''}${semester.endDate?` · النهاية: ${semester.endDate}`:''}</div>`:'<div class="alert alert-info">لم يتم اعتماد فصل نشط لهذه الدفعة بعد.</div>'}
+        ${semester?`<div class="alert alert-info">الفصل الحالي: <strong>${semester.name||'—'}</strong>${semester.startDate?` · البداية: ${semester.startDate}`:''}${semester.endDate?` · النهاية: ${semester.endDate}`:''}</div>`:'<div class="alert alert-info">لم يتم اعتماد فصل نشط لهذه الدفعة حتى الآن.</div>'}
         ${renderStudentUnitsTimeline()}
       </div>
     </div>
@@ -4210,7 +4255,7 @@ async function loadMyGrades() {
           <div class="info-item"><div class="info-item-label">البرنامج</div><div class="info-item-value">${st.program||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">المسار</div><div class="info-item-value">${st.track||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${st.batch||'—'}</div></div>
-          <div class="info-item"><div class="info-item-label">نوع التسجيل</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
+          <div class="info-item"><div class="info-item-label">نوع الباقة</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">تاريخ التسجيل</div><div class="info-item-value">${st.regDate||'—'}</div></div>
         </div>
         <div style="margin-top:1rem;">${mySubjs.map(subj=>{
