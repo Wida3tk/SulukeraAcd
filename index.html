@@ -2013,11 +2013,18 @@ async function doLogin(){
       }
       await upgradeLegacyPassword(user,password);
       currentUser={...user};
-      await _finishLogin();
       if(loginRole==='student'){
         const stdIdx=students.findIndex(s=>s.id===username);
-        if(stdIdx>=0)currentUser.studentIdx=stdIdx;
+        if(stdIdx<0){
+          currentUser=null;
+          document.getElementById('loginError').style.display='block';
+          if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
+          showToast('⚠️ تعذر ربط الحساب بسجل الطالب أو الطالبة');
+          return;
+        }
+        currentUser.studentIdx=stdIdx;
       }
+      await _finishLogin();
       if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
       return;
     }
