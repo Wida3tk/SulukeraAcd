@@ -3316,6 +3316,75 @@ function renderStudentAdminSheet(stdIdx, st){
       </div>
     </div>`;
 }
+function renderStudentAdminSheet(stdIdx, st){
+  const sheet=getStudentAdminSheet(st?._fbKey) || {};
+  const statusField=(id,label,value,options,noteValue,noteLabel='ملاحظات')=>`
+    <div style="background:linear-gradient(180deg,#ffffff,#f9fbff);border:1px solid #d9e4ff;border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px;height:100%;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:15px;font-weight:800;color:var(--primary-dark)">${label}</div>
+        <span class="badge badge-student">متابعة</span>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label style="margin-bottom:6px">الحالة الحالية</label>
+        <select id="${id}">
+          ${options.map(option=>`<option value="${option.value}" ${value===option.value?'selected':''}>${option.label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;flex:1;">
+        <label style="margin-bottom:6px">${noteLabel}</label>
+        <textarea id="${id}_notes" placeholder="${noteLabel}" style="min-height:124px">${escapeHtml(noteValue||'')}</textarea>
+      </div>
+    </div>`;
+  const traineeStatusOptions=[
+    {value:'active',label:'مستمر'},
+    {value:'paused',label:'مؤجل'},
+    {value:'withdrawn',label:'منسحب'},
+    {value:'stopped',label:'متوقف'}
+  ];
+  const completionStatusOptions=[
+    {value:'in_progress',label:'مستمر في الدراسة'},
+    {value:'completed_courses',label:'أنهى المقررات'},
+    {value:'academically_completed',label:'مكتمل أكاديميًا'},
+    {value:'at_risk',label:'متعثر'}
+  ];
+  const certificateStatusOptions=[
+    {value:'not_eligible',label:'غير مستحق بعد'},
+    {value:'under_review',label:'بانتظار المراجعة'},
+    {value:'approved',label:'معتمد'},
+    {value:'blocked',label:'موقوف لوجود نواقص'}
+  ];
+  return `
+    <div class="card card-accent" style="background:linear-gradient(180deg,#ffffff,#f7faff);border:1px solid #d9e4ff;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px;">
+        <div>
+          <div class="card-title" style="margin-bottom:6px;border:none;padding-bottom:0">بطاقة المتدرب الإدارية</div>
+          <div style="font-size:12px;color:var(--text-muted);line-height:1.8;max-width:760px;">متابعة داخلية واضحة لحالة المتدرب، الإنجاز، الشهادة، وملاحظات التواصل والإدارة في مكان واحد.</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveStudentAdminSheetFromProfile(${stdIdx})">حفظ البطاقة</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;">
+        ${statusField('studentSheet_traineeStatus','حالة المتدرب',sheet.traineeStatus||'active',traineeStatusOptions,sheet.traineeStatusNotes,'ملاحظات حالة المتدرب')}
+        ${statusField('studentSheet_completionStatus','حالة الإنجاز',sheet.completionStatus||'in_progress',completionStatusOptions,sheet.completionStatusNotes,'ملاحظات الإنجاز')}
+        ${statusField('studentSheet_certificateStatus','حالة الشهادة',sheet.certificateStatus||'not_eligible',certificateStatusOptions,sheet.certificateStatusNotes,'ملاحظات الشهادة')}
+      </div>
+      <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-top:14px;">
+        <div style="background:#fff;border:1px solid #d9e4ff;border-radius:18px;padding:18px;">
+          <div style="font-size:15px;font-weight:800;color:var(--primary-dark);margin-bottom:12px">ملاحظات إدارية</div>
+          <div class="form-group" style="margin:0">
+            <label style="margin-bottom:6px">تفاصيل المتابعة الداخلية</label>
+            <textarea id="studentSheet_adminNotes" placeholder="دوّني هنا أي ملاحظات إدارية إضافية تخص الملف أو المتابعة." style="min-height:190px">${escapeHtml(sheet.adminNotes||'')}</textarea>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #d9e4ff;border-radius:18px;padding:18px;">
+          <div style="font-size:15px;font-weight:800;color:var(--primary-dark);margin-bottom:12px">ملاحظات علاقات العملاء</div>
+          <div class="form-group" style="margin:0">
+            <label style="margin-bottom:6px">التواصل والمتابعة</label>
+            <textarea id="studentSheet_customerRelationsNotes" placeholder="اكتبي ملخص التواصل، المواعيد، أو أي متابعة مرتبطة بخدمة المتدرب." style="min-height:190px">${escapeHtml(sheet.customerRelationsNotes||'')}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
 async function saveStudentAdminSheetFromProfile(stdIdx){
   const st=students[stdIdx];
   if(!st?._fbKey) return showToast('تعذر تحديد المتدرب');
