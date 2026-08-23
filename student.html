@@ -442,6 +442,54 @@ const STUDENT_MOTIVATIONS = [
   'التقدم اليومي الصغير يصنع فرقًا كبيرًا مع نهاية الفصل.',
   'ترتيبك لوقتك أهم من عدد الساعات التي تدرسها.'
 ];
+const PORTAL_BATCH_SEMESTERS = {
+  'Q1-26': {
+    code: 'Q1-26',
+    batchLabel: 'الدفعة العاشرة',
+    name: 'الفصل الرابع',
+    semesterNo: 4,
+    startDate: '2027/04/01',
+    endDate: '2027/06/30'
+  },
+  'Q2-26': {
+    code: 'Q2-26',
+    batchLabel: 'الدفعة الحادية عشرة',
+    name: 'الفصل الثاني',
+    semesterNo: 2,
+    startDate: '2026/12/01',
+    endDate: '2027/03/31'
+  },
+  'Q3-26': {
+    code: 'Q3-26',
+    batchLabel: 'الدفعة الثانية عشرة',
+    name: 'الفصل الأول',
+    semesterNo: 1,
+    startDate: '2026/08/24',
+    endDate: '2026/11/30'
+  }
+};
+const PORTAL_FALLBACK_WEEKLY = {
+  'Q1-26': [
+    { batch:'Q1-26', day:'الأربعاء', timeStart:'18:00', timeEnd:'20:00', subject:'نهج تحليلات السلوك', lecturer:'ماريا', color:'#0D40FC' },
+    { batch:'Q1-26', day:'الأحد', timeStart:'18:00', timeEnd:'20:00', subject:'تطبيقات خاصة', lecturer:'د. رحاب الزاير', color:'#1a7a3c' },
+    { batch:'Q1-26', day:'الاثنين', timeStart:'18:00', timeEnd:'20:00', subject:'التدريب والإشراف', lecturer:'ياسمين', color:'#b35c00' }
+  ],
+  'Q2-26': [
+    { batch:'Q2-26', day:'الاثنين', timeStart:'18:00', timeEnd:'20:00', subject:'مفهوم القياس', lecturer:'د. نوف', color:'#0D40FC' },
+    { batch:'Q2-26', day:'الثلاثاء', timeStart:'18:00', timeEnd:'20:00', subject:'التقييم في تحليل السلوك التطبيقي', lecturer:'د. محمد', color:'#1a7a3c' },
+    { batch:'Q2-26', day:'الأربعاء', timeStart:'18:00', timeEnd:'20:00', subject:'مبادئ في تحليل السلوك', lecturer:'ريم', color:'#b35c00' }
+  ],
+  'Q3-26': [
+    { batch:'Q3-26', day:'الاثنين', timeStart:'18:00', timeEnd:'20:00', subject:'مفهوم القياس', lecturer:'د. نوف', color:'#0D40FC' },
+    { batch:'Q3-26', day:'الثلاثاء', timeStart:'18:00', timeEnd:'20:00', subject:'التقييم في تحليل السلوك التطبيقي', lecturer:'د. محمد', color:'#1a7a3c' },
+    { batch:'Q3-26', day:'الأربعاء', timeStart:'18:00', timeEnd:'20:00', subject:'مبادئ في تحليل السلوك', lecturer:'ريم', color:'#b35c00' }
+  ]
+};
+const PORTAL_PROGRAM_STAGES = [
+  { order:1, title:'الفصل الأول', dateRange:'2026/08/24 - 2026/11/30' },
+  { order:2, title:'الفصل الثاني', dateRange:'2026/12/01 - 2027/03/31' },
+  { order:4, title:'الفصل الرابع', dateRange:'2027/04/01 - 2027/06/30' }
+];
 
 // ══════════════════════════════════════════════
 //  HELPERS
@@ -715,33 +763,33 @@ function renderStudentHomeTab(){
   const reviewedRequests = requests.filter(request=>request.reviewedAt).length;
   const crossBatchCourses = mySubjects.filter(subject=>subject.batch && !sameBatchName(subject.batch, st.batch)).length;
   const ungradedCourses = mySubjects.filter(subject=>!getGrade_data(currentUser.fbKey, subject.key)).length;
-  const urgentFocus = hasFail ? 'راجعي المقررات التي عليها تنبيه أكاديمي ثم ارفعي طلب دعم إذا احتجتِ.' : 'ثبّتي إيقاعك هذا الأسبوع وراجعي الدرجات بعد كل عملية رصد.';
+  const urgentFocus = hasFail ? 'راجع المقررات التي عليها تنبيه أكاديمي ثم ارفع طلب دعم عند الحاجة.' : 'استمر على المتابعة الأسبوعية وراجع الدرجات بعد كل عملية رصد.';
   const semesterDaysText = semester?.startDate || semester?.endDate
     ? `${semester?.startDate||'—'} إلى ${semester?.endDate||'—'}`
     : 'لم يتم تحديد بداية ونهاية الفصل بعد';
   const studentAlerts = [
     hasFail ? {
       title:'تنبيه أكاديمي',
-      body:'لديك مقرر أو أكثر بحاجة إلى متابعة. افتحي الدرجات وراجعي مواضع التعثر مبكرًا.',
-      action:'📊 افتحي الدرجات',
+      body:'يوجد مقرر أو أكثر بحاجة إلى متابعة. افتح صفحة الدرجات وراجع مواضع التعثر مباشرة.',
+      action:'📊 فتح الدرجات',
       tab:'grades'
     } : null,
     pendingRequests ? {
       title:'طلبات قيد المراجعة',
       body:`يوجد ${pendingRequests} طلب ${pendingRequests===1?'مفتوح':'مفتوحة'} بانتظار المتابعة من الإدارة.`,
-      action:'📝 تابعي طلباتك',
+      action:'📝 متابعة الطلبات',
       tab:'requests'
     } : null,
     ungradedCourses ? {
       title:'مقررات بانتظار الرصد',
       body:`يوجد ${ungradedCourses} مقرر لم يتم رصد درجاته بعد بشكل كامل.`,
-      action:'📄 راجعي كشف الدرجات',
+      action:'📄 فتح كشف الدرجات',
       tab:'transcript'
     } : null,
     crossBatchCourses ? {
       title:'تسجيلات من دفعات أخرى',
-      body:`لديك ${crossBatchCourses} مقرر مسجل استثنائيًا من دفعة أخرى، تأكدي من جدوله بشكل مستمر.`,
-      action:'📚 افتحي مقرراتي',
+      body:`يوجد ${crossBatchCourses} مقرر مسجل استثنائيًا من دفعة أخرى. راجع جدوله ضمن الخطة الحالية.`,
+      action:'📚 فتح المقررات',
       tab:'courses'
     } : null
   ].filter(Boolean);
@@ -774,8 +822,8 @@ function renderStudentHomeTab(){
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">أقرب محاضرة</div>
-          <div style="font-size:14px;font-weight:800">${nextClass?.subject||'لا توجد محاضرات مضافة بعد'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextClass?`${nextClass.day||'—'} · ${nextClass.timeStart||'—'} - ${nextClass.timeEnd||'—'}`:'راجعي الإدارة لإضافة الجدول'}</div>
+          <div style="font-size:14px;font-weight:800">${nextClass?.subject||'لا توجد محاضرات معتمدة حالياً'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextClass?`${nextClass.day||'—'} · ${nextClass.timeStart||'—'} - ${nextClass.timeEnd||'—'}`:'الجدول بانتظار الاعتماد الإداري'}</div>
         </div>
       </div>
     </div>
@@ -798,10 +846,10 @@ function renderStudentHomeTab(){
           </div>
         </div>
         <div style="display:grid;gap:8px;">
-          <button class="btn-out" onclick="switchAppTab('grades', document.querySelectorAll('.app-tab')[2])">📊 افتحي الدرجات</button>
-          <button class="btn-out" onclick="switchAppTab('requests', document.querySelectorAll('.app-tab')[4])">📝 ارفعي طلبًا</button>
+          <button class="btn-out" onclick="switchAppTab('grades', document.querySelectorAll('.app-tab')[2])">📊 فتح الدرجات</button>
+          <button class="btn-out" onclick="switchAppTab('requests', document.querySelectorAll('.app-tab')[4])">📝 رفع طلب</button>
           <button class="btn-out" onclick="switchAppTab('transcript', document.querySelectorAll('.app-tab')[3])">📄 كشف الدرجات</button>
-          <button class="btn-out" onclick="switchAppTab('schedule', document.querySelectorAll('.app-tab')[7])">📅 راجعي الجدول</button>
+          <button class="btn-out" onclick="switchAppTab('schedule', document.querySelectorAll('.app-tab')[7])">📅 فتح الجدول</button>
         </div>
       </div>
     </div>
@@ -815,8 +863,8 @@ function renderStudentHomeTab(){
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">الأولوية الحالية</div>
-          <div style="font-size:13px;font-weight:800">${hasFail?'راجعي المقررات المتعثرة':'استمري على نفس الوتيرة'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px">${hasFail?'يوجد تنبيه أكاديمي يحتاج متابعة':'وضعك الأكاديمي الحالي جيد'}</div>
+          <div style="font-size:13px;font-weight:800">${hasFail?'مراجعة المقررات المتعثرة مطلوبة':'التقدم الأكاديمي مستقر'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">${hasFail?'يوجد تنبيه أكاديمي يحتاج إجراء':'الوضع الأكاديمي الحالي جيد'}</div>
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">خطة الطالب</div>
@@ -830,8 +878,8 @@ function renderStudentHomeTab(){
       ${scheduleSlots.length ? `<div style="display:grid;gap:8px;">${scheduleSlots.slice(0,4).map(slot=>`
         <div style="padding:11px 13px;background:var(--bg);border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center;">
           <div><strong>${slot.subject||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${slot.day||'—'} · ${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div></div>
-          <div style="font-size:11px;color:var(--muted)">${slot.room?`🏠 ${slot.room}`:'بدون قاعة'}</div>
-        </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بجدولك حتى الآن</div>'}
+          <div style="font-size:11px;color:var(--muted)">${slot.lecturer?`مقدم المقرر: ${slot.lecturer}`:'مقدم المقرر غير مضاف'}</div>
+        </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات معتمدة في جدولك حالياً</div>'}
     </div>
     <div class="card">
       <div class="card-title">🔔 تنبيهاتك الحالية</div>
@@ -842,7 +890,7 @@ function renderStudentHomeTab(){
             <div style="font-size:11px;color:var(--muted);margin-top:4px">${alert.body}</div>
           </div>
           <button class="btn-out" onclick="switchAppTab('${alert.tab}', getAppTabButtonById('${alert.tab}'))">${alert.action}</button>
-        </div>`).join('')}</div>` : '<div class="empty">لا توجد تنبيهات على حسابك حاليًا</div>'}
+        </div>`).join('')}</div>` : '<div class="empty">لا توجد تنبيهات على الحساب حالياً</div>'}
     </div>
     <div class="card">
       <div class="card-title">📘 سياسات سريعة</div>
@@ -854,15 +902,15 @@ function renderStudentHomeTab(){
           <strong>الطلبات</strong><br>كل طلب يرفع من داخل البوابة لضمان التوثيق والمتابعة الرسمية.
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px;line-height:1.8">
-          <strong>الدرجات</strong><br>راجعي الدرجات دوريًا وإذا ظهر خلل استخدمي طلب مراجعة الدرجات مباشرة.
+          <strong>الدرجات</strong><br>راجع الدرجات بشكل دوري، وعند وجود ملاحظة استخدم طلب مراجعة الدرجات مباشرة.
         </div>
       </div>
     </div>
     <div class="card">
       <div class="card-title">📌 نصائح للدراسة</div>
       <div style="display:grid;gap:8px;">
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">تابعي <strong>جدولي</strong> يوميًا قبل بداية المحاضرات.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجعي <strong>درجاتي</strong> بعد كل عملية رصد لتتابعي تقدمك أولًا بأول.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع <strong>جدولي</strong> يوميًا قبل بداية المحاضرات.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع <strong>درجاتي</strong> بعد كل عملية رصد لمتابعة التقدم أولاً بأول.</div>
         <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">استخدمي <strong>طلباتي</strong> لرفع أي طلب أكاديمي أو مراجعة درجات بشكل رسمي.</div>
       </div>
     </div>`;
@@ -1173,11 +1221,24 @@ function getStudentRequests(){
     .filter(request=>request.studentKey===currentUser.fbKey)
     .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
 }
+function getPortalBatchProfile(batch){
+  return PORTAL_BATCH_SEMESTERS[normalizeBatchName(batch)] || null;
+}
 function getCurrentSemesterForBatch(batch){
-  return Object.values(dbData.semesters||{}).find(semester=>
+  const liveSemester = Object.values(dbData.semesters||{}).find(semester=>
     (semester.status==='active' || semester.status==='current') &&
     (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
-  ) || null;
+  );
+  if(liveSemester) return liveSemester;
+  const fallback = getPortalBatchProfile(batch);
+  return fallback ? {
+    name: fallback.name,
+    semesterNo: fallback.semesterNo,
+    startDate: fallback.startDate,
+    endDate: fallback.endDate,
+    batches: [fallback.code],
+    status: 'current'
+  } : null;
 }
 function sortScheduleSlots(slots){
   const dayOrder = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
@@ -1191,20 +1252,44 @@ function getStudentScheduleSlots(student=currentUser?.data){
   if(!student) return [];
   const mySubjectNames = new Set(getStudentSubjects(currentUser.fbKey).map(subject=>subject.name));
   const weekly = Object.values(dbData.schedule?.weekly||{});
-  return sortScheduleSlots(weekly.filter(slot=>{
+  const matched = weekly.filter(slot=>{
     const sameBatch = !slot.batch || normalizeBatchName(slot.batch)===normalizeBatchName(student.batch);
     const sameSubject = !slot.subject || mySubjectNames.has(slot.subject);
     return sameBatch && sameSubject;
-  }));
+  });
+  if(matched.length) return sortScheduleSlots(matched);
+  return sortScheduleSlots(PORTAL_FALLBACK_WEEKLY[normalizeBatchName(student.batch)] || []);
 }
 function getLecturerScheduleSlots(){
   const lecturerName = currentUser?.data?.name;
   const mySubjectNames = new Set(getLecturerSubjects().map(subject=>subject.name));
   const weekly = Object.values(dbData.schedule?.weekly||{});
-  return sortScheduleSlots(weekly.filter(slot=>
+  const matched = weekly.filter(slot=>
     (slot.lecturer && lecturerName && slot.lecturer===lecturerName) ||
     (slot.subject && mySubjectNames.has(slot.subject))
-  ));
+  );
+  if(matched.length) return sortScheduleSlots(matched);
+  const fallback = getLecturerSubjects().flatMap(subject=>{
+    const batchKey = normalizeBatchName(subject.batch);
+    return (PORTAL_FALLBACK_WEEKLY[batchKey] || []).filter(slot=>slot.subject===subject.name);
+  });
+  return sortScheduleSlots(fallback);
+}
+function getProgramScheduleForRole(){
+  if(currentUser?.role==='student'){
+    const batchKey = normalizeBatchName(currentUser?.data?.batch);
+    return {
+      batchKey,
+      semester: getPortalBatchProfile(batchKey)
+    };
+  }
+  if(currentUser?.role==='lecturer'){
+    const batches = [...new Set(getLecturerSubjects().map(subject=>normalizeBatchName(subject.batch)).filter(Boolean))];
+    return {
+      semesterList: batches.map(batchKey=>getPortalBatchProfile(batchKey)).filter(Boolean)
+    };
+  }
+  return {};
 }
 function getNextUpcomingSlot(slots){
   if(!slots.length) return null;
@@ -1549,7 +1634,7 @@ function renderLecturerHomeTab(){
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">أقرب محاضرة</div>
           <div style="font-size:14px;font-weight:800">${nextSlot?.subject || 'لا توجد محاضرات مرتبطة بجدولك'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextSlot ? `${nextSlot.day||'—'} · ${nextSlot.timeStart||'—'} - ${nextSlot.timeEnd||'—'}` : 'راجعي الإدارة لربط الجدول بالمحاضر أو المقرر'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextSlot ? `${nextSlot.day||'—'} · ${nextSlot.timeStart||'—'} - ${nextSlot.timeEnd||'—'}` : 'الجدول بانتظار الربط بالمحاضر أو المقرر'}</div>
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">دفعاتك الحالية</div>
@@ -1562,7 +1647,7 @@ function renderLecturerHomeTab(){
       <div class="card-title">📌 أولوياتك اليوم</div>
       <div style="display:grid;gap:8px;">
         <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">ادخلي إلى <strong>إدخال الدرجات</strong> لإكمال الرصد الناقص أو تحديث أعمال الأسابيع.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجعي <strong>مقرراتي</strong> لمعرفة توزيع الطلاب على الدفعات والمقررات.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">افتح <strong>مقرراتي</strong> لمراجعة توزيع الطلاب على الدفعات والمقررات.</div>
         <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">تحققي من <strong>جدولي</strong> قبل بدء المحاضرات للتأكد من القاعات والأوقات.</div>
       </div>
     </div>
@@ -1586,7 +1671,7 @@ function renderLecturerHomeTab(){
         <div style="padding:11px 13px;background:var(--bg);border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center;">
           <div><strong>${slot.subject||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${slot.day||'—'} · ${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div></div>
           <div style="font-size:11px;color:var(--muted)">${slot.room?`🏠 ${slot.room}`:'بدون قاعة'}</div>
-        </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بجدولك حتى الآن</div>'}
+        </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بالحساب حالياً</div>'}
     </div>`;
 }
 
@@ -1875,13 +1960,15 @@ function renderScheduleView(){
   const el = document.getElementById('scheduleContent');
   const schedule = dbData.schedule || {};
   let weekly = schedule.weekly || {};
-  const units = schedule.units || {};
+  let units = schedule.units || {};
   if(currentUser?.role==='student'){
     const visible = getStudentScheduleSlots(currentUser.data);
     weekly = Object.fromEntries(visible.map((slot,index)=>['student_'+index, slot]));
+    units = {};
   } else if(currentUser?.role==='lecturer'){
     const visible = getLecturerScheduleSlots();
     weekly = Object.fromEntries(visible.map((slot,index)=>['lecturer_'+index, slot]));
+    units = {};
   }
 
   let html = `
@@ -1907,102 +1994,130 @@ function switchSchTab(tab, btn){
 }
 
 function renderWeeklySchedule(weekly){
-  const slots = Object.values(weekly).sort((a,b)=>a.timeStart?.localeCompare(b.timeStart));
-  if(!slots.length) return '<div class="empty">📅 لم يتم إضافة جدول أسبوعي بعد</div>';
-
-  // الوقت الحالي بتوقيت السعودية
-  const nowSA = new Date().toLocaleString('en-US',{timeZone:'Asia/Riyadh'});
-  const nowDate = new Date(nowSA);
-  const nowH = nowDate.getHours();
-  const nowM = nowDate.getMinutes();
-  const nowMins = nowH*60+nowM;
-
-  // ترتيب الأوقات الفريدة
-  const times = [...new Set(slots.map(s=>s.timeStart+'-'+s.timeEnd))]
-    .sort((a,b)=>a.localeCompare(b));
-
-  let html = `
-  <div style="margin-bottom:8px;font-size:11px;color:var(--muted);text-align:left">
-    🕐 التوقيت: ${new Date().toLocaleTimeString('ar-SA',{timeZone:'Asia/Riyadh',hour:'2-digit',minute:'2-digit',hour12:true})} (توقيت الرياض)
-  </div>
-  <div style="overflow-x:auto;margin-bottom:1rem;">
-  <table style="width:100%;border-collapse:collapse;min-width:600px;">
-    <thead>
-      <tr>
-        <th style="background:var(--dark);color:white;padding:10px 12px;text-align:center;font-size:12px;min-width:110px;border-radius:0 6px 0 0">الوقت</th>
-        ${DAYS.map(d=>`<th style="background:var(--dark);color:white;padding:10px 8px;text-align:center;font-size:12px;">${d}</th>`).join('')}
-      </tr>
-    </thead>
-    <tbody>
-      ${times.map(time=>{
-        const [start,end] = time.split('-');
-        const [sh,sm] = start.split(':').map(Number);
-        const [eh,em] = end.split(':').map(Number);
-        const startMins = sh*60+sm;
-        const endMins = eh*60+em;
-        const isCurrent = nowMins>=startMins && nowMins<endMins;
-        const rowBg = isCurrent ? 'rgba(13,64,252,0.04)' : 'white';
-        return `<tr style="background:${rowBg};">
-          <td style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);border-left:1px solid var(--border);${isCurrent?'border-left:3px solid var(--primary);':''}">
-            <div style="font-size:13px;font-weight:700;color:${isCurrent?'var(--primary)':'var(--text)'}">${to12h(start)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${to12h(end)}</div>
-            ${isCurrent?'<div style="font-size:9px;color:var(--primary);font-weight:700;margin-top:2px">● الآن</div>':''}
-          </td>
-          ${DAYS.map(day=>{
-            const slot = slots.find(s=>s.day===day && s.timeStart===start && s.timeEnd===end);
-            return `<td style="padding:5px;border-bottom:1px solid var(--border);border-left:1px solid var(--border);vertical-align:top;">
-              ${slot ? `<div style="background:${slot.color||'var(--primary)'};color:white;border-radius:8px;padding:8px 10px;height:100%;">
-                <div style="font-size:12px;font-weight:700;line-height:1.3">${slot.subject||''}</div>
-                ${slot.lecturer?`<div style="font-size:10px;opacity:0.85;margin-top:3px">👤 ${slot.lecturer}</div>`:''}
-                ${slot.room?`<div style="font-size:10px;opacity:0.85;margin-top:2px">🏠 ${slot.room}</div>`:''}
-              </div>` : ''}
-            </td>`;
-          }).join('')}
-        </tr>`;
-      }).join('')}
-    </tbody>
-  </table>
-  </div>`;
-
-  // Legend
-  const subjNames = [...new Set(slots.map(s=>s.subject).filter(Boolean))];
-  if(subjNames.length){
-    html += `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:8px 0">
-      ${subjNames.map(s=>{
-        const color = slots.find(sl=>sl.subject===s)?.color||'var(--primary)';
-        return `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);">
-          <span style="width:12px;height:12px;border-radius:3px;background:${color};display:inline-block;flex-shrink:0"></span>${s}
-        </span>`;
-      }).join('')}
+  const slots = sortScheduleSlots(Object.values(weekly));
+  if(!slots.length) return '<div class="empty">لا يوجد جدول محاضرات معتمد حالياً.</div>';
+  const semester = currentUser?.role==='student'
+    ? getPortalBatchProfile(currentUser?.data?.batch)
+    : null;
+  const heading = semester ? `${semester.batchLabel} (${semester.name})` : 'جدول المحاضرات';
+  return `
+    <div class="card" style="margin-bottom:14px;background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+        <div>
+          <div class="card-title" style="margin:0;border:none;padding:0">${heading}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px">يعرض هذا الجدول المحاضرات المعتمدة للحساب الحالي.</div>
+        </div>
+        <div style="padding:10px 14px;border-radius:14px;background:#eef4ff;color:#0D40FC;font-size:12px;font-weight:800;">
+          ${slots.length} محاضرات أسبوعية
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:separate;border-spacing:0;min-width:680px;border:1px solid #cddcff;border-radius:16px;overflow:hidden;">
+          <thead>
+            <tr>
+              <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:right;font-size:13px;font-weight:800;">المحاضرة</th>
+              <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">الموعد</th>
+              <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">المحاضر</th>
+              <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">اليوم</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${slots.map((slot,index)=>`
+              <tr style="background:${index%2===0?'#ffffff':'#f9fbff'};">
+                <td style="padding:14px 16px;border-top:1px solid #e5edf8;font-size:13px;font-weight:700;color:#0f1f3d;">
+                  <span style="display:inline-block;width:10px;height:10px;border-radius:999px;background:${slot.color||'#0D40FC'};margin-left:8px;"></span>
+                  ${slot.subject||'—'}
+                </td>
+                <td style="padding:14px 16px;border-top:1px solid #e5edf8;text-align:center;font-size:13px;font-weight:700;color:#334155;">${to12h(slot.timeStart||'18:00')} - ${to12h(slot.timeEnd||'20:00')}</td>
+                <td style="padding:14px 16px;border-top:1px solid #e5edf8;text-align:center;font-size:13px;color:#334155;">${slot.lecturer||'غير محدد'}</td>
+                <td style="padding:14px 16px;border-top:1px solid #e5edf8;text-align:center;font-size:13px;font-weight:700;color:#334155;">${slot.day||'—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
     </div>`;
-  }
-  return html;
 }
 
 function renderProgramSchedule(units){
+  const roleProgram = getProgramScheduleForRole();
+  if(currentUser?.role==='student'){
+    const semester = roleProgram.semester;
+    if(!semester) return '<div class="empty">لا توجد خطة برنامج معتمدة لهذه الدفعة حالياً.</div>';
+    return `
+      <div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:14px;margin-bottom:14px;">
+        <div class="card" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
+          <div class="card-title">خطة البرنامج الحالية</div>
+          <div style="display:grid;gap:10px;">
+            <div style="padding:12px 14px;background:#eef4ff;border-radius:14px;border:1px solid #d9e6ff;">
+              <div style="font-size:11px;color:#456">الدفعة</div>
+              <div style="font-size:18px;font-weight:900;color:#0D40FC;margin-top:6px">${semester.batchLabel}</div>
+              <div style="font-size:12px;color:#456;margin-top:6px">${semester.code}</div>
+            </div>
+            <div style="padding:12px 14px;background:#f8fbff;border-radius:14px;border:1px solid #e2ebff;">
+              <div style="font-size:11px;color:#456">الفصل الحالي</div>
+              <div style="font-size:18px;font-weight:900;color:#0f1f3d;margin-top:6px">${semester.name}</div>
+              <div style="font-size:12px;color:#456;margin-top:6px">${semester.startDate} إلى ${semester.endDate}</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="background:linear-gradient(135deg,#ffffff,#fffdf8);border:1px solid #efe3bf;">
+          <div class="card-title">التقويم الأكاديمي</div>
+          <div style="display:grid;gap:10px;">
+            <div style="padding:10px 12px;border-radius:12px;background:#eef8e8;border:1px solid #d7e8c7;font-size:12px;"><strong>بداية الدراسة:</strong> 2026/08/24</div>
+            <div style="padding:10px 12px;border-radius:12px;background:#f8fbff;border:1px solid #e2ebff;font-size:12px;"><strong>السنة الأكاديمية:</strong> 2026/2027</div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="background:linear-gradient(135deg,#ffffff,#fbfcff);border:1px solid #e2ebff;">
+        <div class="card-title">مراحل البرنامج</div>
+        <div style="display:grid;gap:10px;">
+          ${PORTAL_PROGRAM_STAGES.map(stage=>`
+            <div style="display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center;padding:12px 14px;border:1px solid ${stage.order===semester.semesterNo?'#bfd2ff':'#e5edf8'};background:${stage.order===semester.semesterNo?'#eef4ff':'#fff'};border-radius:16px;">
+              <div style="width:44px;height:44px;border-radius:14px;background:${stage.order===semester.semesterNo?'#0D40FC':'#d9e8f8'};color:${stage.order===semester.semesterNo?'#fff':'#1c2f4d'};display:flex;align-items:center;justify-content:center;font-weight:900;">${stage.order}</div>
+              <div>
+                <div style="font-size:14px;font-weight:800;color:#0f1f3d;">${stage.title}</div>
+                <div style="font-size:12px;color:#5b6b82;margin-top:4px;">${stage.dateRange}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+  const lecturerSemesters = roleProgram.semesterList || [];
+  if(currentUser?.role==='lecturer'){
+    if(!lecturerSemesters.length) return '<div class="empty">لا توجد دفعات مرتبطة بحساب المحاضر حالياً.</div>';
+    return `
+      <div class="card" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
+        <div class="card-title">مراحل الدفعات المرتبطة بحساب المحاضر</div>
+        <div style="display:grid;gap:10px;">
+          ${lecturerSemesters.map(semester=>`
+            <div style="padding:14px 16px;border:1px solid #e2ebff;border-radius:16px;background:#fff;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div>
+                  <div style="font-size:15px;font-weight:900;color:#0f1f3d;">${semester.batchLabel}</div>
+                  <div style="font-size:12px;color:#5b6b82;margin-top:4px;">${semester.code}</div>
+                </div>
+                <span style="padding:8px 12px;border-radius:999px;background:#eef4ff;color:#0D40FC;font-size:12px;font-weight:800;">${semester.name}</span>
+              </div>
+              <div style="font-size:12px;color:#5b6b82;margin-top:10px;">الفترة المعتمدة: ${semester.startDate} إلى ${semester.endDate}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
   const unitList = Object.entries(units).sort(([,a],[,b])=>a.order-b.order);
-  if(!unitList.length) return '<div class="empty">📚 لم يتم إضافة وحدات البرنامج بعد</div>';
-
-  const colors = ['#0D40FC','#1a7a3c','#b35c00','#8e44ad','#c0392b','#2980b9','#16a085'];
-
+  if(!unitList.length) return '<div class="empty">لا توجد بيانات برنامج معتمدة حالياً.</div>';
   return `<div class="units-grid">
     ${unitList.map(([key,unit],i)=>`
       <div class="unit-card">
-        <div class="unit-header" style="background:${colors[i%colors.length]}">
+        <div class="unit-header" style="background:#0D40FC">
           <div class="unit-num">${unit.order||i+1}</div>
           <div>
             <div style="font-size:13px;font-weight:700">${unit.title||'وحدة '+(i+1)}</div>
-            ${unit.duration?`<div style="font-size:10px;opacity:0.7;margin-top:1px">⏱ ${unit.duration}</div>`:''}
             ${unit.dateRange?`<div style="font-size:10px;opacity:0.7">📅 ${unit.dateRange}</div>`:''}
           </div>
         </div>
         <div class="unit-body">
           ${unit.description?`<p style="font-size:12px;color:var(--muted);margin-bottom:8px">${unit.description}</p>`:''}
-          ${(unit.topics||[]).map(t=>`
-            <div class="unit-topic">
-              <div class="unit-topic-dot"></div>
-              <span style="font-size:12px">${t}</span>
-            </div>`).join('')}
+          ${(unit.topics||[]).map(t=>`<div class="unit-topic"><div class="unit-topic-dot"></div><span style="font-size:12px">${t}</span></div>`).join('')}
         </div>
       </div>`).join('')}
   </div>`;
