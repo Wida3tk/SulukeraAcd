@@ -289,7 +289,7 @@ tr:hover td{background:#f8faff;}
 
   <div class="role-tabs">
     <button class="role-tab active" onclick="setRole('student',this)">👩‍🎓 دخول الطالب</button>
-    <button class="role-tab" onclick="setRole('lecturer',this)">👨‍🏫 دخول المحاضر</button>
+    <button class="role-tab" onclick="setRole('lecturer',this)">👨‍🏫 دخول عضو هيئة التدريس</button>
   </div>
 
   <!-- Student: ID + password -->
@@ -566,13 +566,13 @@ function setRole(role, btn){
   const loginBtn=document.getElementById('loginBtn');
   const loginHint=document.getElementById('loginHintText');
   if(loginBtn){
-    loginBtn.textContent = role==='student' ? 'دخول الطالب ←' : 'دخول المحاضر ←';
+    loginBtn.textContent = role==='student' ? 'دخول الطالب ←' : 'دخول عضو هيئة التدريس ←';
     loginBtn.dataset.label = loginBtn.textContent;
   }
   if(loginHint){
     loginHint.textContent = role==='student'
       ? 'يدخل الطالب بالرقم الطلابي وكلمة المرور لعرض المقررات والدرجات والطلبات.'
-      : 'يدخل المحاضر باسم المستخدم وكلمة المرور لمتابعة المقررات والرصد الأكاديمي.';
+      : 'استخدم اسم المستخدم وكلمة المرور للوصول إلى المقررات المسندة وسجل الدرجات.';
   }
   document.getElementById('loginErr').style.display = 'none';
 }
@@ -1340,13 +1340,13 @@ function showLecturerView(){
 
   const lec = currentUser.data;
   document.getElementById('topbarName').textContent = lec.name;
-  document.getElementById('topbarRole').textContent = '👨‍🏫 محاضر';
+  document.getElementById('topbarRole').textContent = '👨‍🏫 عضو هيئة التدريس';
   document.getElementById('topbarRole').className = 'user-role role-lecturer';
   configureAppTabs([
     { id:'home', label:'🏠 الرئيسية' },
-    { id:'courses', label:'📚 مقرراتي' },
-    { id:'grades', label:'📊 إدخال الدرجات' },
-    { id:'schedule', label:'📅 جدولي' }
+    { id:'courses', label:'📚 المقررات المسندة' },
+    { id:'grades', label:'📊 سجل الدرجات' },
+    { id:'schedule', label:'📅 الجدول الأسبوعي' }
   ]);
   switchAppTab('home', document.querySelector('#appTabs .app-tab'));
 }
@@ -1503,8 +1503,8 @@ function renderLecDashboard(){
 
   if(!mySubjects.length){
     document.getElementById('mainContent').innerHTML=`
-      <div class="card"><div class="empty">📚 لا توجد مقررات مرتبطة بحسابك في الفصل الحالي<br>
-      <small style="color:var(--muted)">يقوم المدير بتعيين المقررات لك وتفعيل الفصل</small></div></div>`;
+      <div class="card"><div class="empty">📚 لا توجد مقررات مسندة إلى الحساب في الفصل الحالي<br>
+      <small style="color:var(--muted)">يُستكمل الإسناد وتفعيل الفصل من إدارة النظام عند اعتماد التكليف.</small></div></div>`;
     return;
   }
 
@@ -1543,15 +1543,15 @@ function renderLecDashboard(){
 
   let html=`
     <div class="stat-row">
-      <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📖 مقرراتي</div></div>
-      <div class="stat-box"><div class="stat-val">${allStudents.size}</div><div class="stat-lbl">👩‍🎓 طلابي</div></div>
+      <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📖 المقررات المسندة</div></div>
+      <div class="stat-box"><div class="stat-val">${allStudents.size}</div><div class="stat-lbl">👩‍🎓 طلاب المقررات</div></div>
       <div class="stat-box"><div class="stat-val">${batchNames.length}</div><div class="stat-lbl">👥 الدفعات</div></div>
       <div class="stat-box"><div class="stat-val" style="color:var(--success)">${totalRows>0&&passRows>0?Math.round(passRows/totalRows*100):0}%</div><div class="stat-lbl">✓ نسبة النجاح</div></div>
     </div>
 
     <!-- اختيار الدفعة -->
     <div class="card" style="margin-bottom:1rem;">
-      <div class="card-title">👥 اختر الدفعة</div>
+      <div class="card-title">👥 الدفعة</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;" id="batchTabs">
         ${batchNames.map((b,i)=>`
           <button class="lec-tab ${i===0?'active':''}"
@@ -1614,7 +1614,7 @@ function renderLecturerHomeTab(){
   const batchNames = Object.keys(batchMap).sort();
   const pendingAlerts = getLecturerPendingGradeAlerts();
   if(!mySubjects.length){
-    document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات مرتبطة بحسابك حتى الآن</div></div>`;
+    document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات مسندة إلى الحساب حتى الآن</div></div>`;
     return;
   }
   document.getElementById('mainContent').innerHTML = `
@@ -1625,26 +1625,26 @@ function renderLecturerHomeTab(){
       <div class="stat-box"><div class="stat-val">${gradedRows>0&&passedRows>0?Math.round(passedRows/gradedRows*100):0}%</div><div class="stat-lbl">✅ نجاح مرصود</div></div>
     </div>
     <div class="card">
-      <div class="card-title">✨ لوحة المحاضر</div>
+      <div class="card-title">✨ لوحة عضو هيئة التدريس</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">أقرب محاضرة</div>
-          <div style="font-size:14px;font-weight:800">${nextSlot?.subject || 'لا توجد محاضرات مرتبطة بجدولك'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextSlot ? `${nextSlot.day||'—'} · ${nextSlot.timeStart||'—'} - ${nextSlot.timeEnd||'—'}` : 'الجدول بانتظار الربط بالمحاضر أو المقرر'}</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">المحاضرة التالية</div>
+          <div style="font-size:14px;font-weight:800">${nextSlot?.subject || 'لا توجد محاضرات معتمدة في الجدول'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextSlot ? `${nextSlot.day||'—'} · ${nextSlot.timeStart||'—'} - ${nextSlot.timeEnd||'—'}` : 'تُعرض المحاضرات بعد اعتماد الجدول وإسناد المقرر.'}</div>
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">دفعاتك الحالية</div>
-          <div style="font-size:14px;font-weight:800">${batchNames.length ? batchNames.join(' · ') : 'بدون دفعات ظاهرة'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">${mySubjects.length} مقرر مرتبط بحسابك</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">الدفعات المسندة</div>
+          <div style="font-size:14px;font-weight:800">${batchNames.length ? batchNames.join(' · ') : 'لا توجد دفعات مسندة'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${mySubjects.length} مقرر مسند إلى الحساب</div>
         </div>
       </div>
     </div>
     <div class="card">
-      <div class="card-title">📌 أولوياتك اليوم</div>
+      <div class="card-title">📌 الإجراءات الأكاديمية</div>
       <div style="display:grid;gap:8px;">
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">ادخلي إلى <strong>إدخال الدرجات</strong> لإكمال الرصد الناقص أو تحديث أعمال الأسابيع.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">افتح <strong>مقرراتي</strong> لمراجعة توزيع الطلاب على الدفعات والمقررات.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">تحققي من <strong>جدولي</strong> قبل بدء المحاضرات للتأكد من القاعات والأوقات.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">استكمل الرصد الناقص أو حدّث درجات أعمال الأسابيع من <strong>سجل الدرجات</strong>.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع قوائم الطلاب المسندين إلى كل دفعة ومقرر من <strong>المقررات المسندة</strong>.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع <strong>الجدول الأسبوعي</strong> قبل بدء المحاضرات للتحقق من الوقت والقاعة.</div>
       </div>
     </div>
     <div class="card">
@@ -1657,7 +1657,7 @@ function renderLecturerHomeTab(){
             <td>${alert.batch||'—'}</td>
             <td>${alert.pendingCount}</td>
             <td style="font-size:11px;color:var(--muted)">${alert.studentNames.join('، ')}${alert.pendingCount>alert.studentNames.length?` +${alert.pendingCount-alert.studentNames.length}`:''}</td>
-            <td><button class="btn-out" onclick="openLecturerGradeAlert('${alert.subjectKey}','${alert.batch||''}')">📊 افتح الرصد</button></td>
+            <td><button class="btn-out" onclick="openLecturerGradeAlert('${alert.subjectKey}','${alert.batch||''}')">📊 عرض سجل الدرجات</button></td>
           </tr>`).join('')}</tbody>
       </table></div>` : '<div class="empty">لا توجد تنبيهات رصد ناقص حاليًا</div>'}
     </div>
@@ -1693,7 +1693,7 @@ function renderLecturerCoursesTab(){
   }).join('');
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
-      <div class="card-title">📚 مقرراتي</div>
+      <div class="card-title">📚 المقررات المسندة</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         ${Object.entries(batchMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([batchName, info])=>`
           <span class="badge badge-student">${batchName}: ${info.students.size} طالب</span>`).join('')}
@@ -2013,7 +2013,7 @@ function renderWeeklySchedule(weekly){
             <tr>
               <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:right;font-size:13px;font-weight:800;">المحاضرة</th>
               <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">الموعد</th>
-              <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">المحاضر</th>
+              <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">عضو هيئة التدريس</th>
               <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">اليوم</th>
             </tr>
           </thead>
@@ -2080,10 +2080,10 @@ function renderProgramSchedule(units){
   }
   const lecturerSemesters = roleProgram.semesterList || [];
   if(currentUser?.role==='lecturer'){
-    if(!lecturerSemesters.length) return '<div class="empty">لا توجد دفعات مرتبطة بحساب المحاضر حالياً.</div>';
+    if(!lecturerSemesters.length) return '<div class="empty">لا توجد دفعات مرتبطة بحساب عضو هيئة التدريس حالياً.</div>';
     return `
       <div class="card" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
-        <div class="card-title">مراحل الدفعات المرتبطة بحساب المحاضر</div>
+        <div class="card-title">مراحل الدفعات المرتبطة بحساب عضو هيئة التدريس</div>
         <div style="display:grid;gap:10px;">
           ${lecturerSemesters.map(semester=>`
             <div style="padding:14px 16px;border:1px solid #e2ebff;border-radius:16px;background:#fff;">
