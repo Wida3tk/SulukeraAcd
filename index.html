@@ -434,7 +434,8 @@ tr:hover td{background:#f8faff;}
           <div class="card-title">👥 خطة الدفعة والمحاضرون</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
             <select id="batchPlanSelect" onchange="renderSelectedBatchPlan()" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:inherit;"></select>
-            <button class="btn btn-primary" onclick="generateSelectedBatchPlan()">إنشاء/تحديث مقررات الدفعة</button>
+            <button class="btn btn-primary" onclick="generateSelectedBatchPlan()">إنشاء مقررات الدفعة</button>
+            <button class="btn btn-success" onclick="assignSelectedBatchStudents()">إسناد الطلاب للمقررات</button>
           </div>
           <div id="batchPlanCourses"></div>
         </div>
@@ -5712,7 +5713,16 @@ function renderSelectedBatchPlan(){
   const template=effectiveCurriculumTemplate();
   const lecturers=users.filter(u=>u.role==='lecturer');
   const offerings=subjects.filter(s=>s.courseKey&&sameBatchName(s.batch,batch));
-  container.innerHTML=`<div class="table-wrap"><table>
+  const batchStudents=students.filter(student=>sameBatchName(student.batch,batch));
+  const enrolledPairs=new Set(enrollmentsData.map(item=>`${item.studentKey}|${item.subjectKey}`));
+  const missingEnrollments=offerings.reduce((count,offering)=>count+batchStudents.filter(student=>studentEligibleForOffering(student,offering)&&!enrolledPairs.has(`${student._fbKey}|${offering._fbKey}`)).length,0);
+  container.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <span class="badge badge-student">${batchStudents.length} طالب في الدفعة</span>
+      <span class="badge badge-admin">${offerings.length}/18 مقرر مُنشأ</span>
+      <span class="badge ${missingEnrollments?'badge-warn':'badge-pass'}">${missingEnrollments?`${missingEnrollments} تسجيل بحاجة إسناد`:'تسجيلات الطلاب مكتملة'}</span>
+    </div>
+    <div class="alert alert-info">أنشئي المقررات مرة واحدة، ثم استخدمي زر <strong>إسناد الطلاب للمقررات</strong> لإضافة التسجيلات الناقصة فقط. لا يحذف هذا الإجراء أي مقرر أو تسجيل استثنائي.</div>
+    <div class="table-wrap"><table>
     <thead><tr><th>#</th><th>المقرر</th><th>الفصل</th><th>المسارات</th><th>المحاضر</th></tr></thead>
     <tbody>${FIXED_COURSES.map((course,index)=>{
       const offering=offerings.find(s=>s.courseKey===course.key);
@@ -5737,12 +5747,10 @@ async function generateBatchPlan(batch,showMessage=true){
   const dbSubjects=root.subjects||{};
   const existing=Object.entries(dbSubjects).filter(([,s])=>s.courseKey&&sameBatchName(s.batch,batch));
   const updates={};
-  const offeringKeys=[];
   FIXED_COURSES.forEach(course=>{
     const found=existing.find(([,s])=>s.courseKey===course.key);
     const key=found?.[0]||offeringKeyFor(batch,course.key);
     const old=found?.[1]||{};
-    offeringKeys.push(key);
     updates['subjects/'+key]={
       ...old,name:course.name,courseKey:course.key,batch,
       semesterNo:template[course.key].semesterNo,
@@ -5751,24 +5759,9 @@ async function generateBatchPlan(batch,showMessage=true){
       sourceSubjectKey:''
     };
   });
-  Object.entries(root.enrollments||{}).forEach(([key,enrollment])=>{
-    if(offeringKeys.includes(enrollment.subjectKey)) updates['enrollments/'+key]=null;
-  });
-  Object.entries(root.students||{}).forEach(([studentKey,student])=>{
-    if(!sameBatchName(student.batch,batch)) return;
-    const pkgName=root.packages?.[student.pkg]?.name||student.pkg||'';
-    const plan=student.planType||(String(pkgName).toUpperCase().includes('QASP')?'QASP-S':'QBA');
-    FIXED_COURSES.filter(c=>c.eligiblePlans.includes(plan)).forEach(course=>{
-      const subjectKey=offeringKeyFor(batch,course.key);
-      const found=existing.find(([,s])=>s.courseKey===course.key);
-      const actualKey=found?.[0]||subjectKey;
-      const enrollmentKey=('enr_'+studentKey+'_'+actualKey).replace(/[.#$[\]]/g,'_');
-      updates['enrollments/'+enrollmentKey]={studentKey,subjectKey:actualKey};
-    });
-  });
   await firebase.database().ref('/').update(updates);
   await loadAllFromFirebase();
-  if(showMessage) showToast(`✅ تم تجهيز 18 مقررًا لدفعة ${batch}`);
+  if(showMessage) showToast(`✅ تم تجهيز 18 مقررًا لدفعة ${batch}. يمكنك الآن إسناد الطلاب للمقررات.`);
   return true;
 }
 
@@ -5779,6 +5772,37 @@ async function generateSelectedBatchPlan(){
   try{ await generateBatchPlan(batch,true); renderSelectedBatchPlan(); }
   catch(e){ console.error(e); showToast('⚠️ تعذر إنشاء خطة الدفعة'); }
   finally{ showLoader(false); }
+}
+
+async function assignSelectedBatchStudents(){
+  const batch=document.getElementById('batchPlanSelect')?.value;
+  if(!batch) return showToast('⚠️ اختاري الدفعة أولاً');
+  const batchStudents=students.filter(student=>sameBatchName(student.batch,batch));
+  const offerings=subjects.filter(subject=>subject.courseKey&&sameBatchName(subject.batch,batch));
+  if(!batchStudents.length) return showToast('⚠️ لا يوجد طلاب مسجلون في هذه الدفعة');
+  if(!offerings.length) return showToast('⚠️ أنشئي مقررات الدفعة أولاً');
+  const enrolledPairs=new Set(enrollmentsData.map(item=>`${item.studentKey}|${item.subjectKey}`));
+  const missing=[];
+  batchStudents.forEach(student=>offerings.forEach(subject=>{
+    if(studentEligibleForOffering(student,subject)&&!enrolledPairs.has(`${student._fbKey}|${subject._fbKey}`)) missing.push({student,subject});
+  }));
+  if(!missing.length) return showToast('✅ جميع طلاب الدفعة مسندون إلى مقرراتهم');
+  if(!confirm(`سيتم إسناد ${missing.length} تسجيل ناقص لطلاب دفعة ${batch}. لن يتم حذف أو تعديل أي تسجيل قائم. المتابعة؟`)) return;
+  showLoader(true);
+  try{
+    const updates={};
+    missing.forEach(({student,subject})=>{
+      const key=('enr_'+student._fbKey+'_'+subject._fbKey).replace(/[.#$[\]]/g,'_');
+      updates['enrollments/'+key]={studentKey:student._fbKey,subjectKey:subject._fbKey,sourceType:'batch_plan',status:'active'};
+    });
+    await firebase.database().ref('/').update(updates);
+    await loadAllFromFirebase();
+    renderSelectedBatchPlan();
+    showToast(`✅ تم إسناد ${missing.length} تسجيل لطلاب دفعة ${batch}`);
+  }catch(e){
+    console.error('assignSelectedBatchStudents error:',e);
+    showToast('⚠️ تعذر إسناد الطلاب للمقررات');
+  }finally{ showLoader(false); }
 }
 
 async function saveBatchPlanLecturers(){
