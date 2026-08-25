@@ -5207,22 +5207,36 @@ function renderWeeklyPreview(){
   if(!el) return;
   const slots=Object.values(scheduleData.weekly||{});
   if(!slots.length){el.innerHTML='<div class="alert alert-info">أضف محاضرات لرؤية المعاينة</div>';return;}
-  const times=[...new Set(slots.map(s=>s.timeStart+'-'+s.timeEnd))].sort();
-  let html=`<div class="sch-preview-grid" style="grid-template-columns:80px repeat(5,1fr)">
-    <div class="sch-ph">الوقت</div>${DAYS_AR.map(d=>`<div class="sch-ph">${d}</div>`).join('')}
-    ${times.map(t=>{
-      const [st,en]=t.split('-');
-      return `<div class="sch-pt">${st}<br><span style="font-size:9px;color:var(--light)">${en}</span></div>
-        ${DAYS_AR.map(day=>{
-          const sl=slots.find(s=>s.day===day&&s.timeStart===st&&s.timeEnd===en);
-          return `<div class="sch-pc">${sl?`<div class="sch-ps" style="background:${sl.color||'var(--primary)'}">
-            <div style="font-weight:700;font-size:10px">${sl.subject}</div>
-            ${sl.room?`<div style="font-size:9px;opacity:0.8">🏠 ${sl.room}</div>`:''}
-          </div>`:''}</div>`;
-        }).join('')}`;
-    }).join('')}
-  </div>`;
-  el.innerHTML=html;
+  const batches=[...new Set(slots.map(slot=>slot.batch||'جدول عام'))].sort();
+  const orderedSlots=[...slots].sort((a,b)=>{
+    const dayDiff=DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day);
+    return dayDiff || String(a.timeStart||'').localeCompare(String(b.timeStart||''));
+  });
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="badge badge-admin">${slots.length} محاضرات أسبوعية</span>
+      <span class="badge badge-student">${batches.length} دفعات</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
+      ${batches.map((batch,batchIndex)=>{
+        const batchSlots=orderedSlots.filter(slot=>(slot.batch||'جدول عام')===batch);
+        const accent=SLOT_COLORS[batchIndex%SLOT_COLORS.length];
+        return `<div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;background:white;box-shadow:var(--shadow)">
+          <div style="background:${accent};color:white;padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
+            <strong>${escapeHtml(batch)}</strong><span style="font-size:11px;opacity:.9">${batchSlots.length} محاضرات</span>
+          </div>
+          <div class="table-wrap"><table style="font-size:11px"><thead><tr><th>اليوم</th><th>الموعد</th><th>المقرر</th><th>المحاضر</th><th>القاعة</th></tr></thead><tbody>
+            ${batchSlots.map(slot=>`<tr>
+              <td><strong>${escapeHtml(slot.day||'—')}</strong></td>
+              <td dir="ltr" style="white-space:nowrap">${escapeHtml(slot.timeStart||'—')} - ${escapeHtml(slot.timeEnd||'—')}</td>
+              <td><strong>${escapeHtml(slot.subject||'—')}</strong></td>
+              <td>${escapeHtml(slot.lecturer||'غير محدد')}</td>
+              <td>${escapeHtml(slot.room||'—')}</td>
+            </tr>`).join('')}
+          </tbody></table></div>
+        </div>`;
+      }).join('')}
+    </div>`;
 }
 
 // ── PROGRAM UNITS ─────────────────────────────
