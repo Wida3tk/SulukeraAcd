@@ -148,6 +148,23 @@ tr:hover td{background:#f8faff;}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
 .mono{font-family:monospace;}
 .text-muted{color:var(--text-muted);}
+.lecturer-followups{display:grid;grid-template-columns:repeat(auto-fit,minmax(390px,1fr));gap:14px;}
+.lecturer-followup-card{border:1px solid var(--border);border-radius:14px;background:#fff;overflow:hidden;box-shadow:0 5px 16px rgba(13,64,252,.05);}
+.lecturer-followup-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px;background:linear-gradient(135deg,#f4f7ff,#fff);border-bottom:1px solid var(--border);}
+.lecturer-followup-name{font-size:14px;font-weight:800;color:var(--text);}
+.lecturer-followup-id{font-family:monospace;font-size:11px;color:var(--text-muted);margin-top:4px;}
+.lecturer-followup-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;}
+.lecturer-followup-score{font-size:12px;font-weight:800;color:var(--primary-dark);padding:5px 9px;border-radius:8px;background:#eaf0ff;white-space:nowrap;}
+.lecturer-followup-body{padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.lecturer-followup-field{display:flex;flex-direction:column;gap:6px;}
+.lecturer-followup-field.full{grid-column:1/-1;}
+.lecturer-followup-field label{font-size:11px;font-weight:800;color:var(--text-muted);}
+.lecturer-followup-field select,.lecturer-followup-field textarea{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:9px 10px;background:#fff;color:var(--text);font:inherit;}
+.lecturer-followup-field textarea{min-height:78px;resize:vertical;line-height:1.55;}
+.lecturer-followup-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;border-top:1px solid var(--border);background:#fbfcff;}
+.lecturer-followup-actions small{font-size:10px;color:var(--text-muted);}
+.lecturer-followup-buttons{display:flex;gap:7px;flex-wrap:wrap;}
+@media(max-width:620px){.lecturer-followups{grid-template-columns:1fr;}.lecturer-followup-body{grid-template-columns:1fr;}.lecturer-followup-field.full{grid-column:auto;}.lecturer-followup-head,.lecturer-followup-actions{flex-direction:column;}.lecturer-followup-meta{justify-content:flex-start;}.lecturer-followup-actions{align-items:stretch;}.lecturer-followup-buttons .btn{flex:1;}}
 @media print{
   #loginScreen{display:none!important;}
   .sidebar,.topbar,.btn,.week-tabs,#gradeSaveRow,.modal-overlay{display:none!important;}
@@ -4224,36 +4241,44 @@ function renderLecturerFollowUpPanel(si){
   }
   panel.innerHTML=`<div class="card card-accent" style="margin-top:1rem;">
     <div class="card-title">🧭 متابعة الطلاب داخل المقرر</div>
-    <div class="alert alert-info">يمكن من هنا تحديد حالة الطالب داخل هذا المقرر، وإضافة الملاحظات، وإرسال رسالة إلى الإدارة عند الحاجة.</div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>الطالب</th><th>الدفعة</th><th>المجموع</th><th>الحالة داخل المقرر</th><th>ملاحظة المحاضر</th><th>رسالة للإدارة</th><th>إجراء</th></tr></thead>
-      <tbody>${studentIdxs.map(stdIdx=>{
+    <div class="alert alert-info">سجل حالة الطالب داخل المقرر، ثم احفظ التحديث أو ارفعه للإدارة عند الحاجة.</div>
+    <div class="lecturer-followups">${studentIdxs.map(stdIdx=>{
         const student=students[stdIdx];
         const grade=grades[si]?.[stdIdx];
         const total=grade?calcTotal(grade):0;
         const followUp=getLecturerFollowUp(student?._fbKey, subj?._fbKey)||{};
         const statusMeta=getLecturerStatusMeta(followUp.status);
-        return `<tr>
-          <td><strong>${escapeHtml(getStudentFullName(student))}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:3px">${escapeHtml(student?.id||'')}</div></td>
-          <td><span class="badge badge-student">${escapeHtml(student?.batch||'—')}</span></td>
-          <td><strong>${total}</strong>/100<div style="margin-top:4px"><span class="badge ${statusMeta.className}">${statusMeta.label}</span></div></td>
-          <td>
-            <select id="${getLecturerFollowUpInputId('status',si,stdIdx)}" style="min-width:170px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;">
+        const sentAt=followUp.sentToAdminAt ? `آخر رفع للإدارة: ${new Date(followUp.sentToAdminAt).toLocaleDateString('ar-SA')}` : 'لم تُرفع ملاحظة للإدارة بعد';
+        return `<article class="lecturer-followup-card">
+          <header class="lecturer-followup-head">
+            <div><div class="lecturer-followup-name">${escapeHtml(getStudentFullName(student))}</div><div class="lecturer-followup-id">${escapeHtml(student?.id||'—')}</div></div>
+            <div class="lecturer-followup-meta"><span class="badge badge-student">${escapeHtml(student?.batch||'—')}</span><span class="lecturer-followup-score">${total}/100</span><span class="badge ${statusMeta.className}">${statusMeta.label}</span></div>
+          </header>
+          <div class="lecturer-followup-body">
+            <div class="lecturer-followup-field full">
+              <label for="${getLecturerFollowUpInputId('status',si,stdIdx)}">حالة الطالب داخل المقرر</label>
+              <select id="${getLecturerFollowUpInputId('status',si,stdIdx)}">
               <option value="active" ${followUp.status==='active'?'selected':''}>منتظم</option>
               <option value="attention" ${followUp.status==='attention'?'selected':''}>يحتاج متابعة</option>
               <option value="at_risk" ${followUp.status==='at_risk'?'selected':''}>متعثر</option>
               <option value="paused" ${followUp.status==='paused'?'selected':''}>منقطع أو مؤجل</option>
             </select>
-          </td>
-          <td><textarea id="${getLecturerFollowUpInputId('note',si,stdIdx)}" placeholder="ملاحظات المحاضر على أداء الطالب داخل المقرر" style="width:100%;min-width:220px;min-height:82px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;">${escapeHtml(followUp.lecturerNote||'')}</textarea></td>
-          <td><textarea id="${getLecturerFollowUpInputId('admin',si,stdIdx)}" placeholder="رسالة أو تنبيه يصل للإدارة" style="width:100%;min-width:220px;min-height:82px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;">${escapeHtml(followUp.adminMessage||'')}</textarea>${followUp.sentToAdminAt?`<div style="font-size:10px;color:var(--text-muted);margin-top:5px">آخر إرسال: ${new Date(followUp.sentToAdminAt).toLocaleDateString('ar-SA')}</div>`:''}</td>
-          <td style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn btn-sm btn-primary" onclick="saveLecturerFollowUp(${si},${stdIdx},false)">حفظ</button>
-            <button class="btn btn-sm" onclick="saveLecturerFollowUp(${si},${stdIdx},true)">إرسال للإدارة</button>
-          </td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table></div>
+            </div>
+            <div class="lecturer-followup-field">
+              <label for="${getLecturerFollowUpInputId('note',si,stdIdx)}">ملاحظة المحاضر</label>
+              <textarea id="${getLecturerFollowUpInputId('note',si,stdIdx)}" placeholder="اكتب ملاحظة عن أداء الطالب داخل المقرر">${escapeHtml(followUp.lecturerNote||'')}</textarea>
+            </div>
+            <div class="lecturer-followup-field">
+              <label for="${getLecturerFollowUpInputId('admin',si,stdIdx)}">ملاحظة للإدارة</label>
+              <textarea id="${getLecturerFollowUpInputId('admin',si,stdIdx)}" placeholder="اكتب الملاحظة التي ترغب برفعها للإدارة">${escapeHtml(followUp.adminMessage||'')}</textarea>
+            </div>
+          </div>
+          <footer class="lecturer-followup-actions">
+            <small>${sentAt}</small>
+            <div class="lecturer-followup-buttons"><button class="btn btn-sm btn-primary" onclick="saveLecturerFollowUp(${si},${stdIdx},false)">حفظ التحديث</button><button class="btn btn-sm" onclick="saveLecturerFollowUp(${si},${stdIdx},true)">رفع للإدارة</button></div>
+          </footer>
+        </article>`;
+      }).join('')}</div>
   </div>`;
 }
 async function saveLecturerFollowUp(si, stdIdx, sendToAdmin){
