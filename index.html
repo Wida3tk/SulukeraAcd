@@ -2218,6 +2218,10 @@ function renderDashboard() {
       </div>`;
     return;
   }
+  if(currentUser.role==='admin'){
+    renderAdminDashboard();
+    return;
+  }
   const page=document.getElementById('page-dashboard');
   const batchCounts=[...new Set(students.map(student=>student.batch).filter(Boolean))]
     .sort()
@@ -2289,6 +2293,66 @@ function renderDashboard() {
 // ══════════════════════════════════════════════
 //  SUBJECTS
 // ══════════════════════════════════════════════
+function renderAdminDashboard(){
+  const page=document.getElementById('page-dashboard');
+  const batches=getAllKnownBatches().map(batch=>({
+    batch,
+    studentCount:students.filter(student=>sameBatchName(student.batch,batch)).length,
+    scheduledCount:Object.values(scheduleData?.weekly||{}).filter(slot=>sameBatchName(slot.batch,batch)).length,
+    sectionCount:subjects.filter(subject=>sameBatchName(subject.batch,batch)).length
+  }));
+  const lecturers=users.filter(user=>user.role==='lecturer');
+  const pendingRequests=getSortedStudentRequests().filter(request=>!['approved','rejected','completed'].includes(request.status));
+  const advisorFollowUps=advisorCasesData.filter(item=>['review','follow_up','urgent'].includes(item.status));
+  const incompleteStudents=students.map((student,index)=>({student,index})).filter(item=>
+    !item.student.email || !item.student.phone || !item.student.program || !item.student.track || !item.student.batch
+  );
+  const unregisteredStudents=students.map((student,index)=>({student,index})).filter(item=>
+    !subjects.some(subject=>subject.students.includes(item.index))
+  );
+  const financeReview=students.map((student,index)=>({student,index,financial:getStudentFinancialState(student)})).filter(item=>
+    !item.student.financeSnapshot && (!item.student.totalAmount || !item.financial.installments.length)
+  );
+  const unassignedSections=subjects.filter(subject=>subject.batch && !subject.lecturerUserId);
+  const unscheduledBatches=batches.filter(item=>item.studentCount>0 && !item.scheduledCount);
+  const actions=[];
+  if(pendingRequests.length) actions.push({tone:'warn',title:'طلبات طلاب بانتظار المراجعة',count:pendingRequests.length,action:"navTo('alerts',null)",detail:'افتح الطلبات واعتمد الإجراء المناسب.'});
+  if(advisorFollowUps.length) actions.push({tone:'danger',title:'حالات تحتاج متابعة أكاديمية',count:advisorFollowUps.length,action:"navTo('academicadvisor',null)",detail:'راجِع الحالات المسجلة لدى المرشد الأكاديمي.'});
+  if(incompleteStudents.length) actions.push({tone:'info',title:'بطاقات طلاب ناقصة البيانات',count:incompleteStudents.length,action:"navTo('students',null)",detail:'استكمل وسائل التواصل أو بيانات البرنامج والدفعة.'});
+  if(unregisteredStudents.length) actions.push({tone:'info',title:'طلاب بلا مقررات مسندة',count:unregisteredStudents.length,action:"navTo('students',null)",detail:'أضف المقررات من سجل الطالب أو خطط الدفعات.'});
+  if(financeReview.length) actions.push({tone:'warn',title:'ملفات مالية تحتاج مراجعة',count:financeReview.length,action:"navTo('students',null)",detail:'تحتاج إدخالاً أو اعتماداً من موظف المالية.'});
+  if(unassignedSections.length) actions.push({tone:'danger',title:'شعب بلا محاضر',count:unassignedSections.length,action:"navTo('subjects',null)",detail:'عيّن محاضراً قبل بدء المقرر.'});
+  if(unscheduledBatches.length) actions.push({tone:'warn',title:'دفعات بلا جدول أسبوعي',count:unscheduledBatches.length,action:"navTo('schedule',null)",detail:unscheduledBatches.map(item=>item.batch).join('، ')});
+  const slots=[...Object.values(scheduleData?.weekly||{})].sort((a,b)=>{
+    const dayDiff=DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day);
+    return dayDiff || String(a.timeStart||'').localeCompare(String(b.timeStart||''));
+  });
+  const activity=getRecentActivityLogs(6);
+  const topStats=[
+    {icon:'👩‍🎓',label:'إجمالي الطلاب',value:students.length,sub:'في جميع الدفعات'},
+    {icon:'🧩',label:'الدفعات',value:batches.length,sub:'دفعات مسجلة'},
+    {icon:'👩‍🏫',label:'المحاضرون',value:lecturers.length,sub:'حسابات محاضرين'},
+    {icon:'📚',label:'الشعب المسندة',value:subjects.filter(subject=>subject.lecturerUserId).length,sub:'مقررات لها محاضر'}
+  ];
+  page.innerHTML=`
+    <div class="student-profile-header" style="background:linear-gradient(135deg,#061a42,#0D40FC 58%,#55D7FF);margin-bottom:1rem;">
+      <div style="flex:1"><div style="font-size:23px;font-weight:900">مركز إدارة الطلاب</div><div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:6px">ملخص تشغيلي يركز على المتابعة والقرارات اليومية.</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" style="background:white;color:var(--primary);border:0;font-weight:800" onclick="navTo('students',null)">إدارة الطلاب</button><button class="btn" style="background:rgba(255,255,255,.14);color:white;border-color:rgba(255,255,255,.35)" onclick="navTo('schedule',null)">الجدول الأكاديمي</button></div>
+    </div>
+    <div class="stat-grid" style="margin-bottom:1rem">${topStats.map(stat=>`<div class="stat"><div class="stat-icon">${stat.icon}</div><div class="stat-label">${stat.label}</div><div class="stat-value">${stat.value}</div><div class="stat-sub">${stat.sub}</div></div>`).join('')}</div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(310px,.65fr);gap:1rem;margin-bottom:1rem">
+      <div class="card card-accent"><div class="card-title">إجراءات تحتاج متابعة</div>
+        ${actions.length?`<div style="display:grid;gap:8px">${actions.slice(0,6).map(item=>`<button onclick="${item.action}" style="width:100%;border:1px solid var(--border);border-right:4px solid ${item.tone==='danger'?'var(--danger)':item.tone==='warn'?'var(--warning)':'var(--primary)'};background:white;border-radius:10px;padding:11px 12px;text-align:right;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:10px"><span style="min-width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:${item.tone==='danger'?'var(--danger-light)':item.tone==='warn'?'var(--warning-light)':'var(--bg)'};color:${item.tone==='danger'?'var(--danger)':item.tone==='warn'?'var(--warning)':'var(--primary)'};font-weight:900">${item.count}</span><span><strong style="font-size:12px">${item.title}</strong><span style="display:block;font-size:10px;color:var(--text-muted);margin-top:3px">${item.detail}</span></span></button>`).join('')}</div>`:'<div class="alert alert-success">لا توجد إجراءات معلقة تحتاج تدخل الإدارة حالياً.</div>'}
+      </div>
+      <div class="card card-accent"><div class="card-title">إجراءات سريعة</div><div style="display:grid;gap:8px"><button class="btn btn-primary" onclick="openStudentModal()">إضافة طالب</button><button class="btn" onclick="navTo('academicadvisor',null)">فتح المرشد الأكاديمي</button><button class="btn" onclick="navTo('alerts',null)">مراجعة الطلبات والتنبيهات</button><button class="btn" onclick="navTo('productivity',null)">الساعات الإنتاجية</button></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1rem">
+      <div class="card card-accent"><div class="card-title">الدفعات</div><div style="display:grid;gap:8px">${batches.map(item=>`<button onclick="navTo('students',null);setTimeout(()=>{const select=document.getElementById('studentBatchFilter');if(select){select.value='${item.batch}';filterStudents();}},0)" style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);background:var(--bg);border-radius:10px;padding:10px;cursor:pointer;font-family:inherit;text-align:right"><span><strong>${item.batch}</strong><span style="display:block;font-size:10px;color:var(--text-muted);margin-top:3px">${item.sectionCount} شعب · ${item.scheduledCount} محاضرات أسبوعية</span></span><span style="font-size:21px;font-weight:900;color:var(--primary)">${item.studentCount}</span></button>`).join('')}</div></div>
+      <div class="card card-accent"><div class="card-title">محاضرات الأسبوع</div>${slots.length?`<div style="display:grid;gap:8px">${slots.map(slot=>`<div style="padding:10px;border:1px solid var(--border);border-right:4px solid ${slot.color||'var(--primary)'};border-radius:9px"><strong style="font-size:12px">${escapeHtml(slot.subject||'—')}</strong><div style="font-size:10px;color:var(--text-muted);margin-top:4px">${escapeHtml(slot.batch||'—')} · ${escapeHtml(slot.day||'—')} · ${escapeHtml(slot.timeStart||'—')} - ${escapeHtml(slot.timeEnd||'—')}</div><div style="font-size:10px;color:var(--text-muted);margin-top:3px">المحاضر: ${escapeHtml(slot.lecturer||'غير محدد')}</div></div>`).join('')}</div>`:'<div class="alert alert-warn">لا توجد محاضرات أسبوعية معتمدة بعد.</div>'}</div>
+      <div class="card card-accent"><div class="card-title">آخر النشاطات</div>${activity.length?`<div style="display:grid;gap:8px">${activity.map(item=>`<div style="padding-bottom:8px;border-bottom:1px solid var(--bg)"><strong style="font-size:11px">${escapeHtml(item.action||'تحديث')}</strong><div style="font-size:10px;color:var(--text-muted);margin-top:3px">${escapeHtml(item.targetLabel||'سجل عام')} · ${escapeHtml(item.actorName||'النظام')}</div></div>`).join('')}</div>`:'<div class="alert alert-info">لا توجد أنشطة مسجلة حتى الآن.</div>'}</div>
+    </div>`;
+}
+
 function getTimeRangeHours(start,end){
   const toMinutes=value=>{
     const parts=String(value||'').split(':').map(Number);
