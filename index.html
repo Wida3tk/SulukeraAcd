@@ -1766,6 +1766,22 @@ function studentEligibleForOffering(student,subject){
   const eligible=subject?.eligiblePlans||[];
   return !eligible.length||eligible.includes(plan);
 }
+function getExplicitStudentPlan(student){
+  const direct=String(student?.planType||'').trim().toUpperCase();
+  if(direct.includes('QASP')) return 'QASP-S';
+  if(direct.includes('QBA')) return 'QBA';
+  const pkgId=String(student?.pkg||'').trim();
+  const pkgName=(packagesData||[]).find(pkg=>pkg._fbKey===pkgId)?.name||'';
+  const source=`${pkgId} ${pkgName}`.toUpperCase();
+  if(source.includes('QASP')) return 'QASP-S';
+  if(source.includes('QBA')) return 'QBA';
+  return '';
+}
+function isStudentExplicitlyEligibleForOffering(student,subject){
+  const plan=getExplicitStudentPlan(student);
+  const eligible=subject?.eligiblePlans||[];
+  return !!plan && (!eligible.length||eligible.includes(plan));
+}
 function calcTotal(g){
   if(!g) return 0;
   let t=0;
@@ -5714,14 +5730,18 @@ function renderSelectedBatchPlan(){
   const lecturers=users.filter(u=>u.role==='lecturer');
   const offerings=subjects.filter(s=>s.courseKey&&sameBatchName(s.batch,batch));
   const batchStudents=students.filter(student=>sameBatchName(student.batch,batch));
+  const studentsWithoutPlan=batchStudents.filter(student=>!getExplicitStudentPlan(student));
+  const studentsWithPlan=batchStudents.filter(student=>getExplicitStudentPlan(student));
   const enrolledPairs=new Set(enrollmentsData.map(item=>`${item.studentKey}|${item.subjectKey}`));
-  const missingEnrollments=offerings.reduce((count,offering)=>count+batchStudents.filter(student=>studentEligibleForOffering(student,offering)&&!enrolledPairs.has(`${student._fbKey}|${offering._fbKey}`)).length,0);
+  const missingEnrollments=offerings.reduce((count,offering)=>count+studentsWithPlan.filter(student=>isStudentExplicitlyEligibleForOffering(student,offering)&&!enrolledPairs.has(`${student._fbKey}|${offering._fbKey}`)).length,0);
   container.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
       <span class="badge badge-student">${batchStudents.length} طالب في الدفعة</span>
       <span class="badge badge-admin">${offerings.length}/18 مقرر مُنشأ</span>
       <span class="badge ${missingEnrollments?'badge-warn':'badge-pass'}">${missingEnrollments?`${missingEnrollments} تسجيل بحاجة إسناد`:'تسجيلات الطلاب مكتملة'}</span>
+      ${studentsWithoutPlan.length?`<span class="badge badge-fail">${studentsWithoutPlan.length} طالب بلا مسار محدد</span>`:''}
     </div>
     <div class="alert alert-info">أنشئي المقررات مرة واحدة، ثم استخدمي زر <strong>إسناد الطلاب للمقررات</strong> لإضافة التسجيلات الناقصة فقط. لا يحذف هذا الإجراء أي مقرر أو تسجيل استثنائي.</div>
+    ${studentsWithoutPlan.length?`<div class="alert alert-warn">لن يُسند أي مقرر تلقائيًا إلى ${studentsWithoutPlan.length} طالب لأن مسارهم غير محدد. استكملي المسار من بطاقة الطالب أولًا.</div>`:''}
     <div class="table-wrap"><table>
     <thead><tr><th>#</th><th>المقرر</th><th>الفصل</th><th>المسارات</th><th>المحاضر</th></tr></thead>
     <tbody>${FIXED_COURSES.map((course,index)=>{
@@ -5781,24 +5801,36 @@ async function assignSelectedBatchStudents(){
   const offerings=subjects.filter(subject=>subject.courseKey&&sameBatchName(subject.batch,batch));
   if(!batchStudents.length) return showToast('⚠️ لا يوجد طلاب مسجلون في هذه الدفعة');
   if(!offerings.length) return showToast('⚠️ أنشئي مقررات الدفعة أولاً');
+  const studentsWithoutPlan=batchStudents.filter(student=>!getExplicitStudentPlan(student));
+  const studentsWithPlan=batchStudents.filter(student=>getExplicitStudentPlan(student));
   const enrolledPairs=new Set(enrollmentsData.map(item=>`${item.studentKey}|${item.subjectKey}`));
   const missing=[];
-  batchStudents.forEach(student=>offerings.forEach(subject=>{
-    if(studentEligibleForOffering(student,subject)&&!enrolledPairs.has(`${student._fbKey}|${subject._fbKey}`)) missing.push({student,subject});
+  studentsWithPlan.forEach(student=>offerings.forEach(subject=>{
+    if(isStudentExplicitlyEligibleForOffering(student,subject)&&!enrolledPairs.has(`${student._fbKey}|${subject._fbKey}`)) missing.push({student,subject});
   }));
-  if(!missing.length) return showToast('✅ جميع طلاب الدفعة مسندون إلى مقرراتهم');
-  if(!confirm(`سيتم إسناد ${missing.length} تسجيل ناقص لطلاب دفعة ${batch}. لن يتم حذف أو تعديل أي تسجيل قائم. المتابعة؟`)) return;
+  if(!missing.length) return showToast(studentsWithoutPlan.length ? `⚠️ لا توجد تسجيلات ناقصة للمسارات المحددة. يوجد ${studentsWithoutPlan.length} طالب يحتاج تحديد المسار.` : '✅ جميع طلاب الدفعة مسندون إلى مقرراتهم');
+  const skippedText=studentsWithoutPlan.length ? ` سيتم استثناء ${studentsWithoutPlan.length} طالب لأن مسارهم غير محدد.` : '';
+  if(!confirm(`سيتم إسناد ${missing.length} تسجيل ناقص لطلاب دفعة ${batch}.${skippedText} لن يتم حذف أو تعديل أي تسجيل قائم أو استثنائي. المتابعة؟`)) return;
   showLoader(true);
   try{
+    const rootSnap=await fbRef('/').get();
+    const liveEnrollments=rootSnap.exists() ? Object.values(rootSnap.val().enrollments||{}) : [];
+    const livePairs=new Set(liveEnrollments.map(item=>`${item.studentKey}|${item.subjectKey}`));
     const updates={};
     missing.forEach(({student,subject})=>{
+      if(livePairs.has(`${student._fbKey}|${subject._fbKey}`)) return;
       const key=('enr_'+student._fbKey+'_'+subject._fbKey).replace(/[.#$[\]]/g,'_');
       updates['enrollments/'+key]={studentKey:student._fbKey,subjectKey:subject._fbKey,sourceType:'batch_plan',status:'active'};
     });
+    if(!Object.keys(updates).length){
+      await loadAllFromFirebase();
+      renderSelectedBatchPlan();
+      return showToast('✅ لا توجد تسجيلات جديدة لإضافتها');
+    }
     await firebase.database().ref('/').update(updates);
     await loadAllFromFirebase();
     renderSelectedBatchPlan();
-    showToast(`✅ تم إسناد ${missing.length} تسجيل لطلاب دفعة ${batch}`);
+    showToast(`✅ تم إسناد ${Object.keys(updates).length} تسجيل لطلاب دفعة ${batch}`);
   }catch(e){
     console.error('assignSelectedBatchStudents error:',e);
     showToast('⚠️ تعذر إسناد الطلاب للمقررات');
