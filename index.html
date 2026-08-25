@@ -5843,7 +5843,12 @@ function filterStudents(){
   }
   
   const count = document.getElementById('studentsCount');
-  if(count) count.textContent = `عرض ${filtered.length} من ${students.length} طالب`;
+  if(count){
+    const batchLabel = batchSelect?.options[batchSelect.selectedIndex]?.text || batchFilter;
+    count.textContent = batchFilter
+      ? `عدد طلاب دفعة ${batchLabel}: ${filtered.length} طالب`
+      : `إجمالي الطلاب: ${filtered.length} طالب`;
+  }
   
   renderStudentsTableFiltered(filtered);
 }
@@ -5865,7 +5870,7 @@ function renderStudentsTableFiltered(filtered){
     tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>';
     return;
   }
-  tbody.innerHTML = filtered.map((st)=>{
+  tbody.innerHTML = filtered.map((st,rowNumber)=>{
     const stdIdx = st.idx;
     const mySubjs = subjects.filter(s=>s.students.includes(stdIdx));
     const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[stdIdx]?calcTotal(grades[si][stdIdx]):0;});
@@ -5877,7 +5882,7 @@ function renderStudentsTableFiltered(filtered){
     const canEdit = canEditStudentRecord();
     const canDelete = canManageAcademicAdmin();
     return `<tr>
-      <td class="mono">${stdIdx+1}</td>
+      <td class="mono">${rowNumber+1}</td>
       <td><strong style="cursor:pointer;color:var(--primary)" onclick="openStudentProfile(${stdIdx})">${getStudentFullName(st)}</strong></td>
       <td class="mono">${st.id}</td>
       <td style="font-size:11px">${st.email||'—'}</td>
