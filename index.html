@@ -250,6 +250,9 @@ tr:hover td{background:#f8faff;}
         </div>
       </div>
 
+      <!-- LECTURER PRODUCTIVITY (ADMIN ONLY) -->
+      <div class="page" id="page-productivity"><div id="lecturerProductivityContent"></div></div>
+
       <!-- SUBJECTS -->
       <div class="page" id="page-subjects">
         <div class="card card-accent"><div class="card-title">📖 المواد الدراسية</div>
@@ -1097,6 +1100,8 @@ async function loadAllFromFirebase(){
     advisorCasesData = root.advisorCases
       ? Object.entries(root.advisorCases).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
+    lecturerProductivityData = root.lecturerProductivity || {};
+    scheduleData = root.schedule || {weekly:{}, units:{}};
     studentAdminSheetsData = root.studentAdminSheets
       ? Object.entries(root.studentAdminSheets).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
@@ -2071,6 +2076,7 @@ function doLogout() {
 const navConfig = {
   admin: [
     {id:'dashboard',icon:'🏠',label:'لوحة التحكم'},
+    {id:'productivity',icon:'⏱️',label:'الساعات الإنتاجية'},
     {id:'subjects',icon:'📖',label:'المواد الدراسية'},
     {id:'students',icon:'👩‍🎓',label:'الطلاب'},
     {id:'academicadvisor',icon:'🧭',label:'المرشد الأكاديمي'},
@@ -2107,7 +2113,7 @@ function renderNav() {
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
-  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', semesters:'الفصول الدراسية',
+  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
   settings:'الإعدادات',mygrades:'بياناتي ودرجاتي'
 };
 function navTo(pageId, el) {
@@ -2137,6 +2143,7 @@ function renderTopbarActions(pageId) {
 }
 function refreshPage(p) {
   if (p==='dashboard') renderDashboard();
+  if (p==='productivity') renderLecturerProductivity();
   if (p==='subjects') renderSubjectsTable();
   if (p==='students') renderStudentsTable();
   if (p==='academicadvisor') renderAcademicAdvisorPage();
@@ -2206,7 +2213,30 @@ function renderDashboard() {
     return;
   }
   const page=document.getElementById('page-dashboard');
-  page.innerHTML=`
+  const batchCounts=[...new Set(students.map(student=>student.batch).filter(Boolean))]
+    .sort()
+    .map(batch=>({batch,count:students.filter(student=>sameBatchName(student.batch,batch)).length}));
+  const lecturers=users.filter(user=>user.role==='lecturer');
+  const assignedSections=subjects.filter(subject=>subject.lecturerUserId);
+  const unassignedSections=subjects.filter(subject=>subject.batch && !subject.lecturerUserId).length;
+  const adminMetrics=currentUser.role==='admin' ? `
+    <div class="student-profile-header" style="background:linear-gradient(135deg,#061a42,#0D40FC 58%,#55D7FF);margin-bottom:1rem;align-items:stretch;">
+      <div style="flex:1"><div style="font-size:23px;font-weight:900">ملخص الإدارة الأكاديمي</div><div style="font-size:12px;color:rgba(255,255,255,.78);margin-top:6px">قراءة مباشرة لبيانات الطلاب والدفعات والمحاضرين المسجلة في النظام.</div></div>
+      <button class="btn" style="align-self:center;background:white;color:var(--primary);border:none;font-weight:800" onclick="navTo('productivity',document.querySelector('.nav-item[onclick*=\\'productivity\\']'))">الساعات الإنتاجية للمحاضرين</button>
+    </div>
+    <div class="stat-grid" style="margin-bottom:1rem">
+      <div class="stat"><div class="stat-icon">👩‍🎓</div><div class="stat-label">إجمالي الطلاب</div><div class="stat-value">${students.length}</div><div class="stat-sub">جميع الدفعات</div></div>
+      <div class="stat"><div class="stat-icon">🧩</div><div class="stat-label">الدفعات النشطة</div><div class="stat-value">${batchCounts.length}</div><div class="stat-sub">دفعات مسجلة</div></div>
+      <div class="stat"><div class="stat-icon">👩‍🏫</div><div class="stat-label">المحاضرون</div><div class="stat-value">${lecturers.length}</div><div class="stat-sub">حسابات محاضرين</div></div>
+      <div class="stat"><div class="stat-icon">📚</div><div class="stat-label">الشعب المسندة</div><div class="stat-value">${assignedSections.length}</div><div class="stat-sub">مقررات لها محاضر</div></div>
+    </div>
+    <div class="card card-accent" style="margin-bottom:1rem"><div class="card-title">توزيع الطلاب حسب الدفعة</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        ${batchCounts.map(item=>`<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px"><div style="font-weight:900;color:var(--primary-dark)">${item.batch}</div><div style="font-size:25px;font-weight:900;color:var(--primary);margin-top:5px">${item.count}</div><div style="font-size:11px;color:var(--text-muted)">طالب</div></div>`).join('') || '<div class="alert alert-info">لا توجد دفعات مسجلة حتى الآن.</div>'}
+      </div>
+      ${unassignedSections?`<div class="alert alert-warn" style="margin:12px 0 0">يوجد ${unassignedSections} شعبة بلا محاضر مسند.</div>`:''}
+    </div>` : '';
+  page.innerHTML=`${adminMetrics}
     <div class="stat-grid" id="dashStats"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
       <div class="card card-accent"><div class="card-title">📋 آخر النتائج</div>
@@ -2253,6 +2283,92 @@ function renderDashboard() {
 // ══════════════════════════════════════════════
 //  SUBJECTS
 // ══════════════════════════════════════════════
+function getTimeRangeHours(start,end){
+  const toMinutes=value=>{
+    const parts=String(value||'').split(':').map(Number);
+    return Number.isFinite(parts[0])&&Number.isFinite(parts[1]) ? (parts[0]*60)+parts[1] : 0;
+  };
+  const duration=toMinutes(end)-toMinutes(start);
+  return duration>0 ? duration/60 : 0;
+}
+function getLecturerScheduledHours(lecturer){
+  const lecturerName=String(lecturer?.name||'').trim();
+  const lecturerId=String(lecturer?.username||lecturer?.id||'').trim();
+  return Object.values(scheduleData?.weekly||{}).reduce((total,slot)=>{
+    const subject=subjects.find(item=>item.name===slot.subject);
+    const matchesName=String(slot.lecturer||'').trim()===lecturerName;
+    const matchesSubject=subject && [lecturerId,lecturer?._fbKey,lecturer?.id].filter(Boolean).includes(subject.lecturerUserId);
+    return (matchesName||matchesSubject) ? total+getTimeRangeHours(slot.timeStart,slot.timeEnd) : total;
+  },0);
+}
+function getLecturerProductivityRecord(period,username){
+  return lecturerProductivityData?.[period]?.[username]||{};
+}
+function formatProductivityHours(hours){
+  return Number(hours||0).toLocaleString('ar-SA',{maximumFractionDigits:1});
+}
+function renderLecturerProductivity(){
+  if(!isAdminRole()) return navTo('dashboard',null);
+  const container=document.getElementById('lecturerProductivityContent');
+  if(!container) return;
+  const periodInput=document.getElementById('productivityPeriod');
+  const period=periodInput?.value || new Date().toISOString().slice(0,7);
+  const lecturers=users.filter(user=>user.role==='lecturer').sort((a,b)=>(a.name||'').localeCompare(b.name||'','ar'));
+  const rows=lecturers.map(lecturer=>{
+    const username=lecturer.username||lecturer.id||lecturer._fbKey;
+    const scheduledWeekly=getLecturerScheduledHours(lecturer);
+    const record=getLecturerProductivityRecord(period,username);
+    const extraHours=Number(record.extraHours)||0;
+    const assigned=subjects.filter(subject=>[username,lecturer._fbKey,lecturer.id].filter(Boolean).includes(subject.lecturerUserId));
+    const studentCount=[...new Set(assigned.flatMap(subject=>subject.students||[]))].length;
+    return {lecturer,username,scheduledWeekly,monthlyScheduled:scheduledWeekly*4.33,extraHours,totalHours:(scheduledWeekly*4.33)+extraHours,assigned,studentCount,record};
+  });
+  const totalHours=rows.reduce((sum,row)=>sum+row.totalHours,0);
+  const totalScheduled=rows.reduce((sum,row)=>sum+row.monthlyScheduled,0);
+  container.innerHTML=`
+    <div class="student-profile-header" style="background:linear-gradient(135deg,#061a42,#0D40FC 62%,#55D7FF);margin-bottom:1rem;">
+      <div style="flex:1"><div style="font-size:23px;font-weight:900">الساعات الإنتاجية للمحاضرين</div><div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:6px">الساعات المجدولة تُحسب من الجدول الأسبوعي × 4.33 أسبوعاً، ويمكن اعتماد ساعات إضافية لكل شهر.</div></div>
+      <div style="min-width:145px"><label style="display:block;font-size:11px;color:white;margin-bottom:5px">الشهر</label><input id="productivityPeriod" type="month" value="${period}" onchange="renderLecturerProductivity()" style="width:100%;padding:8px;border:0;border-radius:8px;font-family:inherit"></div>
+    </div>
+    <div class="stat-grid" style="margin-bottom:1rem">
+      <div class="stat"><div class="stat-icon">👩‍🏫</div><div class="stat-label">المحاضرون</div><div class="stat-value">${rows.length}</div><div class="stat-sub">حسابات نشطة</div></div>
+      <div class="stat"><div class="stat-icon">🗓️</div><div class="stat-label">الساعات المجدولة</div><div class="stat-value">${formatProductivityHours(totalScheduled)}</div><div class="stat-sub">ساعة تقديرية للشهر</div></div>
+      <div class="stat"><div class="stat-icon">⏱️</div><div class="stat-label">إجمالي الساعات المعتمدة</div><div class="stat-value">${formatProductivityHours(totalHours)}</div><div class="stat-sub">مجدولة وإضافية</div></div>
+      <div class="stat"><div class="stat-icon">📚</div><div class="stat-label">الشعب المسندة</div><div class="stat-value">${subjects.filter(subject=>subject.lecturerUserId).length}</div><div class="stat-sub">جميع الدفعات</div></div>
+    </div>
+    <div class="card card-accent"><div class="card-title">تفصيل المحاضرين</div>
+      <div class="table-wrap"><table><thead><tr><th>المحاضر</th><th>الشعب المسندة</th><th>الطلاب المرتبطون</th><th>ساعات أسبوعية</th><th>ساعات مجدولة للشهر</th><th>ساعات إضافية</th><th>الإجمالي المعتمد</th><th>ملاحظات الإدارة</th><th>حفظ</th></tr></thead><tbody>
+        ${rows.length ? rows.map((row,index)=>`<tr>
+          <td><strong>${escapeHtml(row.lecturer.name||row.username)}</strong><div style="font-size:10px;color:var(--text-muted);margin-top:3px">${escapeHtml(row.username)}</div></td>
+          <td>${row.assigned.length}</td><td>${row.studentCount}</td><td>${formatProductivityHours(row.scheduledWeekly)}</td><td>${formatProductivityHours(row.monthlyScheduled)}</td>
+          <td><input id="productivityExtra_${index}" type="number" min="0" step="0.5" value="${row.extraHours}" style="width:76px;padding:7px;border:1px solid var(--border);border-radius:7px;font-family:inherit"></td>
+          <td><strong style="color:var(--primary)">${formatProductivityHours(row.totalHours)}</strong></td>
+          <td><input id="productivityNote_${index}" value="${escapeHtml(row.record.note||'')}" placeholder="ملاحظة اختيارية" style="min-width:180px;padding:7px;border:1px solid var(--border);border-radius:7px;font-family:inherit"></td>
+          <td><button class="btn btn-primary btn-sm" onclick="saveLecturerProductivity(${index})">حفظ</button></td>
+        </tr>`).join('') : '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد حسابات محاضرين مسجلة حتى الآن.</td></tr>'}
+      </tbody></table></div>
+    </div>`;
+  window._productivityRows=rows;
+}
+async function saveLecturerProductivity(index){
+  const row=window._productivityRows?.[index];
+  const period=document.getElementById('productivityPeriod')?.value;
+  if(!row||!period) return;
+  const extraHours=Math.max(0,Number(document.getElementById(`productivityExtra_${index}`)?.value)||0);
+  const note=document.getElementById(`productivityNote_${index}`)?.value.trim()||'';
+  const record={extraHours,note,updatedAt:new Date().toISOString(),updatedBy:currentUser?.username||'admin'};
+  try{
+    await fbRef(`lecturerProductivity/${period}/${row.username}`).set(record);
+    if(!lecturerProductivityData[period]) lecturerProductivityData[period]={};
+    lecturerProductivityData[period][row.username]=record;
+    showToast('تم حفظ ساعات المحاضر');
+    renderLecturerProductivity();
+  }catch(error){
+    console.error('Productivity save error:',error);
+    showToast('تعذر حفظ الساعات');
+  }
+}
+
 function normalizeBatchName(batch){
   return String(batch||'').trim().toUpperCase();
 }
@@ -4991,6 +5107,7 @@ window.addEventListener('load', function(){ initFirebase(); });
 const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
 const SLOT_COLORS = ['#0D40FC','#1a7a3c','#b35c00','#8e44ad','#c0392b','#2980b9','#16a085','#d35400'];
 let scheduleData = {weekly:{}, units:{}};
+let lecturerProductivityData = {};
 
 async function renderScheduleAdmin(){
   // Load from Firebase
