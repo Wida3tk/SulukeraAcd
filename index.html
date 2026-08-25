@@ -2313,7 +2313,6 @@ function renderAdminDashboard(){
   const financeReview=students.map((student,index)=>({student,index,financial:getStudentFinancialState(student)})).filter(item=>
     !item.student.financeSnapshot && (!item.student.totalAmount || !item.financial.installments.length)
   );
-  const unassignedSections=subjects.filter(subject=>subject.batch && !subject.lecturerUserId);
   const unscheduledBatches=batches.filter(item=>item.studentCount>0 && !item.scheduledCount);
   const actions=[];
   if(pendingRequests.length) actions.push({tone:'warn',title:'طلبات طلاب بانتظار المراجعة',count:pendingRequests.length,action:"navTo('alerts',null)",detail:'افتح الطلبات واعتمد الإجراء المناسب.'});
@@ -2321,7 +2320,6 @@ function renderAdminDashboard(){
   if(incompleteStudents.length) actions.push({tone:'info',title:'بطاقات طلاب ناقصة البيانات',count:incompleteStudents.length,action:"navTo('students',null)",detail:'استكمل وسائل التواصل أو بيانات البرنامج والدفعة.'});
   if(unregisteredStudents.length) actions.push({tone:'info',title:'طلاب بلا مقررات مسندة',count:unregisteredStudents.length,action:"navTo('students',null)",detail:'أضف المقررات من سجل الطالب أو خطط الدفعات.'});
   if(financeReview.length) actions.push({tone:'warn',title:'ملفات مالية تحتاج مراجعة',count:financeReview.length,action:"navTo('students',null)",detail:'تحتاج إدخالاً أو اعتماداً من موظف المالية.'});
-  if(unassignedSections.length) actions.push({tone:'danger',title:'شعب بلا محاضر',count:unassignedSections.length,action:"navTo('subjects',null)",detail:'عيّن محاضراً قبل بدء المقرر.'});
   if(unscheduledBatches.length) actions.push({tone:'warn',title:'دفعات بلا جدول أسبوعي',count:unscheduledBatches.length,action:"navTo('schedule',null)",detail:unscheduledBatches.map(item=>item.batch).join('، ')});
   const slots=[...Object.values(scheduleData?.weekly||{})].sort((a,b)=>{
     const dayDiff=DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day);
