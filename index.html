@@ -5823,7 +5823,8 @@ async function savePkgSubjects(){
 function filterStudents(){
   const query = (document.getElementById('studentSearchInput')?.value||'').toLowerCase().trim();
   const progFilter = document.getElementById('studentProgramFilter')?.value||'';
-  const batchFilter = document.getElementById('studentBatchFilter')?.value||'';
+  const batchSelect = document.getElementById('studentBatchFilter');
+  const batchFilter = normalizeBatchName(batchSelect?.value||'');
   
   let filtered = students.map((st,idx)=>({...st,idx}));
   if(query){
@@ -5838,7 +5839,7 @@ function filterStudents(){
     filtered = filtered.filter(st=>st.program===progFilter);
   }
   if(batchFilter){
-    filtered = filtered.filter(st=>sameBatchName(st.batch,batchFilter));
+    filtered = filtered.filter(st=>normalizeBatchName(st.batch)===batchFilter);
   }
   
   const count = document.getElementById('studentsCount');
@@ -5912,6 +5913,8 @@ function populateBatchFilterDropdown(){
     batches.map(b=>`<option value="${b}">${b}</option>`).join('');
   const selected = batches.find(b=>sameBatchName(b,current));
   if(selected) sel.value = selected;
+  // Rebind after rebuilding options so the visible batch always filters the table.
+  sel.onchange = filterStudents;
 }
 
 // ══════════════════════════════════════════════
