@@ -1250,13 +1250,9 @@ function sortScheduleSlots(slots){
 }
 function getStudentScheduleSlots(student=currentUser?.data){
   if(!student) return [];
-  const mySubjectNames = new Set(getStudentSubjects(currentUser.fbKey).map(subject=>subject.name));
   const weekly = Object.values(dbData.schedule?.weekly||{});
-  const matched = weekly.filter(slot=>{
-    const sameBatch = !slot.batch || normalizeBatchName(slot.batch)===normalizeBatchName(student.batch);
-    const sameSubject = !slot.subject || mySubjectNames.has(slot.subject);
-    return sameBatch && sameSubject;
-  });
+  // Only a schedule explicitly assigned to this batch overrides the approved fallback.
+  const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch));
   if(matched.length) return sortScheduleSlots(matched);
   return sortScheduleSlots(PORTAL_FALLBACK_WEEKLY[normalizeBatchName(student.batch)] || []);
 }

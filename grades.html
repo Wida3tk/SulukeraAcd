@@ -1184,13 +1184,8 @@ function sortScheduleSlots(slots){
 }
 function getStudentScheduleSlots(student=currentUser?.data){
   if(!student) return [];
-  const mySubjectNames = new Set(getStudentSubjects(currentUser.fbKey).map(subject=>subject.name));
   const weekly = Object.values(dbData.schedule?.weekly||{});
-  return sortScheduleSlots(weekly.filter(slot=>{
-    const sameBatch = !slot.batch || normalizeBatchName(slot.batch)===normalizeBatchName(student.batch);
-    const sameSubject = !slot.subject || mySubjectNames.has(slot.subject);
-    return sameBatch && sameSubject;
-  }));
+  return sortScheduleSlots(weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch)));
 }
 function getLecturerScheduleSlots(){
   const lecturerName = currentUser?.data?.name;

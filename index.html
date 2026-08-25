@@ -511,7 +511,7 @@ tr:hover td{background:#f8faff;}
           <div class="card card-accent">
             <div class="card-title">📅 إدارة الجدول الأسبوعي</div>
             <div class="alert alert-info">أضف المحاضرات الأسبوعية — ستظهر للطلاب والمحاضرين في student.html</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:end;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:end;">
               <div class="form-group" style="margin:0">
                 <label>اليوم</label>
                 <select id="schDay" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
@@ -531,6 +531,12 @@ tr:hover td{background:#f8faff;}
                 <label>المقرر</label>
                 <select id="schSubject" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
                   <option value="">-- اختر مقرراً --</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>الدفعة *</label>
+                <select id="schBatch" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
+                  <option value="">-- اختر الدفعة --</option>
                 </select>
               </div>
               <div class="form-group" style="margin:0">
@@ -5120,7 +5126,13 @@ async function renderScheduleAdmin(){
   const subjSel = document.getElementById('schSubject');
   if(subjSel){
     subjSel.innerHTML = '<option value="">-- اختر مقرراً --</option>' +
-      subjects.map(s=>`<option value="${s.name}">${s.name}</option>`).join('');
+      subjects.filter(s=>s._fbKey).map(s=>`<option value="${s._fbKey}">${s.name}${s.batch?' — '+s.batch:''}</option>`).join('');
+  }
+  const batchSel = document.getElementById('schBatch');
+  if(batchSel){
+    const batches=getAllKnownBatches();
+    batchSel.innerHTML = '<option value="">-- اختر الدفعة --</option>' +
+      batches.map(batch=>`<option value="${batch}">${batch}</option>`).join('');
   }
   renderWeeklySlots();
   renderWeeklyPreview();
@@ -5139,17 +5151,20 @@ async function addScheduleSlot(){
   const day    = document.getElementById('schDay').value;
   const start  = document.getElementById('schStart').value;
   const end    = document.getElementById('schEnd').value;
-  const subj   = document.getElementById('schSubject').value;
+  const subjectKey = document.getElementById('schSubject').value;
+  const batch  = document.getElementById('schBatch').value;
   const room   = document.getElementById('schRoom').value.trim();
-  if(!start||!end||!subj) return showToast('⚠️ أدخل الوقت والمقرر');
+  const subjectRecord=subjects.find(subject=>subject._fbKey===subjectKey);
+  if(!start||!end||!subjectRecord||!batch) return showToast('⚠️ أدخل الوقت والمقرر والدفعة');
   if(start>=end) return showToast('⚠️ وقت البداية يجب أن يكون قبل النهاية');
 
-  const lecUser = subjects.find(s=>s.name===subj);
+  const subj = subjectRecord.name;
+  const lecUser = subjectRecord;
   const lecName = lecUser ? getLecturerName(lecUser.lecturerUserId) : '';
   const colorIdx = Object.keys(scheduleData.weekly||{}).length % SLOT_COLORS.length;
 
   const key = 'slot_'+Date.now();
-  const slot = {day, timeStart:start, timeEnd:end, subject:subj, lecturer:lecName, room, color:SLOT_COLORS[colorIdx]};
+  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:SLOT_COLORS[colorIdx]};
 
   if(!scheduleData.weekly) scheduleData.weekly={};
   scheduleData.weekly[key]=slot;
@@ -5172,7 +5187,7 @@ function renderWeeklySlots(){
         <div class="slot-color" style="background:${s.color||'var(--primary)'}"></div>
         <div>
           <div style="font-size:13px;font-weight:700">${s.subject}</div>
-          <div style="font-size:11px;color:var(--muted)">${s.day} · ${s.timeStart}–${s.timeEnd}${s.room?' · 🏠 '+s.room:''}</div>
+          <div style="font-size:11px;color:var(--muted)">${s.batch||'جدول عام'} · ${s.day} · ${s.timeStart}–${s.timeEnd}${s.room?' · 🏠 '+s.room:''}</div>
         </div>
       </div>
       <button class="btn btn-danger btn-xs" onclick="deleteSlot('${key}')">🗑️</button>
