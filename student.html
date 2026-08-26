@@ -1084,16 +1084,33 @@ function renderStudentAccountTab(){
   const { st, fullName } = getCurrentStudentAcademicData();
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
-      <div class="card-title">👤 حسابي</div>
+      <div class="card-title">👤 بيانات الحساب</div>
+      <div style="font-size:12px;color:var(--muted);margin:-4px 0 14px">يمكنك تحديث البريد الإلكتروني ورقم الجوال فقط. تحفظ بقية البيانات من إدارة النظام.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field"><label>الاسم</label><input value="${fullName}" readonly></div>
         <div class="field"><label>الرقم الطلابي</label><input value="${st.id||''}" readonly></div>
-        <div class="field"><label>البريد الإلكتروني</label><input value="${st.email||''}" readonly></div>
-        <div class="field"><label>رقم الجوال</label><input value="${st.phone||''}" readonly></div>
+        <div class="field"><label>البريد الإلكتروني</label><input id="studentAccountEmail" type="email" value="${st.email||''}" placeholder="name@example.com"></div>
+        <div class="field"><label>رقم الجوال</label><input id="studentAccountPhone" type="tel" value="${st.phone||''}" placeholder="05XXXXXXXX"></div>
         <div class="field"><label>الدفعة</label><input value="${st.batch||''}" readonly></div>
         <div class="field"><label>الرخصة الأكاديمية</label><input value="${st.planType||''}" readonly></div>
       </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:4px"><button class="btn btn-primary" onclick="saveStudentContactDetails()">حفظ بيانات التواصل</button></div>
     </div>`;
+}
+async function saveStudentContactDetails(){
+  const email=document.getElementById('studentAccountEmail')?.value.trim()||'';
+  const phone=document.getElementById('studentAccountPhone')?.value.trim()||'';
+  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('يرجى إدخال بريد إلكتروني صحيح');
+  if(phone&&phone.length<7) return toast('يرجى إدخال رقم جوال صحيح');
+  try{
+    const updatedAt=new Date().toISOString();
+    await fbRef('students/'+currentUser.fbKey).update({email,phone,contactUpdatedAt:updatedAt});
+    if(currentUser.authKey) await fbRef('users/'+currentUser.authKey).update({email,phone,contactUpdatedAt:updatedAt});
+    currentUser.data={...currentUser.data,email,phone,contactUpdatedAt:updatedAt};
+    currentUser.authUser={...currentUser.authUser,email,phone,contactUpdatedAt:updatedAt};
+    if(dbData.students?.[currentUser.fbKey]) dbData.students[currentUser.fbKey]={...dbData.students[currentUser.fbKey],email,phone,contactUpdatedAt:updatedAt};
+    toast('تم حفظ بيانات التواصل');
+  }catch(error){console.error('saveStudentContactDetails',error);toast('تعذر حفظ بيانات التواصل');}
 }
 
 function exportStudentTranscriptCsv(){
