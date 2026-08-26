@@ -582,7 +582,10 @@ tr:hover td{background:#f8faff;}
                 <label>القاعة (اختياري)</label>
                 <input type="text" id="schRoom" placeholder="مثال: Q1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
               </div>
-              <button class="btn btn-primary btn-sm" onclick="addScheduleSlot()" style="align-self:end;white-space:nowrap">+ إضافة</button>
+              <div style="display:flex;gap:6px;align-self:end;white-space:nowrap">
+                <button id="schSaveButton" class="btn btn-primary btn-sm" onclick="addScheduleSlot()">+ إضافة</button>
+                <button id="schCancelEditButton" class="btn btn-outline btn-sm" onclick="cancelScheduleSlotEdit()" style="display:none">إلغاء</button>
+              </div>
             </div>
             <div id="weeklySlotsList"></div>
           </div>
@@ -5411,6 +5414,7 @@ const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربع�
 const SLOT_COLORS = ['#0D40FC','#1a7a3c','#b35c00','#8e44ad','#c0392b','#2980b9','#16a085','#d35400'];
 let scheduleData = {weekly:{}, units:{}};
 let lecturerProductivityData = {};
+let editingScheduleSlotKey = '';
 
 async function renderScheduleAdmin(){
   // Load from Firebase
@@ -5458,19 +5462,45 @@ async function addScheduleSlot(){
   const subj = subjectRecord.name;
   const lecUser = subjectRecord;
   const lecName = lecUser ? getLecturerName(lecUser.lecturerUserId) : '';
+  const existingSlot=editingScheduleSlotKey ? scheduleData.weekly?.[editingScheduleSlotKey] : null;
   const colorIdx = Object.keys(scheduleData.weekly||{}).length % SLOT_COLORS.length;
-
-  const key = 'slot_'+Date.now();
-  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:SLOT_COLORS[colorIdx]};
+  const key = editingScheduleSlotKey || 'slot_'+Date.now();
+  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:existingSlot?.color||SLOT_COLORS[colorIdx]};
 
   if(!scheduleData.weekly) scheduleData.weekly={};
   scheduleData.weekly[key]=slot;
   await fbRef('schedule/weekly/'+key).set(slot);
 
-  document.getElementById('schRoom').value='';
+  const wasEditing=Boolean(editingScheduleSlotKey);
+  cancelScheduleSlotEdit();
   renderWeeklySlots();
   renderWeeklyPreview();
-  showToast('✅ تم إضافة المحاضرة');
+  showToast(wasEditing?'✅ تم حفظ تعديل المحاضرة':'✅ تم إضافة المحاضرة');
+}
+
+function editScheduleSlot(key){
+  const slot=scheduleData.weekly?.[key];
+  if(!slot) return showToast('تعذر العثور على المحاضرة');
+  editingScheduleSlotKey=key;
+  document.getElementById('schDay').value=slot.day||'الأحد';
+  document.getElementById('schStart').value=slot.timeStart||'';
+  document.getElementById('schEnd').value=slot.timeEnd||'';
+  document.getElementById('schSubject').value=slot.subjectKey||'';
+  document.getElementById('schBatch').value=slot.batch||'';
+  document.getElementById('schRoom').value=slot.room||'';
+  document.getElementById('schSaveButton').textContent='حفظ التعديل';
+  document.getElementById('schCancelEditButton').style.display='inline-flex';
+  document.getElementById('schDay').closest('.card').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function cancelScheduleSlotEdit(){
+  editingScheduleSlotKey='';
+  const defaults={schDay:'الأحد',schStart:'',schEnd:'',schSubject:'',schBatch:'',schRoom:''};
+  Object.entries(defaults).forEach(([id,value])=>{const element=document.getElementById(id);if(element) element.value=value;});
+  const saveButton=document.getElementById('schSaveButton');
+  const cancelButton=document.getElementById('schCancelEditButton');
+  if(saveButton) saveButton.textContent='+ إضافة';
+  if(cancelButton) cancelButton.style.display='none';
 }
 
 function renderWeeklySlots(){
@@ -5487,7 +5517,10 @@ function renderWeeklySlots(){
           <div style="font-size:11px;color:var(--muted)">${s.batch||'جدول عام'} · ${s.day} · ${s.timeStart}–${s.timeEnd}${s.room?' · 🏠 '+s.room:''}</div>
         </div>
       </div>
-      <button class="btn btn-danger btn-xs" onclick="deleteSlot('${key}')">🗑️</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-xs" onclick="editScheduleSlot('${key}')" title="تعديل المحاضرة">✏️</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteSlot('${key}')" title="حذف المحاضرة">🗑️</button>
+      </div>
     </div>`).join('');
 }
 
