@@ -642,7 +642,7 @@ tr:hover td{background:#f8faff;}
             <div class="form-group"><label>🟢 حد A (ممتاز)</label><input type="number" id="gradeA" value="85" oninput="updateSettingsSummary()"></div>
             <div class="form-group"><label>🔵 حد B (جيد جدًا)</label><input type="number" id="gradeB" value="70" oninput="updateSettingsSummary()"></div>
             <div class="form-group"><label>🟡 حد C (جيد)</label><input type="number" id="gradeC" value="60" oninput="updateSettingsSummary()"></div>
-            <div class="form-group"><label>🔴 حد الرسوب</label><input type="number" id="gradeFail" value="60" oninput="updateSettingsSummary()"></div>
+            <div class="form-group"><label>🔴 حد الاجتياز</label><input type="number" id="gradeFail" value="80" oninput="updateSettingsSummary()"></div>
           </div>
           <div class="card-title" style="margin-top:1rem">🔗 ربط نظام العمليات</div>
           <div class="alert alert-info">هذه الإعدادات تُستخدم لمزامنة المالية من نظام العمليات إلى الأكاديمية. احتفظي بالرمز داخل حسابات الإدارة فقط.</div>
@@ -1067,7 +1067,7 @@ async function loadAllFromFirebase(){
     if(root.settings){
       const s=root.settings;
       settings={attend:s.attend||5,hw:s.hw||5,disc:s.disc||5,exam:s.exam||40,
-        gradeA:s.gradeA||85,gradeB:s.gradeB||70,gradeC:s.gradeC||60,gradeFail:s.gradeFail||60,
+        gradeA:s.gradeA||85,gradeB:s.gradeB||70,gradeC:s.gradeC||60,gradeFail:s.gradeFail||80,
         operBaseUrl:s.operBaseUrl||'',operIntegrationToken:s.operIntegrationToken||''};
     }
 
@@ -1437,7 +1437,7 @@ async function saveActivityLog(entry){
 // ══════════════════════════════════════════════
 //  DATA
 // ══════════════════════════════════════════════
-let settings={attend:5,hw:5,disc:5,exam:40,gradeA:85,gradeB:70,gradeC:60,gradeFail:60,operBaseUrl:'',operIntegrationToken:''};
+let settings={attend:5,hw:5,disc:5,exam:40,gradeA:85,gradeB:70,gradeC:60,gradeFail:80,operBaseUrl:'',operIntegrationToken:''};
 let programsData=[];
 let users=[{id:'u1',name:'مدير النظام',username:'admin',password:null,passwordHash:'disabled',passwordSalt:'disabled',role:'admin',subjects:[]}];
 let subjects=[];

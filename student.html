@@ -466,7 +466,7 @@ let currentSubjectKey = null;
 let currentBatchName = null;
 let currentAppTab = 'home';
 
-const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:60 };
+const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:80 };
 const STUDENT_MOTIVATIONS = [
   'بداية قوية اليوم تصنع نتيجة مختلفة غدًا.',
   'كل مقرر تنجزه يقربك من هدفك المهني.',
@@ -1098,7 +1098,7 @@ function renderStudentPoliciesTab(){
   ];
   const renderGroups=groups=>groups.map(group=>`<section class="card policy-group"><div class="card-title">${group.icon} ${group.title}</div><div class="policy-list">${group.items.map(item=>`<details class="policy-item"><summary><div><div class="policy-item-title">${item[0]}</div><div class="policy-item-brief">${item[1]}</div></div></summary><div class="policy-item-body">${item[2]}</div></details>`).join('')}</div></section>`).join('');
   document.getElementById('mainContent').innerHTML=`
-    <section class="policy-hero"><div class="policy-eyebrow">نظام معلومات الطالب</div><h1>سياسات سلوكيرا</h1></section>
+    <section class="policy-hero"><div class="policy-eyebrow">نظام معلومات الطالب</div><h1>سياسات سلوكيرا</h1><p>إصدار 1.0 · تاريخ السريان: 26 أغسطس 2026 · إصدار مشرف المنصة</p></section>
     <div class="policy-tabs"><button class="policy-tab active" onclick="switchPolicyTab('platform',this)">سياسات المنصة</button><button class="policy-tab" onclick="switchPolicyTab('assessment',this)">سياسة التقييم والاختبارات</button></div>
     <div id="policyPlatformPanel">${renderGroups(platformGroups)}</div><div id="policyAssessmentPanel" style="display:none">${renderGroups(assessmentGroups)}</div>`;
 }
