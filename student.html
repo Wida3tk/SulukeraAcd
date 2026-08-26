@@ -521,6 +521,15 @@ const PORTAL_PROGRAM_STAGES = [
   { order:2, title:'الفصل الثاني', dateRange:'2026/12/01 - 2027/03/31' },
   { order:4, title:'الفصل الرابع', dateRange:'2027/04/01 - 2027/06/30' }
 ];
+const PORTAL_ACADEMIC_CALENDAR = [
+  {order:1, title:'الفصل الأول', study:'23 أغسطس - 19 سبتمبر 2026', exam:'20 - 26 سبتمبر 2026', break:'27 سبتمبر - 3 أكتوبر 2026'},
+  {order:2, title:'الفصل الثاني', study:'4 - 31 أكتوبر 2026', exam:'1 - 7 نوفمبر 2026', break:'8 - 14 نوفمبر 2026'},
+  {order:3, title:'الفصل الثالث', study:'15 نوفمبر - 12 ديسمبر 2026', exam:'13 - 19 ديسمبر 2026', break:'20 - 26 ديسمبر 2026'},
+  {order:4, title:'الفصل الرابع', study:'27 ديسمبر 2026 - 23 يناير 2027', exam:'24 - 30 يناير 2027', break:'31 يناير - 6 فبراير 2027'},
+  {order:5, title:'الفصل الخامس', study:'7 فبراير - 6 مارس 2027', exam:'7 - 13 مارس 2027', break:'14 - 20 مارس 2027'},
+  {order:6, title:'الفصل السادس', study:'21 مارس - 17 أبريل 2027', exam:'18 - 24 أبريل 2027', break:'25 أبريل - 1 مايو 2027'},
+  {order:7, title:'الفصل السابع', study:'2 - 29 مايو 2027', exam:'30 مايو - 5 يونيو 2027', break:'6 - 12 يونيو 2027'}
+];
 
 // ══════════════════════════════════════════════
 //  HELPERS
@@ -2275,19 +2284,7 @@ function renderProgramSchedule(units){
           </div>
         </div>
       </div>
-      <div class="card" style="background:linear-gradient(135deg,#ffffff,#fbfcff);border:1px solid #e2ebff;">
-        <div class="card-title">مراحل البرنامج</div>
-        <div style="display:grid;gap:10px;">
-          ${PORTAL_PROGRAM_STAGES.map(stage=>`
-            <div style="display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center;padding:12px 14px;border:1px solid ${stage.order===semester.semesterNo?'#bfd2ff':'#e5edf8'};background:${stage.order===semester.semesterNo?'#eef4ff':'#fff'};border-radius:16px;">
-              <div style="width:44px;height:44px;border-radius:14px;background:${stage.order===semester.semesterNo?'#0D40FC':'#d9e8f8'};color:${stage.order===semester.semesterNo?'#fff':'#1c2f4d'};display:flex;align-items:center;justify-content:center;font-weight:900;">${stage.order}</div>
-              <div>
-                <div style="font-size:14px;font-weight:800;color:#0f1f3d;">${stage.title}</div>
-                <div style="font-size:12px;color:#5b6b82;margin-top:4px;">${stage.dateRange}</div>
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>`;
+      ${renderAcademicCalendar([semester.semesterNo])}`;
   }
   const lecturerSemesters = roleProgram.semesterList || [];
   const unitList = Object.entries(units).sort(([,a],[,b])=>Number(a.order||0)-Number(b.order||0));
@@ -2311,11 +2308,12 @@ function renderProgramSchedule(units){
               <div style="font-size:12px;color:#5b6b82;margin-top:10px;">الفترة المعتمدة: ${semester.startDate} إلى ${semester.endDate}</div>
             </div>`).join('')}
         </div>`:'<div class="alert alert-info" style="margin-bottom:16px;">التقويم العام معتمد ويظهر كاملًا إلى حين ربط دفعات إضافية بالحساب.</div>'}
-        ${unitList.length?`<div class="program-calendar-grid">${unitList.map(([key,unit])=>{
+        ${renderAcademicCalendar(lecturerSemesters.map(semester=>semester.semesterNo))}
+        ${unitList.length?`<div class="program-calendar-grid" style="margin-top:16px">${unitList.map(([key,unit])=>{
           const type=String(unit.title||'');
           const itemClass=type.includes('اختبارات')?'exam':type.includes('إجازة')?'break':'';
           return `<div class="program-calendar-item ${itemClass}"><div class="program-calendar-order">${unit.order||'—'}</div><div><div class="program-calendar-title">${unit.title||'مرحلة البرنامج'}</div><div class="program-calendar-date">${unit.dateRange||'التاريخ غير محدد'}</div><div class="program-calendar-duration">${unit.duration||''}</div></div></div>`;
-        }).join('')}</div>`:'<div class="empty">لا توجد مراحل برنامج معتمدة حاليًا.</div>'}
+        }).join('')}</div>`:''}
       </div>`;
   }
   if(!unitList.length) return '<div class="empty">لا توجد بيانات برنامج معتمدة حالياً.</div>';
@@ -2335,6 +2333,30 @@ function renderProgramSchedule(units){
         </div>
       </div>`).join('')}
   </div>`;
+}
+
+function renderAcademicCalendar(activeSemesters=[]){
+  const activeSet=new Set(activeSemesters.filter(Boolean).map(Number));
+  return `
+    <div class="card" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+        <div><div class="card-title" style="margin:0;border:none;padding:0;">التقويم الأكاديمي 2026-2027</div><div style="font-size:12px;color:var(--muted);margin-top:7px;">بداية البرنامج: 23 أغسطس 2026 · نهاية البرنامج: 12 يونيو 2027</div></div>
+        <span class="badge badge-pass">4 أسابيع دراسة · أسبوع اختبارات · أسبوع إجازة</span>
+      </div>
+      <div class="program-calendar-grid">
+        ${PORTAL_ACADEMIC_CALENDAR.map(term=>{
+          const active=activeSet.has(term.order);
+          return `<div class="program-calendar-item" style="border-color:${active?'#9dbbff':'#e0e9f8'};background:${active?'#f1f6ff':'#fff'};">
+            <div class="program-calendar-order" style="background:${active?'#0D40FC':'#eaf0ff'};color:${active?'#fff':'#0D40FC'};">${term.order}</div>
+            <div><div class="program-calendar-title">${term.title}${active?' · الفصل الحالي':''}</div>
+              <div class="program-calendar-date"><strong>الدراسة:</strong> ${term.study}</div>
+              <div class="program-calendar-date"><strong>الاختبارات:</strong> ${term.exam}</div>
+              <div class="program-calendar-date"><strong>الإجازة:</strong> ${term.break}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
 }
 
 // ══════════════════════════════════════════════
