@@ -1847,7 +1847,7 @@ function getLecturerSubjects(uid){
   return subjects.map((s,i)=>({...s,idx:i})).filter(s=>s.lecturerUserId&&ids.has(s.lecturerUserId));
 }
 function getCurrentAcademicDateIso(){
-  return '2026-08-19';
+  return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
 }
 function getSubjectSemesterSummary(subj){
   const subjectKey=subj?._fbKey;
@@ -1856,13 +1856,14 @@ function getSubjectSemesterSummary(subj){
   );
   const semesterKey=semesterEntry?.[0]||subj?.semesterKey||'';
   const semester=semesterEntry?.[1]||null;
-  const startDate=semester?.startDate||'';
-  const endDate=semester?.endDate||'';
+  // تعتمد حالة المقرر على تواريخه الخاصة أولاً، ثم على تواريخ الفصل المرتبط به عند عدم ضبطها.
+  const startDate=subj?.startDate||semester?.startDate||'';
+  const endDate=subj?.endDate||semester?.endDate||'';
   const today=getCurrentAcademicDateIso();
   let state='ongoing';
-  if(semester?.status==='active') state='ongoing';
-  else if(endDate && endDate<today) state='finished';
+  if(endDate && endDate<today) state='finished';
   else if(startDate && startDate>today) state='upcoming';
+  else if(semester?.status==='active') state='ongoing';
   else if(semester?.status==='inactive' && startDate && endDate && startDate<=today && endDate>=today) state='ongoing';
   else if(!semester && subj?.semesterNo) state='ongoing';
   else if(!semester && !startDate && !endDate) state='ongoing';
@@ -5765,19 +5766,22 @@ function renderSelectedBatchPlan(){
       <span class="badge ${missingEnrollments?'badge-warn':'badge-pass'}">${missingEnrollments?`${missingEnrollments} تسجيل بحاجة إسناد`:'تسجيلات الطلاب مكتملة'}</span>
       ${studentsWithoutPlan.length?`<span class="badge badge-fail">${studentsWithoutPlan.length} طالب بلا مسار محدد</span>`:''}
     </div>
-    <div class="alert alert-info">أنشئي المقررات مرة واحدة، ثم استخدمي زر <strong>إسناد الطلاب للمقررات</strong> لإضافة التسجيلات الناقصة فقط. لا يحذف هذا الإجراء أي مقرر أو تسجيل استثنائي.</div>
+    <div class="alert alert-info">حددي تاريخ بداية ونهاية كل مقرر من الجدول أدناه. تتحول حالته تلقائيًا إلى <strong>منتهٍ</strong> بعد تاريخ النهاية، بينما يبقى رصد الدرجات متاحًا. أنشئي المقررات مرة واحدة، ثم استخدمي زر <strong>إسناد الطلاب للمقررات</strong> لإضافة التسجيلات الناقصة فقط.</div>
     ${studentsWithoutPlan.length?`<div class="alert alert-warn">لن يُسند أي مقرر تلقائيًا إلى ${studentsWithoutPlan.length} طالب لأن مسارهم غير محدد. استكملي المسار من بطاقة الطالب أولًا.</div>`:''}
     <div class="table-wrap"><table>
-    <thead><tr><th>#</th><th>المقرر</th><th>الفصل</th><th>المسارات</th><th>المحاضر</th></tr></thead>
+    <thead><tr><th>#</th><th>المقرر</th><th>الفصل</th><th>تاريخ البداية</th><th>تاريخ النهاية</th><th>المسارات</th><th>عضو هيئة التدريس</th></tr></thead>
     <tbody>${FIXED_COURSES.map((course,index)=>{
       const offering=offerings.find(s=>s.courseKey===course.key);
       return `<tr><td>${index+1}</td><td><strong>${course.name}</strong>${!offering?' <span class="badge badge-warn">لم يُنشأ</span>':''}</td>
-        <td>الفصل ${template[course.key]?.semesterNo||'—'}</td><td>${course.eligiblePlans.join(' + ')}</td>
+        <td>الفصل ${template[course.key]?.semesterNo||'—'}</td>
+        <td><input class="batch-plan-start-date" data-subject-key="${offering?._fbKey||''}" type="date" value="${offering?.startDate||''}" ${offering?'':'disabled'} style="min-width:145px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;"></td>
+        <td><input class="batch-plan-end-date" data-subject-key="${offering?._fbKey||''}" type="date" value="${offering?.endDate||''}" ${offering?'':'disabled'} style="min-width:145px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;"></td>
+        <td>${course.eligiblePlans.join(' + ')}</td>
         <td><select class="batch-plan-lecturer" data-subject-key="${offering?._fbKey||''}" ${offering?'':'disabled'} style="min-width:180px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">
           <option value="">-- بدون محاضر --</option>${lecturers.map(u=>`<option value="${u.username}" ${offering?.lecturerUserId===u.username?'selected':''}>${u.name}</option>`).join('')}
         </select></td></tr>`;
     }).join('')}</tbody></table></div>
-    ${offerings.length?'<button class="btn btn-success" onclick="saveBatchPlanLecturers()">💾 حفظ تعيين المحاضرين</button>':''}`;
+    ${offerings.length?'<button class="btn btn-success" onclick="saveBatchPlanSettings()">💾 حفظ التواريخ وتعيين أعضاء هيئة التدريس</button>':''}`;
 }
 
 async function generateBatchPlan(batch,showMessage=true){
@@ -5862,17 +5866,26 @@ async function assignSelectedBatchStudents(){
   }finally{ showLoader(false); }
 }
 
-async function saveBatchPlanLecturers(){
+async function saveBatchPlanSettings(){
   const updates={};
   document.querySelectorAll('.batch-plan-lecturer').forEach(select=>{
     if(select.dataset.subjectKey) updates['subjects/'+select.dataset.subjectKey+'/lecturerUserId']=select.value||null;
   });
+  const startDates=new Map([...document.querySelectorAll('.batch-plan-start-date')].filter(input=>input.dataset.subjectKey).map(input=>[input.dataset.subjectKey,input.value||'']));
+  const endDates=new Map([...document.querySelectorAll('.batch-plan-end-date')].filter(input=>input.dataset.subjectKey).map(input=>[input.dataset.subjectKey,input.value||'']));
+  for(const [subjectKey,startDate] of startDates){
+    const endDate=endDates.get(subjectKey)||'';
+    if(startDate&&endDate&&startDate>endDate) return showToast('⚠️ تاريخ بداية المقرر يجب أن يسبق تاريخ نهايته');
+    updates['subjects/'+subjectKey+'/startDate']=startDate||null;
+    updates['subjects/'+subjectKey+'/endDate']=endDate||null;
+  }
   await firebase.database().ref('/').update(updates);
   Object.entries(updates).forEach(([path,value])=>{
-    const key=path.split('/')[1],subject=subjects.find(s=>s._fbKey===key);
-    if(subject) subject.lecturerUserId=value;
+    const [,key,field]=path.split('/'),subject=subjects.find(s=>s._fbKey===key);
+    if(subject) subject[field]=value||'';
   });
-  showToast('✅ تم حفظ محاضري الدفعة');
+  renderSelectedBatchPlan();
+  showToast('✅ تم حفظ تواريخ المقررات وتعيين أعضاء هيئة التدريس');
 }
 
 function downloadJson(filename,data){
