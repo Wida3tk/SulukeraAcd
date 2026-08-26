@@ -193,7 +193,7 @@ body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:v
 .program-calendar-order{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:#eaf0ff;color:#0d40fc;font-size:12px;font-weight:900;}
 .program-calendar-item.exam .program-calendar-order{background:#fff2df;color:#a75500;}.program-calendar-item.break .program-calendar-order{background:#eaf8ed;color:#19753c;}
 .program-calendar-title{font-size:12px;font-weight:800;color:#102145;}.program-calendar-date{font-size:11px;color:#596883;line-height:1.55;margin-top:4px;}.program-calendar-duration{font-size:10px;color:#0d40fc;font-weight:700;margin-top:4px;}
-.policy-hero{padding:18px 20px;margin-bottom:14px;border:1px solid #d9e5fb;border-radius:18px;background:linear-gradient(135deg,#ffffff,#edf4ff);box-shadow:0 8px 24px rgba(13,64,252,.06);}.policy-eyebrow{font-size:11px;font-weight:800;color:var(--primary);margin-bottom:5px;}.policy-hero h1{font-size:22px;color:var(--dark);margin:0 0 5px;}.policy-hero p{font-size:12px;color:var(--muted);margin:0;}.policy-group{padding:16px 18px;margin-bottom:12px;}.policy-group .card-title{margin-bottom:10px;padding-bottom:7px;font-size:13px;}.policy-list{display:grid;gap:7px;}.policy-item{border:1px solid #dbe5f7;border-radius:10px;background:#fff;overflow:hidden;transition:border-color .18s,box-shadow .18s;}.policy-item:hover{border-color:#aac2fb;box-shadow:0 5px 14px rgba(13,64,252,.06);}.policy-item summary{cursor:pointer;padding:10px 13px;list-style:none;display:flex;align-items:center;gap:10px;}.policy-item summary::-webkit-details-marker{display:none;}.policy-item summary:before{content:'+';width:20px;height:20px;border-radius:50%;background:#edf3ff;color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;flex-shrink:0;}.policy-item[open] summary:before{content:'−';background:var(--primary);color:#fff;}.policy-item-title{font-size:13px;font-weight:800;color:#15294d;}.policy-item-brief{font-size:11px;color:#667594;line-height:1.55;margin-top:2px;}.policy-item-body{padding:10px 13px 13px;margin:0 13px;border-top:1px solid #e9effa;color:#566785;font-size:12px;line-height:1.9;}
+.policy-hero{padding:18px 20px;margin-bottom:14px;border:1px solid #d9e5fb;border-radius:18px;background:linear-gradient(135deg,#ffffff,#edf4ff);box-shadow:0 8px 24px rgba(13,64,252,.06);}.policy-eyebrow{font-size:11px;font-weight:800;color:var(--primary);margin-bottom:5px;}.policy-hero h1{font-size:22px;color:var(--dark);margin:0 0 5px;}.policy-hero p{font-size:12px;color:var(--muted);margin:0;}.policy-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}.policy-tab{padding:9px 15px;border:1px solid #d4e1fa;border-radius:10px;background:#fff;color:#51617e;font:700 12px inherit;cursor:pointer;transition:.18s;}.policy-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 5px 12px rgba(13,64,252,.17);}.policy-group{padding:16px 18px;margin-bottom:12px;}.policy-group .card-title{margin-bottom:10px;padding-bottom:7px;font-size:13px;}.policy-list{display:grid;gap:7px;}.policy-item{border:1px solid #dbe5f7;border-radius:10px;background:#fff;overflow:hidden;transition:border-color .18s,box-shadow .18s;}.policy-item:hover{border-color:#aac2fb;box-shadow:0 5px 14px rgba(13,64,252,.06);}.policy-item summary{cursor:pointer;padding:10px 13px;list-style:none;display:flex;align-items:center;gap:10px;}.policy-item summary::-webkit-details-marker{display:none;}.policy-item summary:before{content:'+';width:20px;height:20px;border-radius:50%;background:#edf3ff;color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;flex-shrink:0;}.policy-item[open] summary:before{content:'−';background:var(--primary);color:#fff;}.policy-item-title{font-size:13px;font-weight:800;color:#15294d;}.policy-item-brief{font-size:11px;color:#667594;line-height:1.55;margin-top:2px;}.policy-item-body{padding:10px 13px 13px;margin:0 13px;border-top:1px solid #e9effa;color:#566785;font-size:12px;line-height:1.9;}
 @media(max-width:700px){.faculty-welcome{padding:22px 20px;}.faculty-welcome-inner{flex-direction:column;}.faculty-next{min-width:0;}.faculty-welcome h1{font-size:22px;}}
 
 .card{background:white;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.2rem 1.4rem;margin-bottom:1rem;box-shadow:var(--shadow);}
@@ -1049,13 +1049,7 @@ function toggleStudentGradeReviewSubject(){
 }
 
 function renderStudentPoliciesTab(){
-  const groups=[
-    {title:'الدراسة والتقييم',icon:'📚',items:[
-      ['سياسة الحضور','الالتزام بالمحاضرات والتفاعل مع متطلبات المقرر مسؤولية أكاديمية أساسية.','الالتزام بحضور المحاضرات والتفاعل مع متطلبات المقرر جزء أساسي من الرحلة الأكاديمية، ويتحمل الطالب مسؤولية متابعة المحاضرات والمحتوى الدراسي وفق الجدول المعلن.'],
-      ['سياسة التقييم والاجتياز','يشترط الحصول على 80% على الأقل لاجتياز المقرر.','تعتمد الدرجة النهائية للمقرر على أعمال المقرر والاختبارات والتكاليف الأكاديمية المعتمدة. ويشترط الحصول على 80% على الأقل لاجتياز المقرر.'],
-      ['سياسة الاختبارات','يؤدى الاختبار خلال الفترة المحددة وفق آلية التقييم المعتمدة.','يلتزم الطالب بأداء الاختبارات خلال الفترات المحددة والمعلنة، وفق عدد المحاولات وآلية التقييم المعتمدة لكل مقرر. ويعد عدم أداء الاختبار ضمن الفترة المحددة عدم استكمال لمتطلبات المقرر.'],
-      ['سياسة الواجبات والتكاليف','تسلّم التكاليف في المواعيد المحددة وتطبق ضوابط التأخير المعتمدة.','يلتزم الطالب بتسليم الواجبات والمشاريع والتكاليف الأكاديمية في المواعيد المحددة، وتطبق ضوابط التأخير والتقييم المعتمدة للمقرر على أي تسليم متأخر.']
-    ]},
+  const platformGroups=[
     {title:'الحالة الأكاديمية',icon:'🎓',items:[
       ['سياسة التأجيل','يقدم طلب التأجيل خلال الأسبوع الأول من بدء الفصل.','يمكن تقديم طلب تأجيل فصل دراسي أو مقرر خلال الأسبوع الأول من بدء الفصل. وتخضع الطلبات للمراجعة والاعتماد، ويعاد تسجيل الطالب عند أول إتاحة مناسبة وفق الخطة الأكاديمية وتسلسل المقررات، دون ضمان إتاحة المقرر في الفصل التالي مباشرة.'],
       ['سياسة الانقطاع','الانقطاع دون طلب رسمي لا يعد تأجيلًا أو انسحابًا.','التوقف عن حضور المحاضرات أو أداء المتطلبات دون تقديم طلب رسمي لا يعد تأجيلًا أو انسحابًا، ولا يمنح الطالب حق إعادة المقرر دون رسوم أو استرداد الرسوم المدفوعة.'],
@@ -1075,9 +1069,44 @@ function renderStudentPoliciesTab(){
       ['تحديث السياسات','يعلن عن أي تحديث عبر القنوات الرسمية لسلوكيرا.','تخضع السياسات والإجراءات للتحديث عند الحاجة، ويعلن عن أي تحديث من خلال القنوات الرسمية لسلوكيرا، مع تحديد تاريخ سريانه والفئات التي ينطبق عليها.']
     ]}
   ];
+  const assessmentGroups=[
+    {title:'متطلبات المقرر',icon:'📚',items:[
+      ['سياسة متطلبات الاجتياز','يشترط استكمال المتطلبات والحصول على 80% على الأقل.','يلتزم الطالب باستكمال جميع متطلبات المقرر المعتمدة، بما يشمل حضور المحاضرات، والواجبات والتكاليف، والاختبارات، والمشاريع أو الأنشطة المطلوبة - إن وجدت -. ويشترط الحصول على 80% على الأقل لاجتياز المقرر.'],
+      ['سياسة الحضور','الحضور والمتابعة جزء من مسؤوليات الطالب الأكاديمية.','يلتزم الطالب بحضور ومتابعة المحاضرات المباشرة أو المسجلة وفق طبيعة البرنامج والجدول الأكاديمي المعلن، ويعد الالتزام بالحضور والمتابعة جزءًا من مسؤوليات الطالب الأكاديمية.'],
+      ['سياسة الواجبات والتكاليف','تقدم التكاليف عبر القنوات المعتمدة وضمن المواعيد المحددة.','تقدم الواجبات والمناقشات والتكاليف الأكاديمية من خلال القنوات المعتمدة لدى سلوكيرا، ويلتزم الطالب بتسليمها وفق المواعيد والتعليمات المحددة لكل مقرر.'],
+      ['سياسة التأخر في تسليم المهام','قد يترتب على التسليم المتأخر خصم درجات أو عدم قبول المهمة.','يلتزم الطالب بتسليم المهام في الموعد المحدد. ويخضع أي تسليم متأخر لضوابط التأخير المعتمدة للمقرر، وقد يترتب عليه خصم درجات أو عدم قبول المهمة بعد انتهاء الفترة المسموح بها.'],
+      ['سياسة متابعة الدرجات','يتابع الطالب درجاته وسجله الأكاديمي بصورة دورية.','يتحمل الطالب مسؤولية متابعة درجاته وسجله الأكاديمي بصورة دورية، وإبلاغ الإدارة الأكاديمية عن أي ملاحظة أو ظرف يؤثر على استكمال متطلباته خلال الفترة المحددة للمراجعة.']
+    ]},
+    {title:'الاختبارات والأعذار',icon:'📝',items:[
+      ['سياسة الاختبارات النهائية','تُعقد الاختبارات وفق التقويم الأكاديمي والمواعيد المعلنة.','تُعقد الاختبارات النهائية وفق التقويم الأكاديمي والمواعيد المعلنة لكل فصل، ويلتزم الطالب بأداء الاختبار خلال فترة الإتاحة المحددة ووفق التعليمات المنشورة.'],
+      ['سياسة محاولات الاختبار','يتاح للطالب محاولتان للاختبار النهائي ما لم ينص المقرر على خلاف ذلك.','يتاح للطالب محاولتان لأداء الاختبار النهائي، ما لم ينص نظام المقرر أو البرنامج على خلاف ذلك، وتحتسب النتيجة وفق آلية التقييم المعتمدة.'],
+      ['سياسة الاختبارات عن بُعد','يتحمل الطالب مسؤولية الجهاز والاتصال المستقر أثناء الاختبار.','تقدم الاختبارات إلكترونيًا من خلال النظام المعتمد، ويتحمل الطالب مسؤولية توفر جهاز مناسب واتصال مستقر بالإنترنت واستكمال الاختبار خلال فترة الإتاحة المحددة.'],
+      ['سياسة التغيب عن الاختبار','لا يمنح اختبار تعويضي تلقائيًا بسبب التغيب.','يعد الطالب متغيبًا عن الاختبار عند عدم تسجيل محاولة أو تقديم إجابة خلال الفترة المحددة للاختبار. ولا يمنح اختبار تعويضي تلقائيًا بسبب التغيب.'],
+      ['سياسة الأعذار عن الاختبارات','تراجع الأعذار وتُعتمد عند وجود ظرف موثق.','يمكن للطالب تقديم طلب عذر عند وجود ظرف صحي أو عائلي أو طارئ حال دون أداء الاختبار. ويخضع الطلب للمراجعة والاعتماد، ويجوز طلب مستندات رسمية تثبت العذر.'],
+      ['سياسة الاختبار التعويضي','يمنح الاختبار التعويضي محاولة واحدة عند قبول العذر.','عند قبول عذر التغيب، يحدد للطالب موعد تعويضي وفق الجدول المعتمد من الإدارة الأكاديمية، ويمنح محاولة واحدة للاختبار التعويضي. ويعد عدم أداء الاختبار التعويضي في الموعد المحدد استنفادًا لفرصة التعويض، ما لم تعتمد الإدارة خلاف ذلك لظرف استثنائي.']
+    ]},
+    {title:'المشاريع والنزاهة الأكاديمية',icon:'⚖️',items:[
+      ['سياسة المشاريع','تستكمل المشاريع وفق تعليمات المقرر والمواعيد المعتمدة.','يلتزم الطالب باستكمال وتسليم المشاريع الفردية أو الجماعية أو مشروع التخرج - إن وجدت ضمن متطلبات البرنامج - وفق التعليمات والمواعيد وسياسة المشروع المعتمدة.'],
+      ['سياسة النزاهة الأكاديمية','يحظر الغش أو تبادل الإجابات أو استخدام مساعدة غير مصرح بها.','يلتزم الطالب بالنزاهة الأكاديمية في جميع الاختبارات والواجبات والمشاريع، ويحظر الحصول على مساعدة غير مصرح بها، أو تبادل الإجابات، أو نسخ أعمال الآخرين، أو استخدام مصادر أو أدوات غير مسموح بها.'],
+      ['سياسة استخدام الذكاء الاصطناعي','يخضع استخدام أدوات الذكاء الاصطناعي لتعليمات المقرر.','يخضع استخدام أدوات الذكاء الاصطناعي في الواجبات والمشاريع والاختبارات لتعليمات المقرر. ويعد استخدامها لإنتاج أو تقديم إجابات بصورة تخالف التعليمات أو دون الإفصاح عنها عند اشتراط ذلك مخالفة للنزاهة الأكاديمية.'],
+      ['سياسة مخالفات الاختبارات والغش','تتخذ سلوكيرا الإجراء الأكاديمي المناسب بحسب المخالفة.','عند ثبوت الغش أو الشروع فيه أو أي مخالفة للنزاهة الأكاديمية، يحق لسلوكيرا اتخاذ الإجراء الأكاديمي المناسب بحسب طبيعة المخالفة ودرجتها، بما في ذلك إلغاء المحاولة، أو عدم احتساب المهمة أو الاختبار، أو تطبيق الإجراءات التأديبية المعتمدة، وقد تصل المخالفة الجسيمة أو المتكررة إلى إنهاء التسجيل في البرنامج.']
+    ]},
+    {title:'الطلبات وتحديث السياسة',icon:'📌',items:[
+      ['سياسة الطلبات والأعذار','تقدم طلبات الأعذار والمراجعة من خلال نظام معلومات الطالب.','تقدم طلبات الأعذار والمراجعة المتعلقة بالاختبارات والتقييم من خلال نظام معلومات الطالب، ولا يعد الطلب مقبولًا إلا بعد مراجعته واعتماده من الجهة المختصة.'],
+      ['تحديث السياسة','يعلن عن أي تحديث رسمي مع تحديد تاريخ سريانه.','تطبق سياسة التقييم والاختبارات المعتمدة لدى سلوكيرا، ويعلن عن أي تحديثات من خلال القنوات الرسمية، مع تحديد تاريخ سريانها عند وجود تغيير يؤثر على المتطلبات الأكاديمية.']
+    ]}
+  ];
+  const renderGroups=groups=>groups.map(group=>`<section class="card policy-group"><div class="card-title">${group.icon} ${group.title}</div><div class="policy-list">${group.items.map(item=>`<details class="policy-item"><summary><div><div class="policy-item-title">${item[0]}</div><div class="policy-item-brief">${item[1]}</div></div></summary><div class="policy-item-body">${item[2]}</div></details>`).join('')}</div></section>`).join('');
   document.getElementById('mainContent').innerHTML=`
     <section class="policy-hero"><div class="policy-eyebrow">نظام معلومات الطالب</div><h1>سياسات سلوكيرا</h1></section>
-    ${groups.map(group=>`<section class="card policy-group"><div class="card-title">${group.icon} ${group.title}</div><div class="policy-list">${group.items.map(item=>`<details class="policy-item"><summary><div><div class="policy-item-title">${item[0]}</div><div class="policy-item-brief">${item[1]}</div></div></summary><div class="policy-item-body">${item[2]}</div></details>`).join('')}</div></section>`).join('')}`;
+    <div class="policy-tabs"><button class="policy-tab active" onclick="switchPolicyTab('platform',this)">سياسات المنصة</button><button class="policy-tab" onclick="switchPolicyTab('assessment',this)">سياسة التقييم والاختبارات</button></div>
+    <div id="policyPlatformPanel">${renderGroups(platformGroups)}</div><div id="policyAssessmentPanel" style="display:none">${renderGroups(assessmentGroups)}</div>`;
+}
+function switchPolicyTab(tab,button){
+  document.querySelectorAll('.policy-tab').forEach(item=>item.classList.remove('active'));
+  button?.classList.add('active');
+  document.getElementById('policyPlatformPanel').style.display=tab==='platform'?'block':'none';
+  document.getElementById('policyAssessmentPanel').style.display=tab==='assessment'?'block':'none';
 }
 
 function renderStudentAccountTab(){
