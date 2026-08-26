@@ -1068,7 +1068,7 @@ async function loadAllFromFirebase(){
       const s=root.settings;
       settings={attend:s.attend||5,hw:s.hw||5,disc:s.disc||5,exam:s.exam||40,
         gradeA:s.gradeA||85,gradeB:s.gradeB||70,gradeC:s.gradeC||60,gradeFail:s.gradeFail||80,
-        operBaseUrl:s.operBaseUrl||'',operIntegrationToken:s.operIntegrationToken||''};
+        operBaseUrl:s.operBaseUrl||'',operIntegrationToken:''};
     }
 
     // 2. Programs
@@ -1390,7 +1390,7 @@ async function saveSettingsToFirebase(){
   await fbRef('settings').set({
     attend:settings.attend, hw:settings.hw, disc:settings.disc, exam:settings.exam,
     gradeA:settings.gradeA, gradeB:settings.gradeB, gradeC:settings.gradeC, gradeFail:settings.gradeFail,
-    operBaseUrl:settings.operBaseUrl||'', operIntegrationToken:settings.operIntegrationToken||''
+    operBaseUrl:settings.operBaseUrl||''
   });
 }
 
@@ -2066,7 +2066,7 @@ function setLoginRole(role,btn){
   const lbl=document.getElementById('usernameLabel');
   const ph=document.getElementById('loginUsername');
   const hint=document.getElementById('loginHint');
-  if(role==='admin'){lbl.textContent='اسم المستخدم';ph.placeholder='أدخل اسم المستخدم';hint.innerHTML='<strong>الإدارة:</strong> المستخدم: <strong>admin</strong> | المرور: <strong>admin123</strong>';}
+  if(role==='admin'){lbl.textContent='اسم المستخدم';ph.placeholder='أدخل اسم المستخدم';hint.innerHTML='<strong>الإدارة:</strong> استخدم بيانات حساب الإدارة المعتمدة.';}
   else if(role==='finance'){lbl.textContent='اسم المستخدم';ph.placeholder='مثال: finance.maryam';hint.innerHTML='<strong>المالية:</strong> أدخل بيانات حسابك المالي';}
   else if(role==='lecturer'){lbl.textContent='اسم المستخدم';ph.placeholder='مثال: dr.ahmed';hint.innerHTML='<strong>عضو هيئة التدريس:</strong> أدخل بيانات الحساب';}
   else{lbl.textContent='الرقم الطلابي';ph.placeholder='مثال: SUL-001';hint.innerHTML='<strong>طالب:</strong> أدخل رقمك الطلابي وكلمة المرور';}
