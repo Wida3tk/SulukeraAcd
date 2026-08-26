@@ -1516,12 +1516,13 @@ function getLecturerSubjects(){
   const operationalSubjects=hasStructuredSubjects
     ? allMySubjs.filter(s=>s.courseKey)
     : allMySubjs;
+  // لا تظهر للمحاضر إلا الشعب التي تحتوي على طلاب مسندين فعليًا.
+  const assignedSubjects=operationalSubjects.filter(subject=>getSubjectStudents(subject.key).length>0);
 
   const activeKeys=[...new Set(getActiveSemesters().flatMap(s=>s.subjects||[]))];
-  if(!activeKeys.length) return operationalSubjects;
-  const activeMine=operationalSubjects.filter(s=>activeKeys.includes(s.key));
-  // لا نخفي مقررات المحاضر كلها إذا كان إعداد الفصل الحالي ناقصاً.
-  return activeMine.length ? activeMine : operationalSubjects;
+  if(!activeKeys.length) return assignedSubjects;
+  const activeMine=assignedSubjects.filter(s=>activeKeys.includes(s.key));
+  return activeMine.length ? activeMine : assignedSubjects;
 }
 function getLecturerAcademicData(){
   const mySubjects = getLecturerSubjects();
@@ -1613,12 +1614,9 @@ function getSubjectStudents(subjectFbKey){
     }
   });
 
-  // شعب الدفعات الجديدة تُربط بدفعتها مباشرة. لا تعتمد على الفصول القديمة
-  // حتى لا تنتقل أسماء دفعة أخرى إلى سجل الدرجات.
+  // شعب الدفعات الجديدة تعتمد على التسجيلات الصريحة فقط. لا نستنتج الطلاب
+  // من اسم الدفعة حتى لا تظهر دفعات أو طلاب غير مسندين للمحاضر.
   if(subject.courseKey&&subject.batch){
-    Object.entries(dbData.students).forEach(([studentKey,student])=>{
-      if(sameBatchName(student.batch,subject.batch)&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
-    });
     return result;
   }
 

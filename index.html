@@ -1875,7 +1875,9 @@ function getLecturerIdentityValues(user=currentUser){
 }
 function getLecturerSubjects(uid){
   const ids=uid?new Set([uid]):getLecturerIdentityValues(currentUser);
-  return subjects.map((s,i)=>({...s,idx:i})).filter(s=>s.lecturerUserId&&ids.has(s.lecturerUserId));
+  return subjects.map((s,i)=>({...s,idx:i}))
+    .filter(s=>s.lecturerUserId&&ids.has(s.lecturerUserId))
+    .filter(s=>getSubjectStudentIdxs(s).length>0);
 }
 function getCurrentAcademicDateIso(){
   return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
@@ -1990,11 +1992,6 @@ function renderLecturerQuickActions(){
 }
 function getSubjectStudentIdxs(subj){
   const result=new Set(subj?.students||[]);
-  if(subj?.courseKey&&subj.batch){
-    students.forEach((student,idx)=>{
-      if(sameBatchName(student.batch,subj.batch)&&studentEligibleForOffering(student,subj)) result.add(idx);
-    });
-  }
   return [...result].filter(idx=>students[idx]);
 }
 function getStudentEnrollmentRecords(stdIdx){
