@@ -164,7 +164,12 @@ tr:hover td{background:#f8faff;}
 .lecturer-followup-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;border-top:1px solid var(--border);background:#fbfcff;}
 .lecturer-followup-actions small{font-size:10px;color:var(--text-muted);}
 .lecturer-followup-buttons{display:flex;gap:7px;flex-wrap:wrap;}
-@media(max-width:620px){.lecturer-followups{grid-template-columns:1fr;}.lecturer-followup-body{grid-template-columns:1fr;}.lecturer-followup-field.full{grid-column:auto;}.lecturer-followup-head,.lecturer-followup-actions{flex-direction:column;}.lecturer-followup-meta{justify-content:flex-start;}.lecturer-followup-actions{align-items:stretch;}.lecturer-followup-buttons .btn{flex:1;}}
+.lecturer-followup-filter{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#f8faff;}
+.lecturer-followup-filter-field{display:flex;flex:1;min-width:250px;flex-direction:column;gap:6px;}
+.lecturer-followup-filter label{font-size:11px;font-weight:800;color:var(--text-muted);}
+.lecturer-followup-filter select{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:9px 10px;background:#fff;color:var(--text);font:inherit;}
+.lecturer-followup-filter-count{font-size:11px;font-weight:700;color:var(--text-muted);padding-bottom:10px;}
+@media(max-width:620px){.lecturer-followups{grid-template-columns:1fr;}.lecturer-followup-body{grid-template-columns:1fr;}.lecturer-followup-field.full{grid-column:auto;}.lecturer-followup-head,.lecturer-followup-actions{flex-direction:column;}.lecturer-followup-meta{justify-content:flex-start;}.lecturer-followup-actions{align-items:stretch;}.lecturer-followup-buttons .btn{flex:1;}.lecturer-followup-filter{align-items:stretch;}.lecturer-followup-filter-field{min-width:100%;}.lecturer-followup-filter-count{padding-bottom:0;}}
 @media print{
   #loginScreen{display:none!important;}
   .sidebar,.topbar,.btn,.week-tabs,#gradeSaveRow,.modal-overlay{display:none!important;}
@@ -4256,10 +4261,25 @@ function renderLecturerFollowUpPanel(si){
     panel.innerHTML='';
     return;
   }
+  const sortedStudentIdxs=[...studentIdxs].sort((a,b)=>String(getStudentFullName(students[a])).localeCompare(String(getStudentFullName(students[b])),'ar'));
+  const selectedStudentKey=window._lecturerFollowUpStudentFilters?.[subj._fbKey]||'';
+  const selectedStudentExists=sortedStudentIdxs.some(stdIdx=>students[stdIdx]?._fbKey===selectedStudentKey);
+  const activeStudentKey=selectedStudentExists ? selectedStudentKey : '';
+  const visibleStudentIdxs=activeStudentKey ? sortedStudentIdxs.filter(stdIdx=>students[stdIdx]?._fbKey===activeStudentKey) : sortedStudentIdxs;
   panel.innerHTML=`<div class="card card-accent" style="margin-top:1rem;">
     <div class="card-title">🧭 متابعة الطلاب داخل المقرر</div>
     <div class="alert alert-info">سجل حالة الطالب داخل المقرر، ثم احفظ التحديث أو ارفعه للإدارة عند الحاجة.</div>
-    <div class="lecturer-followups">${studentIdxs.map(stdIdx=>{
+    <div class="lecturer-followup-filter">
+      <div class="lecturer-followup-filter-field">
+        <label for="lecturerFollowUpStudentSelect">اختيار الطالب</label>
+        <select id="lecturerFollowUpStudentSelect" onchange="setLecturerFollowUpStudentFilter('${escapeHtml(subj._fbKey)}',${si},this.value)">
+          <option value="">عرض جميع الطلاب</option>
+          ${sortedStudentIdxs.map(stdIdx=>{const student=students[stdIdx];const studentKey=student?._fbKey||'';return `<option value="${escapeHtml(studentKey)}" ${activeStudentKey===studentKey?'selected':''}>${escapeHtml(getStudentFullName(student))} — ${escapeHtml(student?.id||'')}</option>`;}).join('')}
+        </select>
+      </div>
+      <div class="lecturer-followup-filter-count">${activeStudentKey?'عرض بطاقة طالب واحد':`عرض ${visibleStudentIdxs.length} طالبًا`}</div>
+    </div>
+    <div class="lecturer-followups">${visibleStudentIdxs.map(stdIdx=>{
         const student=students[stdIdx];
         const grade=grades[si]?.[stdIdx];
         const total=grade?calcTotal(grade):0;
@@ -4297,6 +4317,11 @@ function renderLecturerFollowUpPanel(si){
         </article>`;
       }).join('')}</div>
   </div>`;
+}
+function setLecturerFollowUpStudentFilter(subjectKey, si, studentKey){
+  window._lecturerFollowUpStudentFilters=window._lecturerFollowUpStudentFilters||{};
+  window._lecturerFollowUpStudentFilters[subjectKey]=studentKey||'';
+  renderLecturerFollowUpPanel(si);
 }
 async function saveLecturerFollowUp(si, stdIdx, sendToAdmin){
   const subj=subjects[si];
