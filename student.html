@@ -522,13 +522,12 @@ const PORTAL_PROGRAM_STAGES = [
   { order:4, title:'الفصل الرابع', dateRange:'2027/04/01 - 2027/06/30' }
 ];
 const PORTAL_ACADEMIC_CALENDAR = [
-  {order:1, title:'الفصل الأول', study:'23 أغسطس - 19 سبتمبر 2026', exam:'20 - 26 سبتمبر 2026', break:'27 سبتمبر - 3 أكتوبر 2026'},
-  {order:2, title:'الفصل الثاني', study:'4 - 31 أكتوبر 2026', exam:'1 - 7 نوفمبر 2026', break:'8 - 14 نوفمبر 2026'},
-  {order:3, title:'الفصل الثالث', study:'15 نوفمبر - 12 ديسمبر 2026', exam:'13 - 19 ديسمبر 2026', break:'20 - 26 ديسمبر 2026'},
-  {order:4, title:'الفصل الرابع', study:'27 ديسمبر 2026 - 23 يناير 2027', exam:'24 - 30 يناير 2027', break:'31 يناير - 6 فبراير 2027'},
-  {order:5, title:'الفصل الخامس', study:'7 فبراير - 6 مارس 2027', exam:'7 - 13 مارس 2027', break:'14 - 20 مارس 2027'},
-  {order:6, title:'الفصل السادس', study:'21 مارس - 17 أبريل 2027', exam:'18 - 24 أبريل 2027', break:'25 أبريل - 1 مايو 2027'},
-  {order:7, title:'الفصل السابع', study:'2 - 29 مايو 2027', exam:'30 مايو - 5 يونيو 2027', break:'6 - 12 يونيو 2027'}
+  {order:1, title:'الفصل الأول', color:'#0D40FC', study:'23 أغسطس - 19 سبتمبر 2026', exam:'20 - 26 سبتمبر 2026', break:'27 سبتمبر - 3 أكتوبر 2026'},
+  {order:2, title:'الفصل الثاني', color:'#19753c', study:'4 - 31 أكتوبر 2026', exam:'1 - 7 نوفمبر 2026', break:'8 - 14 نوفمبر 2026'},
+  {order:3, title:'الفصل الثالث', color:'#a75500', study:'15 نوفمبر - 12 ديسمبر 2026', exam:'13 - 19 ديسمبر 2026', break:'20 - 26 ديسمبر 2026'},
+  {order:4, title:'الفصل الرابع', color:'#8e44ad', study:'27 ديسمبر 2026 - 23 يناير 2027', exam:'24 - 30 يناير 2027', break:'31 يناير - 6 فبراير 2027'},
+  {order:5, title:'الفصل الخامس', color:'#c0392b', study:'7 فبراير - 6 مارس 2027', exam:'7 - 13 مارس 2027', break:'14 - 20 مارس 2027'},
+  {order:6, title:'الفصل السادس', color:'#147a9b', study:'21 مارس - 17 أبريل 2027', exam:'18 - 24 أبريل 2027', break:'25 أبريل - 1 مايو 2027'}
 ];
 
 // ══════════════════════════════════════════════
@@ -817,8 +816,7 @@ function renderStudentHomeTab(){
   const reviewedRequests = requests.filter(request=>request.reviewedAt).length;
   const crossBatchCourses = mySubjects.filter(subject=>subject.batch && !sameBatchName(subject.batch, st.batch)).length;
   const openSubjects=mySubjects.filter(subject=>getStudentSubjectStage(st,subject)==='active');
-  const ungradedCourses = openSubjects.filter(subject=>!getGrade_data(currentUser.fbKey, subject.key)).length;
-  const urgentFocus = hasFail ? 'راجع المقررات التي عليها تنبيه أكاديمي ثم ارفع طلب دعم عند الحاجة.' : 'استمر على المتابعة الأسبوعية وراجع الدرجات بعد كل عملية رصد.';
+  const urgentFocus = hasFail ? 'راجع المقرر المتعثر وقدّم طلب مراجعة عند وجود ملاحظة أكاديمية.' : 'ركّز على حضور المحاضرات واستكمال متطلبات المقرر في مواعيدها.';
   const semesterDaysText = semester?.startDate || semester?.endDate
     ? `${semester?.startDate||'—'} إلى ${semester?.endDate||'—'}`
     : 'لم يتم تحديد بداية ونهاية الفصل بعد';
@@ -834,12 +832,6 @@ function renderStudentHomeTab(){
       body:`يوجد ${pendingRequests} طلب ${pendingRequests===1?'مفتوح':'مفتوحة'} بانتظار المتابعة من الإدارة.`,
       action:'📝 متابعة الطلبات',
       tab:'requests'
-    } : null,
-    ungradedCourses ? {
-      title:'مقررات بانتظار الرصد',
-      body:`يوجد ${ungradedCourses} مقرر لم يتم رصد درجاته بعد بشكل كامل.`,
-      action:'📄 فتح كشف الدرجات',
-      tab:'transcript'
     } : null,
     crossBatchCourses ? {
       title:'تسجيلات من دفعات أخرى',
@@ -864,7 +856,7 @@ function renderStudentHomeTab(){
     <div class="stat-row">
       <div class="stat-box"><div class="stat-val">${openSubjects.length}</div><div class="stat-lbl">📚 مقررات مفتوحة</div></div>
       <div class="stat-box"><div class="stat-val">${pendingRequests}</div><div class="stat-lbl">📝 طلبات مفتوحة</div></div>
-      <div class="stat-box"><div class="stat-val">${gradeRows.length}</div><div class="stat-lbl">📊 المرصود</div></div>
+      <div class="stat-box"><div class="stat-val">${scheduleSlots.length}</div><div class="stat-lbl">📅 محاضرات أسبوعية</div></div>
       <div class="stat-box"><div class="stat-val">${hasFail?'تنبيه':'مستقر'}</div><div class="stat-lbl">🎯 الحالة</div></div>
     </div>
     <div class="card">
@@ -918,8 +910,8 @@ function renderStudentHomeTab(){
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">الأولوية الحالية</div>
-          <div style="font-size:13px;font-weight:800">${hasFail?'مراجعة المقررات المتعثرة مطلوبة':'التقدم الأكاديمي مستقر'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px">${hasFail?'يوجد تنبيه أكاديمي يحتاج إجراء':'الوضع الأكاديمي الحالي جيد'}</div>
+          <div style="font-size:13px;font-weight:800">${hasFail?'متابعة أكاديمية مطلوبة':'التقدم الأكاديمي مستقر'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">${hasFail?'راجع صفحة الدرجات عند وجود ملاحظة':'تابع حضور المحاضرات ومتطلبات المقررات'}</div>
         </div>
         <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">خطة الطالب</div>
@@ -964,9 +956,9 @@ function renderStudentHomeTab(){
     <div class="card">
       <div class="card-title">📌 نصائح للدراسة</div>
       <div style="display:grid;gap:8px;">
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع <strong>جدولي</strong> يوميًا قبل بداية المحاضرات.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع <strong>درجاتي</strong> بعد كل عملية رصد لمتابعة التقدم أولاً بأول.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">استخدمي <strong>طلباتي</strong> لرفع أي طلب أكاديمي أو مراجعة درجات بشكل رسمي.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">بعد كل محاضرة، دوّن مثالًا واحدًا يوضح العلاقة بين <strong>المثير والسلوك والنتيجة</strong>.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">اربط مفاهيم <strong>تحليل السلوك التطبيقي</strong> بحالات واقعية مع مراعاة أخلاقيات الممارسة.</div>
+        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">خصّص وقتًا ثابتًا لمراجعة المصطلحات العلمية وتلخيص الفكرة الرئيسة لكل مقرر.</div>
       </div>
     </div>`;
 }
@@ -1350,7 +1342,7 @@ function getStudentRequestStatusMeta(status){
   return {label:'قيد مراجعة الإدارة',className:'badge-warn'};
 }
 function getPortalBatchProfile(batch){
-  return PORTAL_BATCH_SEMESTERS[normalizeBatchName(batch)] || null;
+  return PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()] || null;
 }
 function getCurrentSemesterForBatch(batch){
   const liveSemester = Object.values(dbData.semesters||{}).find(semester=>
@@ -1382,7 +1374,16 @@ function getStudentScheduleSlots(student=currentUser?.data){
   // Only a schedule explicitly assigned to this batch overrides the approved fallback.
   const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch));
   if(matched.length) return sortScheduleSlots(matched);
-  return sortScheduleSlots(PORTAL_FALLBACK_WEEKLY[normalizeBatchName(student.batch)] || []);
+  return sortScheduleSlots(PORTAL_FALLBACK_WEEKLY[String(student.batch||'').trim().toUpperCase()] || []);
+}
+
+function getMeetingLinkMarkup(value){
+  if(!value) return '—';
+  try{
+    const url=new URL(value);
+    if(!['https:','http:'].includes(url.protocol)) return '—';
+    return `<a href="${url.href}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);font-weight:800;text-decoration:none;">هنا</a>`;
+  }catch(error){ return '—'; }
 }
 function getLecturerScheduleSlots(){
   const lecturerName = currentUser?.data?.name;
@@ -2235,6 +2236,7 @@ function renderWeeklySchedule(weekly){
               <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">الموعد</th>
               <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">عضو هيئة التدريس</th>
               <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">اليوم</th>
+              <th style="background:#d9e8f8;color:#1c2f4d;padding:14px 16px;text-align:center;font-size:13px;font-weight:800;">رابط المحاضرة</th>
             </tr>
           </thead>
           <tbody>
@@ -2247,6 +2249,7 @@ function renderWeeklySchedule(weekly){
                 <td style="padding:14px 16px;border-top:1px solid #e5edf8;text-align:center;font-size:13px;font-weight:700;color:#334155;">${to12h(slot.timeStart||'18:00')} - ${to12h(slot.timeEnd||'20:00')}</td>
                 <td style="padding:14px 16px;border-top:1px solid #e5edf8;text-align:center;font-size:13px;color:#334155;">${slot.lecturer||'غير محدد'}</td>
                 <td style="padding:14px 16px;border-top:1px solid #e5edf8;text-align:center;font-size:13px;font-weight:700;color:#334155;">${slot.day||'—'}</td>
+                <td style="padding:14px 16px;border-top:1px solid #e5edf8;text-align:center;font-size:13px;">${getMeetingLinkMarkup(slot.room)}</td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -2284,7 +2287,7 @@ function renderProgramSchedule(units){
           </div>
         </div>
       </div>
-      ${renderAcademicCalendar([semester.semesterNo])}`;
+      ${renderAcademicCalendar([semester.semesterNo], getStudentPlanType(currentUser?.data)==='QASP-S'?4:6)}`;
   }
   const lecturerSemesters = roleProgram.semesterList || [];
   const unitList = Object.entries(units).sort(([,a],[,b])=>Number(a.order||0)-Number(b.order||0));
@@ -2292,7 +2295,7 @@ function renderProgramSchedule(units){
     return `
       <div class="card" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
-          <div><div class="card-title" style="margin:0;border:none;padding:0;">التقويم الأكاديمي للبرنامج</div><div style="font-size:12px;color:var(--muted);margin-top:7px;">بداية البرنامج: 23 أغسطس 2026 · نهاية البرنامج: 12 يونيو 2027</div></div>
+          <div><div class="card-title" style="margin:0;border:none;padding:0;">التقويم الأكاديمي للبرنامج</div><div style="font-size:12px;color:var(--muted);margin-top:7px;">بداية البرنامج: 23 أغسطس 2026 · نهاية البرنامج: 1 مايو 2027</div></div>
           <span class="badge badge-pass">4 أسابيع دراسة · أسبوع اختبارات · أسبوع إجازة</span>
         </div>
         ${lecturerSemesters.length?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:16px;">
@@ -2335,19 +2338,19 @@ function renderProgramSchedule(units){
   </div>`;
 }
 
-function renderAcademicCalendar(activeSemesters=[]){
+function renderAcademicCalendar(activeSemesters=[], maxTerms=6){
   const activeSet=new Set(activeSemesters.filter(Boolean).map(Number));
   return `
     <div class="card" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
-        <div><div class="card-title" style="margin:0;border:none;padding:0;">التقويم الأكاديمي 2026-2027</div><div style="font-size:12px;color:var(--muted);margin-top:7px;">بداية البرنامج: 23 أغسطس 2026 · نهاية البرنامج: 12 يونيو 2027</div></div>
+        <div><div class="card-title" style="margin:0;border:none;padding:0;">التقويم الأكاديمي 2026-2027</div><div style="font-size:12px;color:var(--muted);margin-top:7px;">بداية البرنامج: 23 أغسطس 2026 · نهاية البرنامج: 1 مايو 2027</div></div>
         <span class="badge badge-pass">4 أسابيع دراسة · أسبوع اختبارات · أسبوع إجازة</span>
       </div>
       <div class="program-calendar-grid">
-        ${PORTAL_ACADEMIC_CALENDAR.map(term=>{
+        ${PORTAL_ACADEMIC_CALENDAR.filter(term=>term.order<=maxTerms).map(term=>{
           const active=activeSet.has(term.order);
-          return `<div class="program-calendar-item" style="border-color:${active?'#9dbbff':'#e0e9f8'};background:${active?'#f1f6ff':'#fff'};">
-            <div class="program-calendar-order" style="background:${active?'#0D40FC':'#eaf0ff'};color:${active?'#fff':'#0D40FC'};">${term.order}</div>
+          return `<div class="program-calendar-item" style="border-color:${active?term.color:'#e0e9f8'};background:${active?'#f8fbff':'#fff'};border-right:5px solid ${term.color};">
+            <div class="program-calendar-order" style="background:${term.color};color:#fff;">${term.order}</div>
             <div><div class="program-calendar-title">${term.title}${active?' · الفصل الحالي':''}</div>
               <div class="program-calendar-date"><strong>الدراسة:</strong> ${term.study}</div>
               <div class="program-calendar-date"><strong>الاختبارات:</strong> ${term.exam}</div>

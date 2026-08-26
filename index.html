@@ -579,8 +579,8 @@ tr:hover td{background:#f8faff;}
                 </select>
               </div>
               <div class="form-group" style="margin:0">
-                <label>القاعة (اختياري)</label>
-                <input type="text" id="schRoom" placeholder="مثال: Q1" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
+                <label>رابط المحاضرة (اختياري)</label>
+                <input type="url" id="schRoom" placeholder="https://..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;">
               </div>
               <div style="display:flex;gap:6px;align-self:end;white-space:nowrap">
                 <button id="schSaveButton" class="btn btn-primary btn-sm" onclick="addScheduleSlot()">+ إضافة</button>
@@ -5416,6 +5416,15 @@ let scheduleData = {weekly:{}, units:{}};
 let lecturerProductivityData = {};
 let editingScheduleSlotKey = '';
 
+function getScheduleMeetingLink(value){
+  if(!value) return '—';
+  try{
+    const url=new URL(value);
+    if(!['https:','http:'].includes(url.protocol)) return '—';
+    return `<a href="${url.href}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);font-weight:800;text-decoration:none;">هنا</a>`;
+  }catch(error){ return '—'; }
+}
+
 async function renderScheduleAdmin(){
   // Load from Firebase
   try{
@@ -5514,7 +5523,7 @@ function renderWeeklySlots(){
         <div class="slot-color" style="background:${s.color||'var(--primary)'}"></div>
         <div>
           <div style="font-size:13px;font-weight:700">${s.subject}</div>
-          <div style="font-size:11px;color:var(--muted)">${s.batch||'جدول عام'} · ${s.day} · ${s.timeStart}–${s.timeEnd}${s.room?' · 🏠 '+s.room:''}</div>
+          <div style="font-size:11px;color:var(--muted)">${s.batch||'جدول عام'} · ${s.day} · ${s.timeStart}–${s.timeEnd}${s.room?' · رابط المحاضرة مضاف':''}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px">
@@ -5555,13 +5564,13 @@ function renderWeeklyPreview(){
           <div style="background:${accent};color:white;padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
             <strong>${escapeHtml(batch)}</strong><span style="font-size:11px;opacity:.9">${batchSlots.length} محاضرات</span>
           </div>
-          <div class="table-wrap"><table style="font-size:11px"><thead><tr><th>اليوم</th><th>الموعد</th><th>المقرر</th><th>المحاضر</th><th>القاعة</th></tr></thead><tbody>
+          <div class="table-wrap"><table style="font-size:11px"><thead><tr><th>اليوم</th><th>الموعد</th><th>المقرر</th><th>المحاضر</th><th>رابط المحاضرة</th></tr></thead><tbody>
             ${batchSlots.map(slot=>`<tr>
               <td><strong>${escapeHtml(slot.day||'—')}</strong></td>
               <td dir="ltr" style="white-space:nowrap">${escapeHtml(slot.timeStart||'—')} - ${escapeHtml(slot.timeEnd||'—')}</td>
               <td><strong>${escapeHtml(slot.subject||'—')}</strong></td>
               <td>${escapeHtml(slot.lecturer||'غير محدد')}</td>
-              <td>${escapeHtml(slot.room||'—')}</td>
+              <td>${getScheduleMeetingLink(slot.room)}</td>
             </tr>`).join('')}
           </tbody></table></div>
         </div>`;
