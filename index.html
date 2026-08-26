@@ -2220,7 +2220,7 @@ function goBack() {
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
   if (pageId==='subjects'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مقررات لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مقرر جديد</button>`;
-  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل ملف كلمات المرور</button><button class="btn btn-sm" onclick="openStudentImportModal()">استيراد Excel</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إعادة ضبط كلمات الطلاب</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل كلمات مضافة حديثًا</button><button class="btn btn-sm" onclick="openStudentImportModal()">استيراد Excel</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إنشاء حسابات الطلاب الجدد</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
   else if (pageId==='users'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
 }
@@ -6718,14 +6718,18 @@ async function changeStudentPassword(stdIdx){
 
 async function generateStudentPasswords(){
   if(!students.length){ showToast('لا يوجد طلاب لتوليد كلمات مرور لهم'); return; }
-  if(!confirm('سيتم توليد كلمات مرور جديدة لكل الطلاب وتنزيل ملف CSV. هل تريدين المتابعة؟')) return;
   showLoader(true);
-  const rows=[['اسم الطالب','الرقم الطلابي','كلمة المرور المؤقتة']];
-  const updates={};
   try{
-    for(let i=0;i<students.length;i++){
-      const st=students[i];
-      if(!st?.id) continue;
+    const usersSnap=await fbRef('users').get();
+    const existingUsernames=new Set(usersSnap.exists()
+      ? Object.values(usersSnap.val()).filter(user=>user.role==='student').map(user=>String(user.username||'').toUpperCase())
+      : []);
+    const newStudents=students.filter(student=>student?.id&&!existingUsernames.has(String(student.id).toUpperCase()));
+    if(!newStudents.length){ showToast('جميع الطلاب لديهم حسابات بالفعل'); return; }
+    if(!confirm(`سيتم إنشاء ${newStudents.length} حساب جديد فقط، ولن تتغير كلمات مرور الحسابات الموجودة. هل تريدين المتابعة؟`)) return;
+    const rows=[['اسم الطالب','الرقم الطلابي','كلمة المرور المؤقتة']];
+    const updates={};
+    for(const st of newStudents){
       const password=randomPassword(10);
       const userKey='user_'+st.id.replace(/[^a-zA-Z0-9]/g,'_');
       const secure=await passwordFields(password);
@@ -6740,7 +6744,7 @@ async function generateStudentPasswords(){
     }
     if(Object.keys(updates).length) await firebase.database().ref('/').update(updates);
     downloadCsv('sulukera_student_passwords_'+new Date().toLocaleDateString('en-CA')+'.csv',rows);
-    showToast('تم توليد كلمات المرور وحفظها على Firebase');
+    showToast('تم إنشاء حسابات الطلاب الجدد وتنزيل الملف');
   }catch(e){
     console.error(e);
     showToast('تعذر توليد كلمات المرور');
