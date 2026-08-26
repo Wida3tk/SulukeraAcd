@@ -1762,9 +1762,9 @@ async function syncStudentFinanceFromOper(stdIdx){
   }
 }
 function studentEligibleForOffering(student,subject){
-  const plan=student?.planType||inferPlanType(student?.pkg);
+  const plan=getExplicitStudentPlan(student);
   const eligible=subject?.eligiblePlans||[];
-  return !eligible.length||eligible.includes(plan);
+  return !!plan && (!eligible.length||eligible.includes(plan));
 }
 function getExplicitStudentPlan(student){
   const direct=String(student?.planType||'').trim().toUpperCase();
