@@ -1064,7 +1064,7 @@ function renderStudentPoliciesTab(){
     ]}
   ];
   document.getElementById('mainContent').innerHTML=`
-    <section class="policy-hero"><div class="policy-eyebrow">نظام معلومات الطالب</div><h1>سياسات البرنامج</h1><p>مرجع أكاديمي مختصر؛ اضغط على أي سياسة للاطلاع على التفاصيل.</p></section>
+    <section class="policy-hero"><div class="policy-eyebrow">نظام معلومات الطالب</div><h1>سياسات سلوكيرا</h1></section>
     ${groups.map(group=>`<section class="card policy-group"><div class="card-title">${group.icon} ${group.title}</div><div class="policy-list">${group.items.map(item=>`<details class="policy-item"><summary><div><div class="policy-item-title">${item[0]}</div><div class="policy-item-brief">${item[1]}</div></div></summary><div class="policy-item-body">${item[2]}</div></details>`).join('')}</div></section>`).join('')}`;
 }
 
