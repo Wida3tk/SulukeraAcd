@@ -211,6 +211,8 @@ tr:hover td{background:#f8faff;}
 .badge-F{background:#f8d7da;color:#721c24;}
 .badge-pass{background:#d4edda;color:#155724;}
 .badge-fail{background:#f8d7da;color:#721c24;}
+.badge-warn{background:#fff3cd;color:#856404;}
+.badge-info{background:#dbeafe;color:#1d4ed8;}
 
 .grade-input{
   width:52px;padding:4px;border:1.5px solid var(--border);
@@ -998,10 +1000,12 @@ function renderStudentTranscriptTab(){
 
 function renderStudentRequestsTab(){
   const requests = getStudentRequests();
+  const { mySubjects } = getCurrentStudentAcademicData();
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
       <div class="card-title">📝 رفع طلب جديد</div>
-      <div class="field"><label>نوع الطلب</label><select id="studentRequestType"><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option></select></div>
+      <div class="field"><label>نوع الطلب</label><select id="studentRequestType" onchange="toggleStudentGradeReviewSubject()"><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option></select></div>
+      <div class="field" id="studentGradeReviewSubjectField" style="display:none"><label>المقرر المطلوب مراجعته</label><select id="studentGradeReviewSubject"><option value="">-- اختر المقرر --</option>${mySubjects.map(subject=>`<option value="${subject.key}">${subject.name}${subject.batch?` — ${subject.batch}`:''}</option>`).join('')}</select></div>
       <div class="field"><label>عنوان الطلب</label><input type="text" id="studentRequestTitle" placeholder="اكتب عنوانًا مختصرًا"></div>
       <div class="field"><label>تفاصيل الطلب</label><textarea id="studentRequestDetails" placeholder="اكتب تفاصيل الطلب بوضوح"></textarea></div>
       <div style="margin:0 0 14px;padding:12px 14px;background:#fff8e8;border:1px solid #f0d48b;border-right:4px solid #b35c00;border-radius:10px;font-size:12px;line-height:1.7;color:#5a430d;">
@@ -1016,13 +1020,19 @@ function renderStudentRequestsTab(){
           <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='grade_review'?'مراجعة درجات':'دعم أكاديمي'}</td>
           <td><strong>${request.title||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${request.details||''}</div></td>
           <td>${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</td>
-          <td><span class="badge ${request.status==='approved'?'badge-pass':request.status==='rejected'?'badge-fail':'badge-warn'}">${request.status==='approved'?'مقبول':request.status==='rejected'?'مرفوض':request.status==='completed'?'مكتمل':'قيد المراجعة'}</span></td>
+          <td><span class="badge ${getStudentRequestStatusMeta(request.status).className}">${getStudentRequestStatusMeta(request.status).label}</span></td>
           <td style="min-width:220px">
             ${request.adminNote?`<div style="font-size:12px;font-weight:700">${request.adminNote}</div>`:'<div style="font-size:11px;color:var(--muted)">لا توجد ملاحظة من الإدارة حتى الآن</div>'}
+            ${request.lecturerNote?`<div style="font-size:11px;color:var(--muted);margin-top:6px">ملاحظة عضو هيئة التدريس: ${request.lecturerNote}</div>`:''}
             ${request.reviewedAt?`<div style="font-size:10px;color:var(--muted);margin-top:4px">تمت المراجعة في ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')}${request.reviewedBy?` · بواسطة ${request.reviewedBy}`:''}</div>`:''}
           </td>
         </tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد طلبات مرفوعة حتى الآن</div>'}
     </div>`;
+}
+function toggleStudentGradeReviewSubject(){
+  const isGradeReview=document.getElementById('studentRequestType')?.value==='grade_review';
+  const field=document.getElementById('studentGradeReviewSubjectField');
+  if(field) field.style.display=isGradeReview?'block':'none';
 }
 
 function renderStudentPoliciesTab(){
@@ -1071,10 +1081,14 @@ function exportStudentTranscriptCsv(){
 
 async function submitStudentRequest(){
   const type = document.getElementById('studentRequestType')?.value;
-  const title = document.getElementById('studentRequestTitle')?.value.trim();
+  const subjectKey=type==='grade_review' ? document.getElementById('studentGradeReviewSubject')?.value||'' : '';
+  const subject=subjectKey ? getStudentSubjects(currentUser.fbKey).find(item=>item.key===subjectKey) : null;
+  const titleInput=document.getElementById('studentRequestTitle')?.value.trim();
+  const title=type==='grade_review'&&!titleInput&&subject ? `طلب مراجعة درجات: ${subject.name}` : titleInput;
   const details = document.getElementById('studentRequestDetails')?.value.trim();
+  if(type==='grade_review'&&!subject) return toast('يرجى اختيار المقرر المطلوب مراجعته');
   if(!title || !details) return toast('يرجى تعبئة عنوان الطلب وتفاصيله');
-  const payload = { studentKey: currentUser.fbKey, type, title, details, status:'pending', adminNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
+  const payload = { studentKey: currentUser.fbKey, type, title, details, subjectKey:subject?.key||'', subjectName:subject?.name||'', status:'pending', adminNote:'', lecturerNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
   const requestKey = 'req_'+Date.now();
   await fbRef('studentRequests/'+requestKey).set(payload);
   if(!dbData.studentRequests) dbData.studentRequests = {};
@@ -1260,6 +1274,14 @@ function getStudentRequests(){
     .map(([key, request])=>({ key, ...request }))
     .filter(request=>request.studentKey===currentUser.fbKey)
     .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+}
+function getStudentRequestStatusMeta(status){
+  if(status==='awaiting_lecturer_review') return {label:'لدى عضو هيئة التدريس',className:'badge-info'};
+  if(status==='completed') return {label:'تمت معالجة الطلب',className:'badge-pass'};
+  if(status==='returned_to_admin') return {label:'قيد مراجعة الإدارة',className:'badge-warn'};
+  if(status==='approved') return {label:'مقبول',className:'badge-pass'};
+  if(status==='rejected') return {label:'مرفوض',className:'badge-fail'};
+  return {label:'قيد مراجعة الإدارة',className:'badge-warn'};
 }
 function getPortalBatchProfile(batch){
   return PORTAL_BATCH_SEMESTERS[normalizeBatchName(batch)] || null;
