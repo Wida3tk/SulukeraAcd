@@ -129,6 +129,17 @@ tr:hover td{background:#f8faff;}
 .week-items{display:flex;gap:4px;justify-content:center;margin-top:4px;flex-wrap:wrap;}
 .week-item-dot{font-size:9px;background:white;border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--text-muted);}
 .student-profile-header{background:var(--primary-dark);border-radius:var(--radius-lg);padding:1.5rem 1.8rem;display:flex;align-items:center;gap:1.4rem;margin-bottom:1rem;color:white;}
+.report-summary{display:grid;grid-template-columns:minmax(240px,1.35fr) minmax(170px,.8fr) minmax(150px,.62fr);gap:0;border:1px solid #dce7ff;border-radius:16px;overflow:hidden;margin-bottom:1.2rem;background:linear-gradient(135deg,#f9fbff,#edf3ff);}
+.report-summary-section{padding:18px 20px;border-left:1px solid #d9e4fa;min-height:116px;display:flex;flex-direction:column;justify-content:center;}
+.report-summary-section:last-child{border-left:none;align-items:center;text-align:center;background:linear-gradient(135deg,#f3f7ff,#e8f0ff);}
+.report-summary-name{font-size:20px;font-weight:900;color:var(--primary-dark);}
+.report-summary-id{font-family:monospace;font-size:11px;color:var(--text-muted);margin-top:4px;}
+.report-summary-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.report-summary-label{font-size:10px;font-weight:800;color:var(--text-muted);margin-bottom:4px;}
+.report-summary-value{font-size:13px;font-weight:800;color:var(--text);}
+.report-summary-average{font-size:42px;font-weight:900;line-height:1;}
+.report-summary-average-label{font-size:10px;color:var(--text-muted);margin-top:6px;}
+@media(max-width:700px){.report-summary{grid-template-columns:1fr;}.report-summary-section{border-left:none;border-bottom:1px solid #d9e4fa;min-height:auto;}.report-summary-section:last-child{border-bottom:none;}}
 .student-avatar{width:64px;height:64px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;flex-shrink:0;border:3px solid rgba(85,215,255,0.4);}
 .profile-tab{padding:8px 18px;border-radius:99px;border:1.5px solid var(--border);cursor:pointer;font-size:12px;color:var(--text-muted);background:white;font-weight:600;transition:all 0.15s;}
 .profile-tab.active{background:var(--primary);color:white;border-color:var(--primary);}
@@ -1068,6 +1079,9 @@ async function loadAllFromFirebase(){
         })) : []
       }));
     }
+    packagesData=root.packages
+      ? Object.entries(root.packages).map(([key,p])=>({...p,_fbKey:key}))
+      : [];
 
     // 3. Users (non-student)
     users=[];
@@ -1608,6 +1622,16 @@ function inferPlanType(pkg){
   const value=String(pkg||'').toUpperCase();
   const pkgName=(packagesData||[]).find(p=>p._fbKey===pkg)?.name||'';
   return (value.includes('QASP')||pkgName.toUpperCase().includes('QASP'))?'QASP-S':'QBA';
+}
+function getStudentPackageDisplayName(student){
+  const pkgId=String(student?.pkg||'').trim();
+  if(!pkgId) return '';
+  const pkg=(packagesData||[]).find(item=>item._fbKey===pkgId||item.name===pkgId);
+  if(pkg?.name) return pkg.name;
+  const legacyNames={full:'باقة كاملة',partial:'باقة جزئية',single:'مقرر منفرد'};
+  if(legacyNames[pkgId]) return legacyNames[pkgId];
+  // مفاتيح Firebase مثل pkg_... تخص التخزين الداخلي ولا تعرض للمستخدمين.
+  return /^pkg_[a-zA-Z0-9_-]+$/.test(pkgId) ? '' : pkgId;
 }
 function inferFinanceMode(student){
   if(student?.financeMode) return student.financeMode;
@@ -3770,7 +3794,7 @@ function renderStudentProfile(stdIdx) {
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
   const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
   const hasFail=gradeRows.some(isFailingGrade);
-  const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مقرر منفرد'};
+  const packageName=getStudentPackageDisplayName(st);
   const financialState=getStudentFinancialState(st);
   const remaining=financialState.remainingAmount;
   const lecturerFollowUps=mySubjs.map(subj=>({subject:subj,record:getLecturerFollowUp(st?._fbKey, subj?._fbKey)})).filter(item=>item.record);
@@ -3783,7 +3807,7 @@ function renderStudentProfile(stdIdx) {
         <div style="font-size:12px;color:var(--neon);margin-top:3px">${st.id} · ${st.program||'—'} · ${st.batch||'—'}</div>
         <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">
           <span class="badge ${hasFail?'badge-fail':'badge-pass'}">${hasFail?'⚠️ تعثر أكاديمي':'✓ وضع أكاديمي جيد'}</span>
-          <span class="badge badge-student">${pkgMap[st.pkg]||'—'}</span>
+          ${packageName?`<span class="badge badge-student">${packageName}</span>`:''}
           ${remaining>0?`<span class="badge badge-warn">💰 متبقي: ${remaining.toLocaleString()} ر.س</span>`:'<span class="badge badge-pass">✓ مسدد بالكامل</span>'}
         </div>
       </div>
@@ -3820,7 +3844,7 @@ function renderStudentProfile(stdIdx) {
           <div class="info-item"><div class="info-item-label">المسار</div><div class="info-item-value">${st.track||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${st.batch||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">الرخصة الأكاديمية</div><div class="info-item-value">${st.planType||inferPlanType(st.pkg)}</div></div>
-          <div class="info-item"><div class="info-item-label">نوع الباقة</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
+          ${packageName?`<div class="info-item"><div class="info-item-label">الباقة</div><div class="info-item-value">${packageName}</div></div>`:''}
           <div class="info-item"><div class="info-item-label">المقررات</div><div class="info-item-value">${mySubjs.length}</div></div>
         </div>
         <div style="margin-top:1rem">${renderStudentAcademicProgressSheet(stdIdx, st, mySubjs)}</div>
@@ -4390,30 +4414,25 @@ function generateReport() {
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
   const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
   const hasFail=gradeRows.some(isFailingGrade);
-  const pkgInfo = packagesData.find(p=>p._fbKey===st.pkg||p.name===st.pkg);
+  const packageName=getStudentPackageDisplayName(st);
 
   let html=`<div class="card card-accent">
     <div class="card-title">📋 كشف درجات — ${getStudentFullName(st)}</div>
-    <!-- Student Info Header -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.8rem;margin-bottom:1.2rem;padding:1rem;background:var(--bg);border-radius:var(--radius);">
-      <div>
-        <div style="font-size:18px;font-weight:800;color:var(--primary-dark)">${getStudentFullName(st)}</div>
-        <div class="mono" style="color:var(--text-muted);font-size:12px;margin-top:2px">${st.id}</div>
-        <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
-          <span class="badge badge-student">${st.batch||'—'}</span>
-          <span class="badge badge-student">${st.program||'—'}</span>
-        </div>
+    <div class="report-summary">
+      <div class="report-summary-section">
+        <div class="report-summary-name">${getStudentFullName(st)}</div>
+        <div class="report-summary-id">${st.id||'—'}</div>
+        <div class="report-summary-tags"><span class="badge badge-student">${st.batch||'دفعة غير محددة'}</span><span class="badge badge-student">${st.program||'برنامج غير محدد'}</span></div>
       </div>
-      <div style="border-right:1px solid var(--border);padding-right:1rem;">
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">المسار</div>
-        <div style="font-size:13px;font-weight:600">${st.track||'—'}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;margin-bottom:3px">الباقة</div>
-        <div style="font-size:13px;font-weight:600">${pkgInfo?.name||st.pkg||'—'}</div>
+      <div class="report-summary-section">
+        <div class="report-summary-label">المسار الأكاديمي</div>
+        <div class="report-summary-value">${st.track||st.planType||'غير محدد'}</div>
+        ${packageName?`<div class="report-summary-label" style="margin-top:12px">الباقة</div><div class="report-summary-value">${packageName}</div>`:''}
       </div>
-      <div style="text-align:center;border-right:1px solid var(--border);padding-right:1rem;">
-        <div style="font-size:42px;font-weight:900;color:${avg>=settings.gradeA?'#1a7a3c':avg>=settings.gradeFail?'var(--primary)':'#c0392b'};line-height:1">${avg}</div>
-        <div style="font-size:11px;color:var(--text-muted)">المتوسط العام / 100</div>
-        <div style="margin-top:6px"><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ وضع جيد'}</span></div>
+      <div class="report-summary-section">
+        <div class="report-summary-average" style="color:${avg>=settings.gradeA?'#1a7a3c':avg>=settings.gradeFail?'var(--primary)':'#c0392b'}">${avg}</div>
+        <div class="report-summary-average-label">المتوسط العام من 100</div>
+        <div style="margin-top:9px"><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'يحتاج متابعة أكاديمية':'الوضع الأكاديمي جيد'}</span></div>
       </div>
     </div>
     <!-- Subjects Cards -->
@@ -4440,16 +4459,16 @@ function generateReport() {
           ${['w1','w2','w3','w4'].map((w,i)=>{
             const wg=g[w]; const wt=(wg.attend||0)+(wg.hw||0)+(wg.disc||0);
             return `<div style="text-align:center;background:var(--bg);border-radius:6px;padding:5px;">
-              <div style="font-size:9px;color:var(--text-muted);font-weight:600">Ø£${i+1}</div>
+              <div style="font-size:9px;color:var(--text-muted);font-weight:600">الأسبوع ${i+1}</div>
               <div style="font-size:15px;font-weight:800;color:var(--primary)">${wt}</div>
               <div style="font-size:8px;color:var(--text-light)">/${wkMax}</div>
               <div style="font-size:8px;color:var(--text-muted);margin-top:2px">ح${wg.attend||0}·و${wg.hw||0}·م${wg.disc||0}</div>
             </div>`;
           }).join('')}
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:${st2==='ناجح'?'var(--success-light)':'var(--danger-light)'};border-radius:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:${st2==='ناجح'?'var(--success-light)':st2==='راسب'?'var(--danger-light)':'var(--bg)'};border-radius:6px;">
           <span style="font-size:11px;font-weight:600">📝 الاختبار النهائي</span>
-          <span style="font-size:16px;font-weight:800;color:${st2==='ناجح'?'var(--success)':'var(--danger)'}">
+          <span style="font-size:16px;font-weight:800;color:${st2==='ناجح'?'var(--success)':st2==='راسب'?'var(--danger)':'var(--text-muted)'}">
             ${g.exam??'—'}/${settings.exam}
           </span>
         </div>
@@ -4820,7 +4839,7 @@ async function loadMyGrades() {
     }catch(e){}
   }
   const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
-  const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مقرر منفرد'};
+  const packageName=getStudentPackageDisplayName(st);
   const semester=getActiveSemesterSummaryForStudent(st.batch);
   const notifications=getStudentPortalNotifications(st,stdIdx,mySubjs);
   const weeklySlots=getStudentWeeklySchedule(st,mySubjs);
@@ -4857,7 +4876,7 @@ async function loadMyGrades() {
             <div class="info-item"><div class="info-item-label">البرنامج</div><div class="info-item-value">${st.program||'—'}</div></div>
             <div class="info-item"><div class="info-item-label">المسار</div><div class="info-item-value">${st.track||'—'}</div></div>
             <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${st.batch||'—'}</div></div>
-            <div class="info-item"><div class="info-item-label">نوع الباقة</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
+            ${packageName?`<div class="info-item"><div class="info-item-label">الباقة</div><div class="info-item-value">${packageName}</div></div>`:''}
             <div class="info-item"><div class="info-item-label">المقررات</div><div class="info-item-value">${mySubjs.length}</div></div>
             <div class="info-item"><div class="info-item-label">الفصل</div><div class="info-item-value">${semester?.name||'—'}</div></div>
           </div>
@@ -4904,7 +4923,7 @@ async function loadMyGrades() {
           <div class="info-item"><div class="info-item-label">البرنامج</div><div class="info-item-value">${st.program||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">المسار</div><div class="info-item-value">${st.track||'—'}</div></div>
           <div class="info-item"><div class="info-item-label">الدفعة</div><div class="info-item-value">${st.batch||'—'}</div></div>
-          <div class="info-item"><div class="info-item-label">نوع الباقة</div><div class="info-item-value">${pkgMap[st.pkg]||'—'}</div></div>
+          ${packageName?`<div class="info-item"><div class="info-item-label">الباقة</div><div class="info-item-value">${packageName}</div></div>`:''}
           <div class="info-item"><div class="info-item-label">تاريخ التسجيل</div><div class="info-item-value">${st.regDate||'—'}</div></div>
         </div>
         <div style="margin-top:1rem;">${mySubjs.map(subj=>{
@@ -6275,12 +6294,11 @@ function exportStudentsExcel(){
     const paidTotal = (st.installments||[]).filter(i=>i.status==='paid').reduce((a,b)=>a+(b.amount||0),0);
     const remaining = (st.totalAmount||0) - paidTotal;
     const hasOverdue = (st.installments||[]).some(i=>i.status==='overdue');
-    const pkgMap={full:'باقة كاملة',partial:'باقة جزئية',single:'مادة واحدة'};
     
     const row = [
       st.id, getStudentFullName(st), st.email||'', st.phone||'',
       st.program||'', st.track||'', st.batch||'',
-      pkgMap[st.pkg]||'', st.totalAmount||0, paidTotal, remaining,
+      getStudentPackageDisplayName(st), st.totalAmount||0, paidTotal, remaining,
       hasOverdue?'متأخر':'منتظم',
       avg>0?avg:'—', hasFail?'تعثر':'جيد'
     ].map(v=>`"${v}"`).join(',');

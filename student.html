@@ -99,6 +99,11 @@ body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:v
   padding:1.5rem 2rem;color:white;display:flex;align-items:center;
   gap:1.2rem;margin-bottom:1.2rem;
 }
+.transcript-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:1rem;padding:16px 18px;border:1px solid #d8e4fb;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#eaf1ff);}
+.transcript-summary-name{font-size:18px;font-weight:900;color:var(--dark);}
+.transcript-summary-meta{font-size:11px;color:var(--muted);margin-top:5px;}
+.transcript-summary-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.transcript-summary-actions{display:flex;gap:8px;flex-wrap:wrap;}
 .student-avatar{
   width:56px;height:56px;border-radius:50%;background:var(--primary);
   display:flex;align-items:center;justify-content:center;
@@ -966,9 +971,13 @@ function renderStudentTranscriptTab(){
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
       <div class="card-title">📄 كشف الدرجات</div>
-      <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-        <div><strong>${fullName}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${st.id} · ${st.batch||'—'} · ${st.planType||'—'}</div></div>
-        <div style="display:flex;gap:8px;"><button class="btn-out" onclick="window.print()">🖨️ طباعة</button><button class="btn-out" onclick="exportStudentTranscriptCsv()">📤 تصدير CSV</button></div>
+      <div class="transcript-summary">
+        <div>
+          <div class="transcript-summary-name">${fullName}</div>
+          <div class="transcript-summary-meta">الرقم الطلابي: ${st.id||'—'}</div>
+          <div class="transcript-summary-tags"><span class="badge badge-student">${st.batch||'دفعة غير محددة'}</span><span class="badge badge-student">${st.program||'برنامج غير محدد'}</span><span class="badge badge-student">${st.planType||'مسار غير محدد'}</span></div>
+        </div>
+        <div class="transcript-summary-actions"><button class="btn-out" onclick="window.print()">🖨️ طباعة الكشف</button><button class="btn-out" onclick="exportStudentTranscriptCsv()">📤 تصدير CSV</button></div>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>#</th><th>المقرر</th><th>المحاضر</th><th>المجموع</th><th>التقدير</th><th>الحالة</th></tr></thead>
