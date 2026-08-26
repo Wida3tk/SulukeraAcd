@@ -1686,6 +1686,7 @@ function renderLecturerHomeTab(){
   const nextSlot = getNextUpcomingSlot(scheduleSlots);
   const batchNames = Object.keys(batchMap).sort();
   const pendingAlerts = getLecturerPendingGradeAlerts();
+  const gradeReviewCount = getLecturerGradeReviewRequests().length;
   const facultyName=currentUser?.data?.name||'عضو هيئة التدريس';
   if(!mySubjects.length){
     document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات مسندة إلى الحساب حتى الآن</div></div>`;
@@ -1715,8 +1716,10 @@ function renderLecturerHomeTab(){
       <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📚 المقررات</div></div>
       <div class="stat-box"><div class="stat-val">${uniqueStudents.length}</div><div class="stat-lbl">👩‍🎓 الطلاب</div></div>
       <div class="stat-box"><div class="stat-val">${pendingExamRows}</div><div class="stat-lbl">📝 رصد معلّق</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${gradeReviewCount?'var(--warning)':'var(--success)'}">${gradeReviewCount}</div><div class="stat-lbl">📩 مراجعات درجات</div></div>
       <div class="stat-box"><div class="stat-val">${gradedRows>0&&passedRows>0?Math.round(passedRows/gradedRows*100):0}%</div><div class="stat-lbl">✅ نجاح مرصود</div></div>
     </div>
+    ${gradeReviewCount?`<div class="card" style="border-right:4px solid var(--warning);margin-bottom:16px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><strong>طلبات مراجعة درجات بانتظار الإجراء</strong><div style="font-size:12px;color:var(--muted);margin-top:5px">${gradeReviewCount} طلب محال من الإدارة. افتح سجل الدرجات ثم اختر المقرر لمعالجة الطلب.</div></div><button class="btn-out" onclick="switchAppTab('grades',getAppTabButtonById('grades'))">فتح سجل الدرجات</button></div></div>`:''}
     <div class="card">
       <div class="card-title">🚨 تنبيهات الرصد الناقص</div>
       ${pendingAlerts.length ? `<div class="table-wrap"><table>
@@ -1776,6 +1779,95 @@ function renderLecturerCoursesTab(){
 }
 
 
+function getLecturerGradeReviewRequests(subjectKey='', batchName=''){
+  const lecturerSubjectKeys=new Set(getLecturerSubjects().map(subject=>subject.key));
+  return Object.entries(dbData.studentRequests||{})
+    .map(([key,request])=>({key,...request}))
+    .filter(request=>request.type==='grade_review'&&request.status==='awaiting_lecturer_review')
+    .filter(request=>lecturerSubjectKeys.has(request.subjectKey))
+    .filter(request=>!subjectKey||request.subjectKey===subjectKey)
+    .filter(request=>!batchName||sameBatchName(dbData.students?.[request.studentKey]?.batch,batchName))
+    .sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+}
+function getGradeReviewFieldMeta(field){
+  const fields={
+    w1_attend:{label:'حضور الأسبوع الأول',max:settings.attend},w1_hw:{label:'واجبات الأسبوع الأول',max:settings.hw},w1_disc:{label:'مناقشة الأسبوع الأول',max:settings.disc},
+    w2_attend:{label:'حضور الأسبوع الثاني',max:settings.attend},w2_hw:{label:'واجبات الأسبوع الثاني',max:settings.hw},w2_disc:{label:'مناقشة الأسبوع الثاني',max:settings.disc},
+    w3_attend:{label:'حضور الأسبوع الثالث',max:settings.attend},w3_hw:{label:'واجبات الأسبوع الثالث',max:settings.hw},w3_disc:{label:'مناقشة الأسبوع الثالث',max:settings.disc},
+    w4_attend:{label:'حضور الأسبوع الرابع',max:settings.attend},w4_hw:{label:'واجبات الأسبوع الرابع',max:settings.hw},w4_disc:{label:'مناقشة الأسبوع الرابع',max:settings.disc},
+    exam:{label:'الاختبار النهائي',max:settings.exam}
+  };
+  return fields[field]||fields.exam;
+}
+function gradeReviewInputId(prefix,requestKey){ return `${prefix}_${requestKey}`; }
+function renderLecturerGradeReviewPanel(subjectKey,batchName){
+  const requests=getLecturerGradeReviewRequests(subjectKey,batchName);
+  if(!requests.length) return '';
+  const fields=['w1_attend','w1_hw','w1_disc','w2_attend','w2_hw','w2_disc','w3_attend','w3_hw','w3_disc','w4_attend','w4_hw','w4_disc','exam'];
+  return `<div class="card" style="border-right:4px solid var(--warning);margin-bottom:1rem;">
+    <div class="card-title">طلبات مراجعة الدرجات</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">اعتمد التعديل بعد التحقق من الطلب، أو أعده إلى الإدارة مع توضيح السبب.</div>
+    <div style="display:grid;gap:12px">${requests.map(request=>{
+      const student=dbData.students?.[request.studentKey]||{};
+      const grade=getGrade_data(request.studentKey,subjectKey)||{};
+      const defaultField=request.gradeReviewField||'exam';
+      const meta=getGradeReviewFieldMeta(defaultField);
+      return `<div style="padding:14px;border:1px solid var(--border);border-radius:12px;background:#fbfdff">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px"><div><strong>${getStudentDisplayName(student)}</strong><div style="font-size:11px;color:var(--muted);margin-top:3px">${student.id||'—'} · ${student.batch||'دفعة غير محددة'}</div></div><span class="badge badge-info">مراجعة درجات</span></div>
+        <div style="font-size:12px;line-height:1.7;padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:10px"><strong>تفاصيل الطالب:</strong> ${request.details||'—'}${request.adminNote?`<br><strong>ملاحظة الإدارة:</strong> ${request.adminNote}`:''}</div>
+        <div style="display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,.7fr);gap:10px"><div class="field" style="margin:0"><label>بند الدرجة</label><select id="${gradeReviewInputId('gradeReviewField',request.key)}" onchange="syncGradeReviewValue('${request.key}','${subjectKey}','${request.studentKey}')">${fields.map(field=>`<option value="${field}" ${field===defaultField?'selected':''}>${getGradeReviewFieldMeta(field).label}</option>`).join('')}</select></div><div class="field" style="margin:0"><label id="${gradeReviewInputId('gradeReviewValueLabel',request.key)}">الدرجة الجديدة (/${meta.max})</label><input id="${gradeReviewInputId('gradeReviewValue',request.key)}" type="number" min="0" max="${meta.max}" value="${grade[defaultField]??''}" placeholder="أدخل الدرجة"></div></div>
+        <div class="field" style="margin:10px 0 0"><label>ملاحظة عضو هيئة التدريس</label><textarea id="${gradeReviewInputId('gradeReviewNote',request.key)}" style="min-height:74px" placeholder="تظهر هذه الملاحظة للطالب والإدارة"></textarea></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-success" onclick="approveStudentGradeReview('${request.key}')">اعتماد التعديل</button><button class="btn-out" onclick="returnStudentGradeReview('${request.key}')">إعادة للإدارة</button></div>
+      </div>`;
+    }).join('')}</div>
+  </div>`;
+}
+function syncGradeReviewValue(requestKey,subjectKey,studentKey){
+  const field=document.getElementById(gradeReviewInputId('gradeReviewField',requestKey))?.value||'exam';
+  const meta=getGradeReviewFieldMeta(field);
+  const value=document.getElementById(gradeReviewInputId('gradeReviewValue',requestKey));
+  const label=document.getElementById(gradeReviewInputId('gradeReviewValueLabel',requestKey));
+  const grade=getGrade_data(studentKey,subjectKey)||{};
+  if(value){value.max=meta.max;value.value=grade[field]??'';}
+  if(label) label.textContent=`الدرجة الجديدة (/${meta.max})`;
+}
+async function approveStudentGradeReview(requestKey){
+  const request=dbData.studentRequests?.[requestKey];
+  if(!request||request.status!=='awaiting_lecturer_review') return toast('الطلب لم يعد متاحًا للمعالجة');
+  const field=document.getElementById(gradeReviewInputId('gradeReviewField',requestKey))?.value||'';
+  const raw=document.getElementById(gradeReviewInputId('gradeReviewValue',requestKey))?.value.trim()||'';
+  const note=document.getElementById(gradeReviewInputId('gradeReviewNote',requestKey))?.value.trim()||'';
+  const meta=getGradeReviewFieldMeta(field), value=Number(raw);
+  if(raw===''||!Number.isFinite(value)||value<0||value>meta.max) return toast(`أدخل درجة صحيحة من 0 إلى ${meta.max}`);
+  const gradeKey=('grade_'+request.studentKey+'_'+request.subjectKey).replace(/[.#$[\]]/g,'_');
+  try{
+    const fallback=getGrade_data(request.studentKey,request.subjectKey)||{};
+    const tx=await fbRef('grades/'+gradeKey).transaction(current=>{
+      const existing=current||fallback;
+      return {studentKey:request.studentKey,subjectKey:request.subjectKey,w1_attend:existing.w1_attend||0,w1_hw:existing.w1_hw||0,w1_disc:existing.w1_disc||0,w2_attend:existing.w2_attend||0,w2_hw:existing.w2_hw||0,w2_disc:existing.w2_disc||0,w3_attend:existing.w3_attend||0,w3_hw:existing.w3_hw||0,w3_disc:existing.w3_disc||0,w4_attend:existing.w4_attend||0,w4_hw:existing.w4_hw||0,w4_disc:existing.w4_disc||0,exam:isExamEntered(existing)?(existing.exam||0):null,examEntered:isExamEntered(existing),[field]:value,...(field==='exam'?{examEntered:true}:{}),updatedAt:new Date().toISOString()};
+    });
+    const now=new Date().toISOString(), reviewer=currentUser.data?.name||'عضو هيئة التدريس';
+    const update={status:'completed',lecturerNote:note,lecturerReviewedAt:now,lecturerReviewedBy:reviewer,gradeReviewField:field,gradeReviewValue:value,reviewedAt:now,reviewedBy:reviewer};
+    await fbRef('studentRequests/'+requestKey).update(update);
+    if(!dbData.grades) dbData.grades={};
+    dbData.grades[gradeKey]=tx.snapshot.val(); dbData.studentRequests[requestKey]={...request,...update};
+    toast('تم اعتماد تعديل الدرجة وتحديث حالة الطلب'); renderGradeInput(currentSubjectKey,currentBatchName);
+  }catch(error){console.error('approveStudentGradeReview',error);toast('تعذر اعتماد التعديل');}
+}
+async function returnStudentGradeReview(requestKey){
+  const request=dbData.studentRequests?.[requestKey];
+  const note=document.getElementById(gradeReviewInputId('gradeReviewNote',requestKey))?.value.trim()||'';
+  if(!request||request.status!=='awaiting_lecturer_review') return toast('الطلب لم يعد متاحًا للمعالجة');
+  if(!note) return toast('اكتب ملاحظة توضح سبب إعادة الطلب إلى الإدارة');
+  try{
+    const now=new Date().toISOString(), reviewer=currentUser.data?.name||'عضو هيئة التدريس';
+    const update={status:'returned_to_admin',lecturerNote:note,lecturerReviewedAt:now,lecturerReviewedBy:reviewer,reviewedAt:now,reviewedBy:reviewer};
+    await fbRef('studentRequests/'+requestKey).update(update);
+    dbData.studentRequests[requestKey]={...request,...update};
+    toast('تمت إعادة الطلب إلى الإدارة'); renderGradeInput(currentSubjectKey,currentBatchName);
+  }catch(error){console.error('returnStudentGradeReview',error);toast('تعذر إعادة الطلب إلى الإدارة');}
+}
+
 function selectLecSubject(subjectKey, batchName, btn){
   currentSubjectKey=subjectKey;
   currentBatchName=batchName||null;
@@ -1816,7 +1908,8 @@ function renderGradeInput(subjectKey, batchName){
     <div class="card" id="summaryCard_${subjectKey}">
       <div class="card-title">📊 ملخص المادة</div>
       <div id="summaryTable_${subjectKey}" style="overflow-x:auto">${buildSummaryHTML(subjectKey, students)}</div>
-    </div>`;
+    </div>
+    ${renderLecturerGradeReviewPanel(subjectKey,batchName)}`;
 
   document.getElementById('lecSubjContent').innerHTML=html;
   renderWeekTable(1);
