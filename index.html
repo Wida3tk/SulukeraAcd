@@ -8,9 +8,10 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root{--primary:#0D40FC;--primary-dark:#001442;--primary-light:#55D7FF;--neon:#55D7FF;--bg:#f0f4ff;--surface:#ffffff;--border:#d0dcf8;--text:#020716;--text-muted:#4a5580;--text-light:#8090bb;--danger:#c0392b;--danger-light:#fdf0ef;--success:#1a7a3c;--success-light:#eafaf0;--warning:#b35c00;--warning-light:#fff5e6;--radius:10px;--radius-lg:14px;--shadow:0 2px 12px rgba(13,64,252,0.08);--shadow-md:0 4px 20px rgba(13,64,252,0.13);}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;direction:rtl;}
+body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;direction:rtl;}
 #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--primary-dark) 0%,#001d6e 50%,#0D40FC 100%);position:relative;overflow:hidden;}
 #loginScreen::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 80%,rgba(85,215,255,0.12) 0%,transparent 50%),radial-gradient(circle at 80% 20%,rgba(13,64,252,0.3) 0%,transparent 50%);}
 .login-card{background:white;border-radius:20px;padding:2.5rem 2rem;width:420px;max-width:95vw;position:relative;z-index:1;box-shadow:0 25px 60px rgba(0,0,0,0.35);}
