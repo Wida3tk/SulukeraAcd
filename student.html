@@ -166,6 +166,26 @@ body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:v
 }
 .lec-tab.active{background:var(--primary);color:white;border-color:var(--primary);}
 .lec-tab:hover{border-color:var(--primary);color:var(--primary);}
+.faculty-welcome{position:relative;overflow:hidden;background:linear-gradient(125deg,#001442 0%,#073494 56%,#0d40fc 100%);border-radius:22px;padding:30px;color:#fff;margin-bottom:16px;box-shadow:0 18px 38px rgba(0,20,66,.2);}
+.faculty-welcome:before,.faculty-welcome:after{content:'';position:absolute;border-radius:50%;pointer-events:none;}
+.faculty-welcome:before{width:260px;height:260px;background:rgba(85,215,255,.14);left:-95px;top:-145px;}
+.faculty-welcome:after{width:170px;height:170px;background:rgba(255,255,255,.08);left:22%;bottom:-125px;}
+.faculty-welcome-inner{position:relative;z-index:1;display:flex;align-items:stretch;justify-content:space-between;gap:20px;}
+.faculty-kicker{font-size:11px;font-weight:800;letter-spacing:.2px;color:#8ce8ff;margin-bottom:9px;}
+.faculty-welcome h1{font-size:26px;line-height:1.3;margin:0;}
+.faculty-welcome p{font-size:13px;line-height:1.7;color:rgba(255,255,255,.8);max-width:570px;margin:8px 0 18px;}
+.faculty-badges{display:flex;flex-wrap:wrap;gap:8px;}
+.faculty-badge{padding:7px 10px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.1);font-size:11px;font-weight:700;}
+.faculty-next{min-width:260px;align-self:center;padding:16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(0,13,55,.28);backdrop-filter:blur(8px);}
+.faculty-next-label{font-size:10px;color:#9de8ff;font-weight:800;margin-bottom:8px;}
+.faculty-next-subject{font-size:15px;font-weight:800;line-height:1.5;}
+.faculty-next-meta{font-size:11px;color:rgba(255,255,255,.72);margin-top:7px;}
+.program-calendar-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;}
+.program-calendar-item{border:1px solid #e0e9f8;border-radius:14px;padding:13px;background:#fff;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;}
+.program-calendar-order{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:#eaf0ff;color:#0d40fc;font-size:12px;font-weight:900;}
+.program-calendar-item.exam .program-calendar-order{background:#fff2df;color:#a75500;}.program-calendar-item.break .program-calendar-order{background:#eaf8ed;color:#19753c;}
+.program-calendar-title{font-size:12px;font-weight:800;color:#102145;}.program-calendar-date{font-size:11px;color:#596883;line-height:1.55;margin-top:4px;}.program-calendar-duration{font-size:10px;color:#0d40fc;font-weight:700;margin-top:4px;}
+@media(max-width:700px){.faculty-welcome{padding:22px 20px;}.faculty-welcome-inner{flex-direction:column;}.faculty-next{min-width:0;}.faculty-welcome h1{font-size:22px;}}
 
 .card{background:white;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.2rem 1.4rem;margin-bottom:1rem;box-shadow:var(--shadow);}
 .card-title{font-size:13px;font-weight:700;margin-bottom:1rem;padding-bottom:8px;border-bottom:2px solid var(--bg);display:flex;align-items:center;gap:7px;}
@@ -1286,7 +1306,10 @@ function getProgramScheduleForRole(){
     };
   }
   if(currentUser?.role==='lecturer'){
-    const batches = [...new Set(getLecturerSubjects().map(subject=>normalizeBatchName(subject.batch)).filter(Boolean))];
+    const batches = [...new Set([
+      ...getLecturerSubjects().map(subject=>normalizeBatchName(subject.batch)),
+      ...getLecturerScheduleSlots().map(slot=>normalizeBatchName(slot.batch))
+    ].filter(Boolean))];
     return {
       semesterList: batches.map(batchKey=>getPortalBatchProfile(batchKey)).filter(Boolean)
     };
@@ -1473,6 +1496,7 @@ function openLecturerGradeAlert(subjectKey, batchName){
 
 function getSubjectStudents(subjectFbKey){
   if(!dbData.students) return [];
+  const subject=dbData.subjects?.[subjectFbKey]||{};
   const result=[];
   const addStudent=(studentKey)=>{
     const student=dbData.students?.[studentKey];
@@ -1482,14 +1506,21 @@ function getSubjectStudents(subjectFbKey){
 
   // التسجيلات الصريحة هي المصدر الأول.
   Object.values(dbData.enrollments||{}).forEach(e=>{
-    if(e.subjectKey===subjectFbKey&&e.studentKey&&dbData.students[e.studentKey]&&
-       isStudentEligibleForSubject(dbData.students[e.studentKey],dbData.subjects?.[subjectFbKey])){
+    if(e.subjectKey===subjectFbKey&&e.studentKey&&dbData.students[e.studentKey]){
       addStudent(e.studentKey);
     }
   });
 
+  // شعب الدفعات الجديدة تُربط بدفعتها مباشرة. لا تعتمد على الفصول القديمة
+  // حتى لا تنتقل أسماء دفعة أخرى إلى سجل الدرجات.
+  if(subject.courseKey&&subject.batch){
+    Object.entries(dbData.students).forEach(([studentKey,student])=>{
+      if(sameBatchName(student.batch,subject.batch)&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
+    });
+    return result;
+  }
+
   // معالجة البيانات القديمة أو الناقصة: استنتج الطلاب من دفعة المادة/الفصل.
-  const subject=dbData.subjects?.[subjectFbKey]||{};
   const subjectBatches=new Set();
   if(subject.batch) subjectBatches.add(normalizeBatchName(subject.batch));
   Object.values(dbData.semesters||{}).forEach(sem=>{
@@ -1619,39 +1650,36 @@ function renderLecturerHomeTab(){
   const nextSlot = getNextUpcomingSlot(scheduleSlots);
   const batchNames = Object.keys(batchMap).sort();
   const pendingAlerts = getLecturerPendingGradeAlerts();
+  const facultyName=currentUser?.data?.name||'عضو هيئة التدريس';
   if(!mySubjects.length){
     document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات مسندة إلى الحساب حتى الآن</div></div>`;
     return;
   }
   document.getElementById('mainContent').innerHTML = `
+    <section class="faculty-welcome">
+      <div class="faculty-welcome-inner">
+        <div>
+          <div class="faculty-kicker">بوابة عضو هيئة التدريس</div>
+          <h1>أهلًا بك، ${facultyName}</h1>
+          <p>واجهة أكاديمية موحّدة لمتابعة المقررات والدفعات وسجل الدرجات المرتبط بالحساب.</p>
+          <div class="faculty-badges">
+            <span class="faculty-badge">${mySubjects.length} مقرر مسند</span>
+            <span class="faculty-badge">${uniqueStudents.length} طالب مرتبط</span>
+            <span class="faculty-badge">${batchNames.length} دفعات</span>
+          </div>
+        </div>
+        <div class="faculty-next">
+          <div class="faculty-next-label">المحاضرة التالية</div>
+          <div class="faculty-next-subject">${nextSlot?.subject||'لا توجد محاضرة معتمدة في الجدول'}</div>
+          <div class="faculty-next-meta">${nextSlot ? `${nextSlot.day||'—'} · ${to12h(nextSlot.timeStart||'')} - ${to12h(nextSlot.timeEnd||'')}` : 'تظهر المحاضرات بعد اعتماد الجدول وإسناد المقرر.'}</div>
+        </div>
+      </div>
+    </section>
     <div class="stat-row">
       <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📚 المقررات</div></div>
       <div class="stat-box"><div class="stat-val">${uniqueStudents.length}</div><div class="stat-lbl">👩‍🎓 الطلاب</div></div>
       <div class="stat-box"><div class="stat-val">${pendingExamRows}</div><div class="stat-lbl">📝 رصد معلّق</div></div>
       <div class="stat-box"><div class="stat-val">${gradedRows>0&&passedRows>0?Math.round(passedRows/gradedRows*100):0}%</div><div class="stat-lbl">✅ نجاح مرصود</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">✨ لوحة عضو هيئة التدريس</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">المحاضرة التالية</div>
-          <div style="font-size:14px;font-weight:800">${nextSlot?.subject || 'لا توجد محاضرات معتمدة في الجدول'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">${nextSlot ? `${nextSlot.day||'—'} · ${nextSlot.timeStart||'—'} - ${nextSlot.timeEnd||'—'}` : 'تُعرض المحاضرات بعد اعتماد الجدول وإسناد المقرر.'}</div>
-        </div>
-        <div style="padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">الدفعات المسندة</div>
-          <div style="font-size:14px;font-weight:800">${batchNames.length ? batchNames.join(' · ') : 'لا توجد دفعات مسندة'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">${mySubjects.length} مقرر مسند إلى الحساب</div>
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">📌 الإجراءات الأكاديمية</div>
-      <div style="display:grid;gap:8px;">
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">استكمل الرصد الناقص أو حدّث درجات أعمال الأسابيع من <strong>سجل الدرجات</strong>.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع قوائم الطلاب المسندين إلى كل دفعة ومقرر من <strong>المقررات المسندة</strong>.</div>
-        <div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:12px">راجع <strong>الجدول الأسبوعي</strong> قبل بدء المحاضرات للتحقق من الوقت والقاعة.</div>
-      </div>
     </div>
     <div class="card">
       <div class="card-title">🚨 تنبيهات الرصد الناقص</div>
@@ -2085,12 +2113,15 @@ function renderProgramSchedule(units){
       </div>`;
   }
   const lecturerSemesters = roleProgram.semesterList || [];
+  const unitList = Object.entries(units).sort(([,a],[,b])=>Number(a.order||0)-Number(b.order||0));
   if(currentUser?.role==='lecturer'){
-    if(!lecturerSemesters.length) return '<div class="empty">لا توجد دفعات مرتبطة بحساب عضو هيئة التدريس حالياً.</div>';
     return `
       <div class="card" style="background:linear-gradient(135deg,#ffffff,#f8fbff);border:1px solid #dce7ff;">
-        <div class="card-title">مراحل الدفعات المرتبطة بحساب عضو هيئة التدريس</div>
-        <div style="display:grid;gap:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+          <div><div class="card-title" style="margin:0;border:none;padding:0;">التقويم الأكاديمي للبرنامج</div><div style="font-size:12px;color:var(--muted);margin-top:7px;">بداية البرنامج: 23 أغسطس 2026 · نهاية البرنامج: 12 يونيو 2027</div></div>
+          <span class="badge badge-pass">4 أسابيع دراسة · أسبوع اختبارات · أسبوع إجازة</span>
+        </div>
+        ${lecturerSemesters.length?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:16px;">
           ${lecturerSemesters.map(semester=>`
             <div style="padding:14px 16px;border:1px solid #e2ebff;border-radius:16px;background:#fff;">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -2102,10 +2133,14 @@ function renderProgramSchedule(units){
               </div>
               <div style="font-size:12px;color:#5b6b82;margin-top:10px;">الفترة المعتمدة: ${semester.startDate} إلى ${semester.endDate}</div>
             </div>`).join('')}
-        </div>
+        </div>`:'<div class="alert alert-info" style="margin-bottom:16px;">التقويم العام معتمد ويظهر كاملًا إلى حين ربط دفعات إضافية بالحساب.</div>'}
+        ${unitList.length?`<div class="program-calendar-grid">${unitList.map(([key,unit])=>{
+          const type=String(unit.title||'');
+          const itemClass=type.includes('اختبارات')?'exam':type.includes('إجازة')?'break':'';
+          return `<div class="program-calendar-item ${itemClass}"><div class="program-calendar-order">${unit.order||'—'}</div><div><div class="program-calendar-title">${unit.title||'مرحلة البرنامج'}</div><div class="program-calendar-date">${unit.dateRange||'التاريخ غير محدد'}</div><div class="program-calendar-duration">${unit.duration||''}</div></div></div>`;
+        }).join('')}</div>`:'<div class="empty">لا توجد مراحل برنامج معتمدة حاليًا.</div>'}
       </div>`;
   }
-  const unitList = Object.entries(units).sort(([,a],[,b])=>a.order-b.order);
   if(!unitList.length) return '<div class="empty">لا توجد بيانات برنامج معتمدة حالياً.</div>';
   return `<div class="units-grid">
     ${unitList.map(([key,unit],i)=>`
