@@ -125,6 +125,7 @@ body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:v
   background:white;border:1px solid var(--border);border-radius:var(--radius-lg);
   overflow:hidden;box-shadow:var(--shadow);
 }
+.course-row-planned{opacity:.62;background:#f8faff;}.course-row-planned td{color:#71809f;}
 .subject-card-head{
   background:var(--dark);padding:0.9rem 1.1rem;
   display:flex;justify-content:space-between;align-items:center;
@@ -612,6 +613,14 @@ function setRole(role, btn){
   }
   document.getElementById('loginErr').style.display = 'none';
 }
+function getStudentSubjectStage(student,subject){
+  const grade=getGrade_data(currentUser?.fbKey,subject.key);
+  if(grade&&isExamEntered(grade)) return 'completed';
+  const activeKeys=activeSubjectKeysForBatch(student?.batch);
+  if(activeKeys.includes(subject.key)) return 'active';
+  if(subject.lecturerUserId) return 'active';
+  return 'planned';
+}
 
 // ══════════════════════════════════════════════
 //  LOGIN
@@ -798,7 +807,8 @@ function renderStudentHomeTab(){
   const pendingRequests = requests.filter(request=>!request.status || request.status==='pending').length;
   const reviewedRequests = requests.filter(request=>request.reviewedAt).length;
   const crossBatchCourses = mySubjects.filter(subject=>subject.batch && !sameBatchName(subject.batch, st.batch)).length;
-  const ungradedCourses = mySubjects.filter(subject=>!getGrade_data(currentUser.fbKey, subject.key)).length;
+  const openSubjects=mySubjects.filter(subject=>getStudentSubjectStage(st,subject)==='active');
+  const ungradedCourses = openSubjects.filter(subject=>!getGrade_data(currentUser.fbKey, subject.key)).length;
   const urgentFocus = hasFail ? 'راجع المقررات التي عليها تنبيه أكاديمي ثم ارفع طلب دعم عند الحاجة.' : 'استمر على المتابعة الأسبوعية وراجع الدرجات بعد كل عملية رصد.';
   const semesterDaysText = semester?.startDate || semester?.endDate
     ? `${semester?.startDate||'—'} إلى ${semester?.endDate||'—'}`
@@ -843,7 +853,7 @@ function renderStudentHomeTab(){
       </div>
     </div>
     <div class="stat-row">
-      <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📚 المقررات</div></div>
+      <div class="stat-box"><div class="stat-val">${openSubjects.length}</div><div class="stat-lbl">📚 مقررات مفتوحة</div></div>
       <div class="stat-box"><div class="stat-val">${pendingRequests}</div><div class="stat-lbl">📝 طلبات مفتوحة</div></div>
       <div class="stat-box"><div class="stat-val">${gradeRows.length}</div><div class="stat-lbl">📊 المرصود</div></div>
       <div class="stat-box"><div class="stat-val">${hasFail?'تنبيه':'مستقر'}</div><div class="stat-lbl">🎯 الحالة</div></div>
@@ -958,21 +968,23 @@ function renderStudentCoursesTab(){
     <div class="card">
       <div class="card-title">📚 مقرراتي</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>#</th><th>المقرر</th><th>دفعة الطرح</th><th>المحاضر</th><th>نوع التسجيل</th></tr></thead>
-        <tbody>${mySubjects.map((subject,index)=>`
-          <tr>
+        <thead><tr><th>#</th><th>المقرر</th><th>دفعة الطرح</th><th>عضو هيئة التدريس</th><th>الحالة</th><th>نوع التسجيل</th></tr></thead>
+        <tbody>${mySubjects.map((subject,index)=>{const stage=getStudentSubjectStage(st,subject);const stageMeta=stage==='active'?{label:'مفتوح حاليًا',className:'badge-pass'}:stage==='completed'?{label:'مكتمل',className:'badge-info'}:{label:'لم يُفتح بعد',className:'badge-warn'};return `
+          <tr class="${stage==='planned'?'course-row-planned':''}">
             <td>${index+1}</td>
             <td><strong>${subject.name}</strong></td>
             <td>${subject.batch||st.batch||'—'}</td>
-            <td>${getLecturerName(subject.lecturerUserId)}</td>
+            <td>${stage==='planned'?'يحدد عند فتح المقرر':getLecturerName(subject.lecturerUserId)}</td>
+            <td><span class="badge ${stageMeta.className}">${stageMeta.label}</span></td>
             <td><span class="badge ${subject.batch && !sameBatchName(subject.batch, st.batch)?'badge-warn':'badge-pass'}">${subject.batch && !sameBatchName(subject.batch, st.batch)?'استثنائي من دفعة أخرى':'ضمن الخطة'}</span></td>
-          </tr>`).join('')}</tbody>
+          </tr>`}).join('')}</tbody>
       </table></div>
     </div>`;
 }
 
 function renderStudentTranscriptTab(){
   const { st, fullName, mySubjects } = getCurrentStudentAcademicData();
+  const transcriptSubjects=mySubjects.filter(subject=>getStudentSubjectStage(st,subject)!=='planned');
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
       <div class="card-title">📄 كشف الدرجات</div>
@@ -986,7 +998,7 @@ function renderStudentTranscriptTab(){
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>#</th><th>المقرر</th><th>المحاضر</th><th>المجموع</th><th>التقدير</th><th>الحالة</th></tr></thead>
-        <tbody>${mySubjects.map((subject,index)=>{ const g=getGrade_data(currentUser.fbKey, subject.key); const total=g?calcTotal(g):0; const status=g?getStatus(total):'قيد الرصد'; return `
+        <tbody>${transcriptSubjects.map((subject,index)=>{ const g=getGrade_data(currentUser.fbKey, subject.key); const total=g?calcTotal(g):0; const status=g?getStatus(total):'قيد الرصد'; return `
           <tr>
             <td>${index+1}</td>
             <td>${subject.name}</td>
@@ -1128,15 +1140,9 @@ function renderStudentGradesTab(){
   document.getElementById('topbarRole').textContent = '👩‍🎓 طالب';
   document.getElementById('topbarRole').className = 'user-role role-student';
 
-  // Get student's subjects via enrollments
+  // تعرض صفحة الدرجات المقررات المفتوحة أو المكتملة فقط؛ المقررات المستقبلية تبقى في تبويب "مقرراتي".
   const allMySubjects = getStudentSubjects(currentUser.fbKey);
-  const activeKeys=activeSubjectKeysForBatch(st.batch);
-  const structuredMySubjects=allMySubjects.filter(s=>s.courseKey);
-  const activeStructured=activeKeys.length?structuredMySubjects.filter(s=>activeKeys.includes(s.key)):[];
-  const activeLegacy=activeKeys.length?allMySubjects.filter(s=>activeKeys.includes(s.key)):[];
-  const mySubjects = structuredMySubjects.length
-    ? (activeStructured.length?activeStructured:structuredMySubjects)
-    : (activeLegacy.length?activeLegacy:allMySubjects);
+  const mySubjects=allMySubjects.filter(subject=>getStudentSubjectStage(st,subject)!=='planned');
   const totals = mySubjects.map(s=>{
     const g = getGrade_data(currentUser.fbKey, s.key);
     return g ? calcTotal(g) : 0;
@@ -1280,13 +1286,14 @@ function getStudentDisplayName(student){
 function getCurrentStudentAcademicData(){
   const st = currentUser.data;
   const mySubjects = getStudentSubjects(currentUser.fbKey);
-  const totals = mySubjects.map(subject=>{
+  const gradeSubjects=mySubjects.filter(subject=>getStudentSubjectStage(st,subject)!=='planned');
+  const totals = gradeSubjects.map(subject=>{
     const grade = getGrade_data(currentUser.fbKey, subject.key);
     return grade ? calcTotal(grade) : 0;
   });
-  const gradeRows = mySubjects.map(subject=>getGrade_data(currentUser.fbKey, subject.key)).filter(Boolean);
+  const gradeRows = gradeSubjects.map(subject=>getGrade_data(currentUser.fbKey, subject.key)).filter(Boolean);
   const avg = totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
-  return { st, fullName:getStudentDisplayName(st), mySubjects, totals, gradeRows, avg, hasFail:gradeRows.some(isFailingGrade) };
+  return { st, fullName:getStudentDisplayName(st), mySubjects, gradeSubjects, totals, gradeRows, avg, hasFail:gradeRows.some(isFailingGrade) };
 }
 function getStudentRequests(){
   if(!currentUser?.fbKey) return [];
