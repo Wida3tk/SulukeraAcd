@@ -2090,9 +2090,16 @@ async function saveGrades(){
       }
     });
 
+    if(!Object.values(byStudent).some(fields=>Object.keys(fields).length)){
+      toast('⚠️ لا توجد درجات مدخلة للحفظ');
+      return;
+    }
+
     // لكل طالب: ادمج التغييرات داخل Transaction حتى لا تكتب جلسة فوق أخرى.
     const legacyDeletes={};
+    let savedCount=0;
     for(const [stKey, newFields] of Object.entries(byStudent)){
+      if(!Object.keys(newFields).length) continue;
       const gradeKey=('grade_'+stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
       const fallback=getGrade_data(stKey,currentSubjectKey)||{};
       const tx=await fbRef('grades/'+gradeKey).transaction(current=>{
@@ -2107,21 +2114,31 @@ async function saveGrades(){
           exam:isExamEntered(existing)?(existing.exam||0):null,
           examEntered:isExamEntered(existing),
           ...newFields,
-          updatedAt:new Date().toISOString()
+          updatedAt:new Date().toISOString(),
+          updatedBy:currentUser?.data?.username||currentUser?.data?.name||'lecturer',
+          updatedRole:'lecturer'
         };
       });
+      if(!tx.committed || !tx.snapshot.exists()) throw new Error('لم تؤكد قاعدة البيانات حفظ درجة أحد الطلاب');
       const merged=tx.snapshot.val();
+      for(const [field,value] of Object.entries(newFields)){
+        if(field==='examEntered') continue;
+        if(Number(merged[field])!==Number(value)) throw new Error('فشل التحقق من الدرجة المحفوظة');
+      }
+      if(newFields.exam!==undefined && (!isExamEntered(merged)||Number(merged.exam)!==Number(newFields.exam)))
+        throw new Error('فشل التحقق من الاختبار النهائي المحفوظ');
       const legacyKey=(stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
       if(legacyKey!==gradeKey) legacyDeletes['grades/'+legacyKey]=null;
       // حدّث dbData المحلي فوراً
       if(!dbData.grades) dbData.grades={};
       dbData.grades[gradeKey] = merged;
+      savedCount++;
     }
 
     if(Object.keys(legacyDeletes).length>0)
       await firebase.database().ref('/').update(legacyDeletes);
 
-    toast('✅ تم حفظ الدرجات');
+    toast(`✅ تم حفظ درجات ${savedCount} طالب والتحقق منها`);
     renderWeekTable(currentWeek);
     renderSummaryTable(currentSubjectKey); // تحديث ملخص المادة
   }catch(e){

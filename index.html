@@ -4264,10 +4264,14 @@ async function saveGrades() {
         exam:current?.exam??null,
         examEntered:current?.examEntered===true,
         ...changedFields,
-        updatedAt:new Date().toISOString()
+        updatedAt:new Date().toISOString(),
+        updatedBy:currentUser?.username||currentUser?.name||'admin',
+        updatedRole:currentUser?.role||'admin'
       }));
     });
-    await Promise.all(transactionTasks.filter(Boolean));
+    const transactionResults=await Promise.all(transactionTasks.filter(Boolean));
+    if(transactionResults.some(result=>!result?.committed||!result.snapshot?.exists()))
+      throw new Error('لم تؤكد قاعدة البيانات حفظ جميع الدرجات');
     if(Object.keys(updates).length>0) await firebase.database().ref().update(updates);
     await saveActivityLog({
       action:'حفظ الدرجات',
@@ -4277,7 +4281,7 @@ async function saveGrades() {
       subjectKey:subj?._fbKey||'',
       details:`${isExam?'الاختبار النهائي':`الأسبوع ${currentWeek}`} · الدفعة: ${currentGradeBatchFilter||subj?.batch||'كل الدفعات'}`
     });
-    showToast('✅ تم حفظ الدرجات');
+    showToast(`✅ تم حفظ درجات ${transactionResults.length} طالب والتحقق منها`);
   } catch(e){ console.error('Save grades error:',e); showToast('❌ خطأ في الحفظ'); }
   if(btn){btn.textContent='💾 حفظ الدرجات';btn.disabled=false;}
 }
