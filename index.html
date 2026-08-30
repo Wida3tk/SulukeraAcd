@@ -1132,7 +1132,10 @@ async function loadAllFromFirebase(){
         operCustomerId:s.operCustomerId||'',
         operOrderId:s.operOrderId||'',
         financeSnapshot:normalizeFinanceSnapshot(s.financeSnapshot),
-        installments:normalizeInstallmentsList(s.installments ? Object.values(s.installments) : [])
+        installments:normalizeInstallmentsList(s.installments ? Object.values(s.installments) : []),
+        accountStatus:s.accountStatus||'active',
+        withdrawnAt:s.withdrawnAt||'',
+        withdrawnBy:s.withdrawnBy||''
       }));
     }
 
@@ -1165,7 +1168,7 @@ async function loadAllFromFirebase(){
     enrollmentsData.forEach(enrollment=>{
       const si=subjects.findIndex(s=>s._fbKey===enrollment.subjectKey);
       const stdIdx=students.findIndex(s=>s._fbKey===enrollment.studentKey);
-      if(si>=0 && stdIdx>=0 && !subjects[si].students.includes(stdIdx)){
+      if(si>=0 && stdIdx>=0 && students[stdIdx].accountStatus!=='withdrawn' && !subjects[si].students.includes(stdIdx)){
         subjects[si].students.push(stdIdx);
       }
     });
@@ -1218,6 +1221,9 @@ async function saveStudentToFirebase(stdIdx, passw){
     phone:st.phone||'', email:st.email||'', regDate:st.regDate||'',
     program:st.program||'', track:st.track||'', batch:st.batch||'',
     id:st.id, pkg:st.pkg||'', planType:st.planType||inferPlanType(st.pkg),
+    accountStatus:st.accountStatus||'active',
+    withdrawnAt:st.withdrawnAt||'',
+    withdrawnBy:st.withdrawnBy||'',
     financeMode:st.financeMode||inferFinanceMode(st),
     totalAmount:st.totalAmount||0, notes:st.notes||'',
     operCustomerId:st.operCustomerId||'',
@@ -1996,7 +2002,7 @@ function renderLecturerQuickActions(){
 }
 function getSubjectStudentIdxs(subj){
   const result=new Set(subj?.students||[]);
-  return [...result].filter(idx=>students[idx]);
+  return [...result].filter(idx=>students[idx]&&students[idx].accountStatus!=='withdrawn');
 }
 function getStudentEnrollmentRecords(stdIdx){
   const student = students[stdIdx];
@@ -2034,6 +2040,7 @@ async function syncMissingSemesterEnrollments(studentIdx=null){
     students.forEach((st,idx)=>{
       if(studentIdx!==null && idx!==studentIdx) return;
       if(!st?._fbKey) return;
+      if(st.accountStatus==='withdrawn') return;
       if(!semBatches.some(b=>sameBatchName(b,st.batch))) return;
       semSubjectKeys.forEach(subjKey=>{
         const si=subjects.findIndex(s=>s._fbKey===subjKey);
@@ -5874,7 +5881,7 @@ async function enrollSemesterStudents(key){
   if(!stdSnap.exists()) return showToast('⚠️ لا يوجد طلاب في النظام');
 
   const allDbStudents = Object.entries(stdSnap.val());
-  const targetDbStudents = allDbStudents.filter(([,st])=> semBatches.some(b=>sameBatchName(b,st.batch)));
+  const targetDbStudents = allDbStudents.filter(([,st])=> st.accountStatus!=='withdrawn' && semBatches.some(b=>sameBatchName(b,st.batch)));
 
   if(!targetDbStudents.length){
     const existing=[...new Set(allDbStudents.map(([,s])=>s.batch).filter(Boolean))];
@@ -5970,7 +5977,7 @@ function renderSelectedBatchPlan(){
   const template=effectiveCurriculumTemplate();
   const lecturers=users.filter(u=>u.role==='lecturer');
   const offerings=subjects.filter(s=>s.courseKey&&sameBatchName(s.batch,batch));
-  const batchStudents=students.filter(student=>sameBatchName(student.batch,batch));
+  const batchStudents=students.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,batch));
   const studentsWithoutPlan=batchStudents.filter(student=>!getExplicitStudentPlan(student));
   const studentsWithPlan=batchStudents.filter(student=>getExplicitStudentPlan(student));
   const enrolledPairs=new Set(enrollmentsData.map(item=>`${item.studentKey}|${item.subjectKey}`));
@@ -6041,7 +6048,7 @@ async function generateSelectedBatchPlan(){
 async function assignSelectedBatchStudents(){
   const batch=document.getElementById('batchPlanSelect')?.value;
   if(!batch) return showToast('⚠️ اختاري الدفعة أولاً');
-  const batchStudents=students.filter(student=>sameBatchName(student.batch,batch));
+  const batchStudents=students.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,batch));
   const offerings=subjects.filter(subject=>subject.courseKey&&sameBatchName(subject.batch,batch));
   if(!batchStudents.length) return showToast('⚠️ لا يوجد طلاب مسجلون في هذه الدفعة');
   if(!offerings.length) return showToast('⚠️ أنشئي مقررات الدفعة أولاً');
@@ -6421,6 +6428,7 @@ function renderStudentsTableFiltered(filtered){
     const hasFail = gradeRows.some(isFailingGrade);
     const financialState = getStudentFinancialState(st);
     const hasOverdue = (financialState.installments||[]).some(i=>i.status==='overdue');
+    const withdrawn=st.accountStatus==='withdrawn';
     const canEdit = canEditStudentRecord();
     const canDelete = canManageAcademicAdmin();
     return `<tr>
@@ -6430,11 +6438,12 @@ function renderStudentsTableFiltered(filtered){
       <td style="font-size:11px">${st.email||'—'}</td>
       <td style="font-size:11px">${st.program||'—'}</td>
       <td><span class="badge badge-student">${st.batch||'—'}</span></td>
-      <td>${avg>0?avg+'/100':'—'}</td>
-      <td><span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}</td>
+      <td>${withdrawn?'—':avg>0?avg+'/100':'—'}</td>
+      <td>${withdrawn?'<span class="badge badge-fail">منسحب</span>':`<span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}`}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn btn-sm btn-primary" onclick="openStudentProfile(${stdIdx})">👁️</button>
         ${canEdit?`<button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">${isFinanceRole()?'💰':'✏️'}</button>`:''}
+        ${canDelete?`<button class="btn btn-sm ${withdrawn?'btn-success':'btn-warning'}" onclick="toggleStudentWithdrawal(${stdIdx})" title="${withdrawn?'إعادة تفعيل الحساب':'تجميد حساب الطالب'}">${withdrawn?'تفعيل':'إيقاف'}</button>`:''}
         ${canDelete?`<button class="btn btn-danger btn-sm" onclick="deleteStudent(${stdIdx})">🗑️</button>`:''}
       </td>
     </tr>`;
@@ -6462,6 +6471,45 @@ function populateBatchFilterDropdown(){
   if(selected) sel.value = selected;
   // Rebind after rebuilding options so the visible batch always filters the table.
   sel.onchange = filterStudents;
+}
+
+async function toggleStudentWithdrawal(stdIdx){
+  const student=students[stdIdx];
+  if(!student?._fbKey) return showToast('⚠️ تعذر تحديد سجل الطالب');
+  if(!canManageAcademicAdmin()) return showToast('⚠️ لا تملكين صلاحية تغيير حالة الحساب');
+  const withdrawing=student.accountStatus!=='withdrawn';
+  const action=withdrawing?'تجميد حساب الطالب وتحويل حالته إلى منسحب':'إعادة تفعيل حساب الطالب';
+  if(!confirm(`${action} للطالب ${getStudentFullName(student)}؟\nستبقى البيانات والدرجات والتسجيلات محفوظة.`)) return;
+  try{
+    const now=new Date().toISOString();
+    const updates={
+      [`students/${student._fbKey}/accountStatus`]:withdrawing?'withdrawn':'active',
+      [`students/${student._fbKey}/withdrawnAt`]:withdrawing?now:'',
+      [`students/${student._fbKey}/withdrawnBy`]:withdrawing?(currentUser?.username||currentUser?.name||'admin'):''
+    };
+    const usersSnap=await fbRef('users').get();
+    if(usersSnap.exists()) Object.entries(usersSnap.val()).forEach(([key,user])=>{
+      if(user.role==='student'&&user.username===student.id){
+        updates[`users/${key}/accountStatus`]=withdrawing?'withdrawn':'active';
+      }
+    });
+    await firebase.database().ref('/').update(updates);
+    student.accountStatus=withdrawing?'withdrawn':'active';
+    student.withdrawnAt=withdrawing?now:'';
+    student.withdrawnBy=withdrawing?(currentUser?.username||currentUser?.name||'admin'):'';
+    await saveActivityLog({
+      action:withdrawing?'تجميد حساب طالب':'إعادة تفعيل حساب طالب',
+      targetType:'student_account', targetKey:student._fbKey,
+      targetLabel:getStudentFullName(student), studentKey:student._fbKey,
+      details:withdrawing?'الحالة: منسحب. البيانات والسجل الأكاديمي محفوظان.':'الحالة: نشط.'
+    });
+    await loadAllFromFirebase();
+    renderStudentsTable();
+    showToast(withdrawing?'✅ تم تجميد الحساب وحفظ السجل':'✅ تم إعادة تفعيل الحساب');
+  }catch(error){
+    console.error('toggleStudentWithdrawal',error);
+    showToast('⚠️ تعذر تحديث حالة الحساب');
+  }
 }
 
 // ══════════════════════════════════════════════

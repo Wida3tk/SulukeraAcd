@@ -664,6 +664,11 @@ async function doLogin(){
           if(v.username===sid && v.role==='student'){ authUser={...v,_fbKey:k}; authKey=k; }
         });
       }
+      if(found.accountStatus==='withdrawn' || authUser?.accountStatus==='withdrawn'){
+        showErr('الحساب موقوف حاليًا. يرجى التواصل مع الإدارة الأكاديمية.');
+        btn.textContent=loginLabel; btn.disabled=false;
+        return;
+      }
       if(!authUser || !(await verifyUserPassword(authUser,pass))){ fail(); return; }
       await upgradeLegacyPassword(authKey,authUser,pass);
 
@@ -702,8 +707,10 @@ async function doLogin(){
   btn.textContent=loginLabel; btn.disabled=false;
 }
 
-function showErr(){
-  document.getElementById('loginErr').style.display='block';
+function showErr(message='❌ البيانات غير صحيحة'){
+  const error=document.getElementById('loginErr');
+  error.textContent=message;
+  error.style.display='block';
 }
 
 async function changeMyPassword(){
@@ -1598,7 +1605,7 @@ function getSubjectStudents(subjectFbKey){
   const result=[];
   const addStudent=(studentKey)=>{
     const student=dbData.students?.[studentKey];
-    if(student && !result.find(r=>r.fbKey===studentKey))
+    if(student && student.accountStatus!=='withdrawn' && !result.find(r=>r.fbKey===studentKey))
       result.push({fbKey:studentKey,...student});
   };
 
@@ -1624,7 +1631,7 @@ function getSubjectStudents(subjectFbKey){
   });
   if(subjectBatches.size){
     Object.entries(dbData.students).forEach(([studentKey,student])=>{
-      if(subjectBatches.has(normalizeBatchName(student.batch))&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
+      if(student.accountStatus!=='withdrawn'&&subjectBatches.has(normalizeBatchName(student.batch))&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
     });
   }
   return result;
