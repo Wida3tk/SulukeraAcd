@@ -142,6 +142,7 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;background:var(-
 .grade-B{background:#0D40FC;}
 .grade-C{background:#b35c00;}
 .grade-F{background:#c0392b;}
+.grade-pending{background:#6b7a99;font-size:18px;}
 
 .weeks-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:0.8rem;}
 .week-box{
@@ -212,6 +213,7 @@ tr:hover td{background:#f8faff;}
 .badge-B{background:#d1ecf1;color:#0c5460;}
 .badge-C{background:#fff3cd;color:#856404;}
 .badge-F{background:#f8d7da;color:#721c24;}
+.badge-pending{background:#e8edf6;color:#52627f;}
 .badge-pass{background:#d4edda;color:#155724;}
 .badge-fail{background:#f8d7da;color:#721c24;}
 .badge-warn{background:#fff3cd;color:#856404;}
@@ -566,6 +568,11 @@ function isFailingGrade(g){
 }
 function getGradeStatus(g){
   return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
+}
+function getGradeDisplay(g){
+  if(!isExamEntered(g)) return {letter:'⏳',className:'pending',total:null,status:'قيد الرصد'};
+  const total=calcTotal(g);
+  return {letter:getGrade(total),className:getGrade(total),total,status:getStatus(total)};
 }
 function getActiveSemesters(){
   return Object.entries(dbData.semesters||{})
@@ -1007,14 +1014,14 @@ function renderStudentTranscriptTab(){
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>#</th><th>المقرر</th><th>المحاضر</th><th>المجموع</th><th>التقدير</th><th>الحالة</th></tr></thead>
-        <tbody>${transcriptSubjects.map((subject,index)=>{ const g=getGrade_data(currentUser.fbKey, subject.key); const total=g?calcTotal(g):0; const status=g?getStatus(total):'قيد الرصد'; return `
+        <tbody>${transcriptSubjects.map((subject,index)=>{ const g=getGrade_data(currentUser.fbKey, subject.key); const display=getGradeDisplay(g); return `
           <tr>
             <td>${index+1}</td>
             <td>${subject.name}</td>
             <td>${getLecturerName(subject.lecturerUserId)}</td>
-            <td>${total}/100</td>
-            <td><span class="badge badge-${getGrade(total)}">${getGrade(total)}</span></td>
-            <td><span class="badge ${status==='ناجح'?'badge-pass':status==='راسب'?'badge-fail':'badge-warn'}">${status}</span></td>
+            <td>${display.total===null?'—':display.total+'/100'}</td>
+            <td><span class="badge badge-${display.className}">${display.letter}</span></td>
+            <td><span class="badge ${display.status==='ناجح'?'badge-pass':display.status==='راسب'?'badge-fail':'badge-warn'}">${display.status}</span></td>
           </tr>`; }).join('')}</tbody>
       </table></div>
     </div>`;
@@ -1140,8 +1147,8 @@ function exportStudentTranscriptCsv(){
   let csv = 'المقرر,المحاضر,المجموع,التقدير,الحالة\n';
   mySubjects.forEach(subject=>{
     const grade = getGrade_data(currentUser.fbKey, subject.key);
-    const total = grade ? calcTotal(grade) : 0;
-    csv += [subject.name, getLecturerName(subject.lecturerUserId), total, getGrade(total), grade?getStatus(total):'قيد الرصد'].join(',') + '\n';
+    const display = getGradeDisplay(grade);
+    csv += [subject.name, getLecturerName(subject.lecturerUserId), display.total??'—', display.letter, display.status].join(',') + '\n';
   });
   const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
@@ -1182,14 +1189,13 @@ function renderStudentGradesTab(){
   // تعرض صفحة الدرجات المقررات المفتوحة أو المكتملة فقط؛ المقررات المستقبلية تبقى في تبويب "مقرراتي".
   const allMySubjects = getStudentSubjects(currentUser.fbKey);
   const mySubjects=allMySubjects.filter(subject=>getStudentSubjectStage(st,subject)!=='planned');
-  const totals = mySubjects.map(s=>{
-    const g = getGrade_data(currentUser.fbKey, s.key);
-    return g ? calcTotal(g) : 0;
-  });
+  const totals = mySubjects.map(s=>getGrade_data(currentUser.fbKey, s.key))
+    .filter(isExamEntered)
+    .map(calcTotal);
   const gradeRows = mySubjects.map(s=>getGrade_data(currentUser.fbKey, s.key)).filter(Boolean);
   const avg = totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
   const hasFail = gradeRows.some(isFailingGrade);
-  const hasAnyGrades = totals.some(t=>t>0);
+  const hasAnyGrades = totals.length>0;
   // اللون: أحمر فقط إذا فيه تعثر حقيقي
   const avgColor = hasFail ? '#ff7070' : (hasAnyGrades ? '#55D7FF' : '#aabbcc');
 
@@ -1218,11 +1224,12 @@ function renderStudentGradesTab(){
     mySubjects.forEach((subj,i)=>{
       const g = getGrade_data(currentUser.fbKey, subj.key);
       const total = g?calcTotal(g):0;
-      const gr = getGrade(total);
-      const status = getGradeStatus(g);
+      const display = getGradeDisplay(g);
+      const gr = display.letter;
+      const status = display.status;
       const examDone = isExamEntered(g);
       const wkMax = settings.attend+settings.hw+settings.disc;
-      const grColor = gr==='A'?'#1a7a3c':gr==='B'?'#0D40FC':gr==='C'?'#b35c00':'#c0392b';
+      const grColor = !examDone?'#6b7a99':gr==='A'?'#1a7a3c':gr==='B'?'#0D40FC':gr==='C'?'#b35c00':'#c0392b';
       const lecName = getLecturerName(subj.lecturerUserId);
 
       html += `
@@ -1232,16 +1239,16 @@ function renderStudentGradesTab(){
               <div style="font-size:13px;font-weight:700;color:white">${subj.name}</div>
               <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:2px">${lecName}</div>
             </div>
-            <div class="grade-badge grade-${gr}">${gr}</div>
+            <div class="grade-badge grade-${display.className}">${gr}</div>
           </div>
           <div class="subject-card-body">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:0.8rem;padding:8px 12px;background:var(--bg);border-radius:8px;">
               <div>
-                <div style="font-size:32px;font-weight:900;color:${grColor};line-height:1">${total}</div>
-                <div style="font-size:10px;color:var(--muted)">من 100</div>
+                <div style="font-size:32px;font-weight:900;color:${grColor};line-height:1">${examDone?total:'—'}</div>
+                <div style="font-size:10px;color:var(--muted)">${examDone?'من 100':'بانتظار الرصد النهائي'}</div>
               </div>
               <div style="flex:1">
-                <div class="progress"><div class="progress-fill pf-${pc(total)}" style="width:${total}%"></div></div>
+                <div class="progress"><div class="progress-fill pf-${examDone?pc(total):'mid'}" style="width:${examDone?total:0}%"></div></div>
                 <div style="font-size:11px;color:${!examDone?'var(--muted)':total>=settings.gradeFail?'var(--success)':'var(--danger)'};margin-top:4px;font-weight:600">
                   ${status}
                 </div>
@@ -2007,14 +2014,14 @@ function renderWeekTable(w){
     thead.innerHTML=`<tr><th>الطالب</th><th>الرقم</th><th>الاختبار (/${settings.exam})</th><th>المجموع</th><th>تصنيف</th><th>حالة</th></tr>`;
     tbody.innerHTML=students.map(st=>{
       const g=getGrade_data(st.fbKey,currentSubjectKey);
-      const tot=g?calcTotal(g):0; const gr=getGrade(tot); const status=getGradeStatus(g);
+      const tot=g?calcTotal(g):0; const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
       return `<tr>
         <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
         <td class="mono">${st.id}</td>
         <td><input class="grade-input" type="number" min="0" max="${settings.exam}"
           value="${g?.exam??''}" data-stkey="${st.fbKey}" data-field="exam"></td>
-        <td><strong>${tot}</strong>/100</td>
-        <td><span class="badge badge-${gr}">${gr}</span></td>
+        <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
+        <td><span class="badge badge-${display.className}">${gr}</span></td>
         <td><span class="badge ${!isExamEntered(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
       </tr>`;
     }).join('');
@@ -2048,12 +2055,12 @@ function buildSummaryHTML(subjectKey, students){
     <tbody>
       ${students.map(st=>{
         const g=getGrade_data(st.fbKey,subjectKey);
-        const tot=g?calcTotal(g):0; const gr=getGrade(tot); const status=getGradeStatus(g);
+        const tot=g?calcTotal(g):0; const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
         return `<tr>
           <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
           <td class="mono">${st.id}</td>
-          <td><strong>${tot}</strong>/100</td>
-          <td><span class="badge badge-${gr}">${gr}</span></td>
+          <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
+          <td><span class="badge badge-${display.className}">${gr}</span></td>
           <td><span class="badge ${!isExamEntered(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
         </tr>`;
       }).join('')}

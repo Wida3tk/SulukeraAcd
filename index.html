@@ -1869,6 +1869,11 @@ function isFailingGrade(g){
 function getGradeStatus(g){
   return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
 }
+function getGradeDisplay(g){
+  if(!isExamEntered(g)) return {letter:'⏳',className:'pending',total:null,status:'قيد الرصد'};
+  const total=calcTotal(g);
+  return {letter:getGrade(total),className:getGrade(total),total,status:getStatus(total)};
+}
 function getStudentCourseResultMeta(g){
   if(!g || !isExamEntered(g)) return {label:'قيد الرصد', className:'badge-warn'};
   return calcTotal(g)>=settings.gradeFail
@@ -2351,11 +2356,11 @@ function renderDashboard() {
       // تحقق إن هذا المقرر في الفصل النشط للطالب
       const activeSubs = getActiveSubjectsForStudent(stdIdx);
       if(!activeSubs.find(s=>s.idx===si)) return;
-      const g=grades[si]?.[stdIdx]; const total=g?calcTotal(g):0;
-      rows.push({student:getStudentFullName(students[stdIdx]),subject:subjects[si].name,total,gr:getGrade(total),st:getGradeStatus(g)});
+      const g=grades[si]?.[stdIdx]; const display=getGradeDisplay(g);
+      rows.push({student:getStudentFullName(students[stdIdx]),subject:subjects[si].name,total:display.total,gr:display.letter,st:display.status,gradeClass:display.className});
     });
   });
-  const avgs=rows.map(r=>r.total);
+  const avgs=rows.filter(r=>r.total!==null).map(r=>r.total);
   const avg=avgs.length?Math.round(avgs.reduce((a,b)=>a+b,0)/avgs.length):0;
   document.getElementById('dashStats').innerHTML=`
     <div class="stat"><div class="stat-icon">📖</div><div class="stat-label">المقررات</div><div class="stat-value">${mySubjIdxs.length}</div><div class="stat-sub">مادة نشطة</div></div>
@@ -2365,9 +2370,9 @@ function renderDashboard() {
     <div class="stat"><div class="stat-icon">🏅</div><div class="stat-label">تصنيف A</div><div class="stat-value" style="color:#1a7a3c">${rows.filter(r=>r.gr==='A').length}</div><div class="stat-sub">ممتاز</div></div>`;
   document.getElementById('dashTableBody').innerHTML=rows.slice(0,12).map(r=>`<tr>
     <td><strong>${r.student}</strong></td><td style="color:var(--text-muted);font-size:11px">${r.subject}</td>
-    <td><strong>${r.total}</strong>/100<div class="progress" style="margin-top:3px"><div class="progress-fill ${pc(r.total)}" style="width:${r.total}%"></div></div></td>
-    <td><span class="badge badge-${r.gr}">${r.gr}</span></td>
-    <td><span class="badge ${r.st==='ناجح'?'badge-pass':'badge-fail'}">${r.st}</span></td>
+    <td><strong>${r.total??'—'}</strong>${r.total===null?'':'/100'}${r.total===null?'':`<div class="progress" style="margin-top:3px"><div class="progress-fill ${pc(r.total)}" style="width:${r.total}%"></div></div>`}</td>
+    <td><span class="badge badge-${r.gradeClass==='pending'?'warn':r.gradeClass}">${r.gr}</span></td>
+    <td><span class="badge ${r.st==='ناجح'?'badge-pass':r.st==='راسب'?'badge-fail':'badge-warn'}">${r.st}</span></td>
   </tr>`).join('');
   document.getElementById('subjectBars').innerHTML=mySubjIdxs.map(si=>{
     const tots=subjects[si].students.map(s2=>grades[si]?.[s2]?calcTotal(grades[si][s2]):0);
@@ -3922,16 +3927,16 @@ function renderProfileGrades(stdIdx, mySubjs) {
   const wkMax=settings.attend+settings.hw+settings.disc;
   return mySubjs.map(subj=>{
     const g=grades[subj.idx]?.[stdIdx]; if(!g) return '';
-    const total=calcTotal(g); const gr=getGrade(total);
+    const total=calcTotal(g); const display=getGradeDisplay(g); const gr=display.letter;
     return `<div class="subject-grade-card">
       <div class="subject-grade-header">
         <div><div style="font-size:14px;font-weight:700">${subj.name}</div><div style="font-size:11px;color:var(--neon)">${getLecturerName(subj.lecturerUserId)}</div></div>
-        <div><span class="badge badge-${gr}">${gr}</span> <span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${getGradeStatus(g)}</span></div>
+        <div><span class="badge badge-${display.className==='pending'?'warn':display.className}">${gr}</span> <span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${display.status}</span></div>
       </div>
       <div class="subject-grade-body">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;padding:10px 14px;background:var(--bg);border-radius:var(--radius)">
-          <div style="text-align:center"><div style="font-size:44px;font-weight:800;color:${total>=settings.gradeA?'#1a7a3c':total>=settings.gradeFail?'var(--primary)':'#c0392b'};line-height:1">${total}</div><div style="font-size:11px;color:var(--text-muted)">من 100</div></div>
-          <div style="flex:1"><div class="progress" style="height:12px;margin-bottom:6px"><div class="progress-fill ${pc(total)}" style="width:${total}%"></div></div></div>
+          <div style="text-align:center"><div style="font-size:44px;font-weight:800;color:${!isExamEntered(g)?'var(--text-muted)':total>=settings.gradeA?'#1a7a3c':total>=settings.gradeFail?'var(--primary)':'#c0392b'};line-height:1">${isExamEntered(g)?total:'—'}</div><div style="font-size:11px;color:var(--text-muted)">${isExamEntered(g)?'من 100':'بانتظار الرصد النهائي'}</div></div>
+          <div style="flex:1"><div class="progress" style="height:12px;margin-bottom:6px"><div class="progress-fill ${pc(total)}" style="width:${isExamEntered(g)?total:0}%"></div></div></div>
         </div>
         <div class="week-breakdown">
           ${['w1','w2','w3','w4'].map((w,i)=>{const wg=g[w];const wt=(wg.attend||0)+(wg.hw||0)+(wg.disc||0);return `<div class="week-box"><div class="week-box-label">أسبوع ${i+1}</div><div class="week-box-val">${wt}</div><div class="week-box-max">/${wkMax}</div></div>`;}).join('')}
@@ -4204,11 +4209,11 @@ function loadGradesTable() {
     const g=grades[si]?.[stdIdx]; if (!g) return '';
     const st=students[stdIdx]; const wg=isExam?null:g[wKey];
     const wt=isExam?(g.exam||0):((wg?.attend||0)+(wg?.hw||0)+(wg?.disc||0));
-    const total=calcTotal(g); const gr=getGrade(total); const status=getGradeStatus(g);
+    const total=calcTotal(g); const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
     if (isExam) return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong></td>
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.exam}" value="${g.exam??''}" onchange="updateGrade(${si},${stdIdx},'exam',null,this.value)"></td>
-      <td><strong>${total}</strong>/100</td><td><span class="badge badge-${gr}">${gr}</span></td>
+      <td><strong>${isExamEntered(g)?total:'—'}</strong>${isExamEntered(g)?'/100':''}</td><td><span class="badge badge-${display.className==='pending'?'warn':display.className}">${gr}</span></td>
       <td><span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td></tr>`;
     return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong></td>
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
