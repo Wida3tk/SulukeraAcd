@@ -796,7 +796,7 @@ tr:hover td{background:#f8faff;}
 <!-- MODAL: LEGACY GRADE IMPORT -->
 <div class="modal-overlay" id="legacyGradeImportModal"><div class="modal" style="width:980px;">
   <h3>استرداد درجات النظام السابق</h3>
-  <div class="alert alert-info">ارفعي ملفات Excel الخاصة بالطلاب. تقرأ الأداة الاسم من ورقة <strong>البيانات الرئيسية</strong>، وتستورد المقررات التي حالتها <strong>مجتاز</strong> فقط. لا تستبدل أي درجة محفوظة، وتعرض كل حالة للمراجعة قبل الاعتماد.</div>
+  <div class="alert alert-info">ارفعي ملفات Excel الخاصة بالطلاب. تقرأ الأداة الاسم من ورقة <strong>البيانات الرئيسية</strong>، وتستورد المقررات التي حالتها <strong>مجتاز</strong> فقط. راجعي تفصيل الدرجات في المعاينة ثم اعتمديها؛ لا تستبدل الأداة أي درجة محفوظة ولا تعدّل بناء المقررات أو توزيعها.</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
     <button class="btn btn-primary" onclick="triggerLegacyGradeImportFiles()">اختيار ملفات الدرجات</button>
     <input type="file" id="legacyGradeImportFiles" accept=".xlsx,.xls" multiple onchange="handleLegacyGradeImportFiles(event)" style="display:none;">
@@ -804,7 +804,7 @@ tr:hover td{background:#f8faff;}
   <div id="legacyGradeImportSummary" class="alert alert-warn">لم يتم اختيار ملفات بعد.</div>
   <div id="legacyGradeImportPreview" style="max-height:390px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--bg);"></div>
   <div class="modal-actions">
-    <button class="btn btn-success" id="legacyGradeImportConfirm" onclick="confirmLegacyGradeImport()" disabled>اعتماد الدرجات الجاهزة</button>
+    <button class="btn btn-success" id="legacyGradeImportConfirm" onclick="confirmLegacyGradeImport()" disabled>اعتماد الدرجات بعد المراجعة</button>
     <button class="btn" onclick="closeModal('legacyGradeImportModal')">إغلاق</button>
   </div>
 </div></div>
@@ -3271,10 +3271,14 @@ function parseLegacyGradeWorkbook(workbook,fileName){
     }
     const grade={studentKey:foundStudent.student._fbKey,subjectKey:subjects[subjectIdx]._fbKey};
     let invalidNote='';
+    const adjustments=[];
     for(let week=1;week<=4;week++){
       const weekRow=getLegacyWeekRow(rows,week);
       const fields=[['attend',weekRow?legacyNumber(weekRow[2]):null,settings.attend],['hw',weekRow?legacyNumber(weekRow[3]):null,settings.hw],['disc',weekRow?legacyNumber(weekRow[4]):null,settings.disc]];
-      for(const [field,value,max] of fields){
+      for(const [field,rawValue,max] of fields){
+        // النموذج السابق يتضمن حالة موثقة لواجب 7/6؛ نعتمد الحد الحالي ونظهر التصحيح في المعاينة.
+        const value=field==='hw' && rawValue===7 && max===6 ? 6 : rawValue;
+        if(rawValue!==value) adjustments.push(`تم ضبط واجب الأسبوع ${week} من ${rawValue} إلى ${value}`);
         if(!legacyScoreIsValid(value,max)) invalidNote=`بيانات الأسبوع ${week} غير صالحة في ${field==='attend'?'الحضور':field==='hw'?'الواجب':'المناقشة'} (الحد ${max})`;
         grade[`w${week}_${field}`]=value;
       }
@@ -3288,7 +3292,7 @@ function parseLegacyGradeWorkbook(workbook,fileName){
       return;
     }
     const total=Object.entries(grade).filter(([key])=>/^(w[1-4]_(attend|hw|disc)|exam)$/.test(key)).reduce((sum,[,value])=>sum+Number(value||0),0);
-    parsedRows.push({...base,status:'ready',note:`${total}/100`,subjectIdx,grade});
+    parsedRows.push({...base,status:'ready',note:`${total}/100${adjustments.length?` · ${adjustments.join('، ')}`:''}`,subjectIdx,grade});
   });
   return {rows:parsedRows,issues};
 }
@@ -3309,7 +3313,7 @@ function renderLegacyGradeImportPreview(fileCount){
   const statusClass={ready:'badge-pass',existing:'badge-info',ignored:'badge-student',blocked:'badge-fail'};
   const issueHtml=legacyGradeImportIssues.length?`<div class="alert alert-warn" style="margin-bottom:10px;">${legacyGradeImportIssues.map(item=>escapeHtml(item)).join('<br>')}</div>`:'';
   if(!legacyGradeImportRows.length){ preview.innerHTML=issueHtml||'<div class="alert alert-warn">لم يتم العثور على مقررات قابلة للقراءة.</div>'; return; }
-  preview.innerHTML=issueHtml+`<table><thead><tr><th>الملف</th><th>الطالب</th><th>المقرر</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>${legacyGradeImportRows.map(row=>`<tr><td style="font-size:11px">${escapeHtml(row.fileName)}</td><td><strong>${escapeHtml(getStudentFullName(row.student))}</strong></td><td>${escapeHtml(row.courseName)}</td><td><span class="badge ${statusClass[row.status]}">${statusLabel[row.status]}</span></td><td>${escapeHtml(row.note)}</td></tr>`).join('')}</tbody></table>`;
+  preview.innerHTML=issueHtml+`<table><thead><tr><th>الملف</th><th>الطالب</th><th>المقرر</th><th>الدرجات المستردة</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>${legacyGradeImportRows.map(row=>{const breakdown=row.grade?`أ1 ${row.grade.w1_attend}/${row.grade.w1_hw}/${row.grade.w1_disc} · أ2 ${row.grade.w2_attend}/${row.grade.w2_hw}/${row.grade.w2_disc} · أ3 ${row.grade.w3_attend}/${row.grade.w3_hw}/${row.grade.w3_disc} · أ4 ${row.grade.w4_attend}/${row.grade.w4_hw}/${row.grade.w4_disc} · نهائي ${row.grade.exam}/${settings.exam}`:'—';return `<tr><td style="font-size:11px">${escapeHtml(row.fileName)}</td><td><strong>${escapeHtml(getStudentFullName(row.student))}</strong></td><td>${escapeHtml(row.courseName)}</td><td style="font-size:10px;line-height:1.7">${escapeHtml(breakdown)}</td><td><span class="badge ${statusClass[row.status]}">${statusLabel[row.status]}</span></td><td>${escapeHtml(row.note)}</td></tr>`;}).join('')}</tbody></table>`;
 }
 async function handleLegacyGradeImportFiles(event){
   const files=Array.from(event?.target?.files||[]);
