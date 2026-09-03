@@ -793,6 +793,22 @@ tr:hover td{background:#f8faff;}
   </div>
 </div></div>
 
+<!-- MODAL: LEGACY GRADE IMPORT -->
+<div class="modal-overlay" id="legacyGradeImportModal"><div class="modal" style="width:980px;">
+  <h3>استرداد درجات النظام السابق</h3>
+  <div class="alert alert-info">ارفعي ملفات Excel الخاصة بالطلاب. تقرأ الأداة الاسم من ورقة <strong>البيانات الرئيسية</strong>، وتستورد المقررات التي حالتها <strong>مجتاز</strong> فقط. لا تستبدل أي درجة محفوظة، وتعرض كل حالة للمراجعة قبل الاعتماد.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
+    <button class="btn btn-primary" onclick="triggerLegacyGradeImportFiles()">اختيار ملفات الدرجات</button>
+    <input type="file" id="legacyGradeImportFiles" accept=".xlsx,.xls" multiple onchange="handleLegacyGradeImportFiles(event)" style="display:none;">
+  </div>
+  <div id="legacyGradeImportSummary" class="alert alert-warn">لم يتم اختيار ملفات بعد.</div>
+  <div id="legacyGradeImportPreview" style="max-height:390px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--bg);"></div>
+  <div class="modal-actions">
+    <button class="btn btn-success" id="legacyGradeImportConfirm" onclick="confirmLegacyGradeImport()" disabled>اعتماد الدرجات الجاهزة</button>
+    <button class="btn" onclick="closeModal('legacyGradeImportModal')">إغلاق</button>
+  </div>
+</div></div>
+
 <!-- MODAL: USER -->
 <div class="modal-overlay" id="userModal"><div class="modal">
   <h3 id="userModalTitle">👤 إضافة مستخدم</h3>
@@ -1459,6 +1475,8 @@ let activityLogsData=[];
 let advisorCasesData=[];
 let studentAdminSheetsData=[];
 let studentImportPreviewRows=[];
+let legacyGradeImportRows=[];
+let legacyGradeImportIssues=[];
 let selectedAdvisorStudentIdx=-1;
 let currentStudentGradeEditor=null;
 let currentUser=null;
@@ -2233,7 +2251,7 @@ function goBack() {
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
   if (pageId==='subjects'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مقررات لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مقرر جديد</button>`;
-  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل كلمات مضافة حديثًا</button><button class="btn btn-sm" onclick="openStudentImportModal()">استيراد Excel</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إنشاء حسابات الطلاب الجدد</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل كلمات مضافة حديثًا</button><button class="btn btn-sm" onclick="openStudentImportModal()">استيراد Excel</button><button class="btn btn-sm" onclick="openLegacyGradeImportModal()">استرداد درجات سابقة</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إنشاء حسابات الطلاب الجدد</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
   else if (pageId==='users'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
 }
@@ -3151,6 +3169,200 @@ async function confirmStudentImport(){
   }finally{
     showLoader(false);
   }
+}
+
+// ══════════════════════════════════════════════
+//  LEGACY GRADE RECOVERY
+// ══════════════════════════════════════════════
+function normalizeLegacyText(value){
+  return String(value??'').trim().toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g,'')
+    .replace(/[إأآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي')
+    .replace(/[^\p{L}\p{N}]+/gu,'');
+}
+function legacyNumber(value){
+  if(typeof value==='number') return Number.isFinite(value)?value:null;
+  const match=String(value??'').replace(/,/g,'.').match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+function legacyScoreIsValid(value,max){
+  return Number.isFinite(value) && value>=0 && value<=max;
+}
+function legacyGradeHasData(grade){
+  if(!grade) return false;
+  if(grade.examEntered===true) return true;
+  return ['exam','w1_attend','w1_hw','w1_disc','w2_attend','w2_hw','w2_disc','w3_attend','w3_hw','w3_disc','w4_attend','w4_hw','w4_disc']
+    .some(field=>Number(grade[field]??grade[field.split('_')[0]]?.[field.split('_')[1]])!==0);
+}
+function getLegacyCourseKey(sheetName,rows){
+  const codeText=[sheetName,rows?.[2]?.[2],rows?.[2]?.[0]].map(String).join(' ');
+  const codeMatch=codeText.match(/ABA\s*0*(\d{1,2})/i);
+  if(codeMatch) return 'course_'+String(Number(codeMatch[1])).padStart(2,'0');
+  const subjectName=rows?.[1]?.[2]||rows?.[2]?.[2]||sheetName;
+  return FIXED_COURSES.find(course=>normalizeLegacyText(course.name)===normalizeLegacyText(subjectName))?.key||'';
+}
+function getLegacyWeekRow(rows,weekNumber){
+  const labels=['الأسبوع الأول','الأسبوع الثاني','الأسبوع الثالث','الأسبوع الرابع'];
+  const target=normalizeLegacyText(labels[weekNumber-1]);
+  return rows.find(row=>normalizeLegacyText((row||[]).slice(0,2).join(' ')).includes(target));
+}
+function getLegacyExamValue(rows){
+  const row=rows.find(item=>normalizeLegacyText((item||[]).slice(0,2).join(' ')).includes(normalizeLegacyText('الاختبار النهائي')));
+  return row ? legacyNumber(row[2]) : null;
+}
+function findLegacyStudent(fullName){
+  const normalized=normalizeLegacyText(fullName);
+  if(!normalized) return null;
+  const matches=students.filter(student=>normalizeLegacyText(getStudentFullName(student))===normalized);
+  return matches.length===1 ? {student:matches[0],stdIdx:students.indexOf(matches[0])} : null;
+}
+function openLegacyGradeImportModal(){
+  legacyGradeImportRows=[];
+  legacyGradeImportIssues=[];
+  const summary=document.getElementById('legacyGradeImportSummary');
+  const preview=document.getElementById('legacyGradeImportPreview');
+  const input=document.getElementById('legacyGradeImportFiles');
+  const confirmButton=document.getElementById('legacyGradeImportConfirm');
+  if(summary){ summary.className='alert alert-warn'; summary.textContent='ارفعي ملفات الطلاب وسيظهر ما يمكن استيراده قبل الحفظ.'; }
+  if(preview) preview.innerHTML='';
+  if(input) input.value='';
+  if(confirmButton) confirmButton.disabled=true;
+  document.getElementById('legacyGradeImportModal').classList.add('open');
+}
+function triggerLegacyGradeImportFiles(){
+  document.getElementById('legacyGradeImportFiles')?.click();
+}
+function parseLegacyGradeWorkbook(workbook,fileName){
+  const mainSheetName=workbook.SheetNames.find(name=>normalizeLegacyText(name)===normalizeLegacyText('البيانات الرئيسية'));
+  if(!mainSheetName) return {rows:[],issues:[`${fileName}: لا توجد ورقة "البيانات الرئيسية".`]};
+  const mainRows=XLSX.utils.sheet_to_json(workbook.Sheets[mainSheetName],{header:1,defval:''});
+  const sourceName=String(mainRows?.[1]?.[0]||'').trim();
+  const foundStudent=findLegacyStudent(sourceName);
+  if(!foundStudent) return {rows:[],issues:[`${fileName}: لم تتم مطابقة الطالب "${sourceName||'غير محدد'}" بحساب واحد في النظام.`]};
+  if(foundStudent.student.accountStatus==='withdrawn') return {rows:[],issues:[`${fileName}: حساب ${sourceName} منسحب؛ لم تُستورد درجاته.`]};
+
+  const completionStatus={};
+  mainRows.forEach(row=>{
+    const match=String(row?.[0]||'').match(/^ABA\s*0*(\d{1,2})\s*$/i);
+    if(match) completionStatus['course_'+String(Number(match[1])).padStart(2,'0')]=String(row?.[1]||'').trim();
+  });
+  const parsedRows=[];
+  const issues=[];
+  workbook.SheetNames.filter(name=>name!==mainSheetName).forEach(sheetName=>{
+    const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:''});
+    const courseKey=getLegacyCourseKey(sheetName,rows);
+    if(!courseKey) return;
+    const course=FIXED_COURSES.find(item=>item.key===courseKey);
+    const completion=completionStatus[courseKey]||'';
+    const base={fileName,sourceName,student:foundStudent.student,stdIdx:foundStudent.stdIdx,courseKey,courseName:course?.name||sheetName,completion};
+    if(normalizeLegacyText(completion)!==normalizeLegacyText('مجتاز')){
+      parsedRows.push({...base,status:'ignored',note:completion?`الحالة السابقة: ${completion}`:'غير مدرج كمقرر مجتاز'});
+      return;
+    }
+    const subjectIdx=subjects.findIndex(subject=>subject.courseKey===courseKey&&sameBatchName(subject.batch,foundStudent.student.batch));
+    if(subjectIdx<0){
+      parsedRows.push({...base,status:'blocked',note:'لا يوجد مقرر مطابق ضمن دفعة الطالب في النظام'});
+      return;
+    }
+    const existing=grades[subjectIdx]?.[foundStudent.stdIdx];
+    if(legacyGradeHasData(existing)){
+      parsedRows.push({...base,status:'existing',note:'توجد درجة محفوظة مسبقًا ولن تُستبدل'});
+      return;
+    }
+    const grade={studentKey:foundStudent.student._fbKey,subjectKey:subjects[subjectIdx]._fbKey};
+    let invalidNote='';
+    for(let week=1;week<=4;week++){
+      const weekRow=getLegacyWeekRow(rows,week);
+      const fields=[['attend',weekRow?legacyNumber(weekRow[2]):null,settings.attend],['hw',weekRow?legacyNumber(weekRow[3]):null,settings.hw],['disc',weekRow?legacyNumber(weekRow[4]):null,settings.disc]];
+      for(const [field,value,max] of fields){
+        if(!legacyScoreIsValid(value,max)) invalidNote=`بيانات الأسبوع ${week} غير صالحة في ${field==='attend'?'الحضور':field==='hw'?'الواجب':'المناقشة'} (الحد ${max})`;
+        grade[`w${week}_${field}`]=value;
+      }
+    }
+    const exam=getLegacyExamValue(rows);
+    if(!legacyScoreIsValid(exam,settings.exam)) invalidNote=`درجة الاختبار النهائي غير صالحة (الحد ${settings.exam})`;
+    grade.exam=exam;
+    grade.examEntered=Number.isFinite(exam);
+    if(invalidNote){
+      parsedRows.push({...base,status:'blocked',note:invalidNote});
+      return;
+    }
+    const total=Object.entries(grade).filter(([key])=>/^(w[1-4]_(attend|hw|disc)|exam)$/.test(key)).reduce((sum,[,value])=>sum+Number(value||0),0);
+    parsedRows.push({...base,status:'ready',note:`${total}/100`,subjectIdx,grade});
+  });
+  return {rows:parsedRows,issues};
+}
+function renderLegacyGradeImportPreview(fileCount){
+  const summary=document.getElementById('legacyGradeImportSummary');
+  const preview=document.getElementById('legacyGradeImportPreview');
+  const confirmButton=document.getElementById('legacyGradeImportConfirm');
+  const ready=legacyGradeImportRows.filter(row=>row.status==='ready');
+  const blocked=legacyGradeImportRows.filter(row=>row.status==='blocked').length+legacyGradeImportIssues.length;
+  const existing=legacyGradeImportRows.filter(row=>row.status==='existing').length;
+  if(summary){
+    summary.className=ready.length?'alert alert-info':'alert alert-warn';
+    summary.innerHTML=`تمت قراءة <strong>${fileCount}</strong> ملف. الجاهز للاستيراد: <strong>${ready.length}</strong> مقرر، محفوظ مسبقًا: <strong>${existing}</strong>، يحتاج معالجة: <strong>${blocked}</strong>.`;
+  }
+  if(confirmButton) confirmButton.disabled=!ready.length;
+  if(!preview) return;
+  const statusLabel={ready:'جاهز',existing:'محفوظ مسبقًا',ignored:'متجاوز',blocked:'يحتاج معالجة'};
+  const statusClass={ready:'badge-pass',existing:'badge-info',ignored:'badge-student',blocked:'badge-fail'};
+  const issueHtml=legacyGradeImportIssues.length?`<div class="alert alert-warn" style="margin-bottom:10px;">${legacyGradeImportIssues.map(item=>escapeHtml(item)).join('<br>')}</div>`:'';
+  if(!legacyGradeImportRows.length){ preview.innerHTML=issueHtml||'<div class="alert alert-warn">لم يتم العثور على مقررات قابلة للقراءة.</div>'; return; }
+  preview.innerHTML=issueHtml+`<table><thead><tr><th>الملف</th><th>الطالب</th><th>المقرر</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>${legacyGradeImportRows.map(row=>`<tr><td style="font-size:11px">${escapeHtml(row.fileName)}</td><td><strong>${escapeHtml(getStudentFullName(row.student))}</strong></td><td>${escapeHtml(row.courseName)}</td><td><span class="badge ${statusClass[row.status]}">${statusLabel[row.status]}</span></td><td>${escapeHtml(row.note)}</td></tr>`).join('')}</tbody></table>`;
+}
+async function handleLegacyGradeImportFiles(event){
+  const files=Array.from(event?.target?.files||[]);
+  if(!files.length) return;
+  if(typeof XLSX==='undefined') return showToast('مكتبة Excel غير متاحة الآن');
+  legacyGradeImportRows=[];
+  legacyGradeImportIssues=[];
+  showLoader(true);
+  try{
+    const results=await Promise.all(files.map(file=>new Promise(resolve=>{
+      const reader=new FileReader();
+      reader.onload=loadEvent=>{
+        try{ resolve(parseLegacyGradeWorkbook(XLSX.read(loadEvent.target.result,{type:'array'}),file.name)); }
+        catch(error){ console.error('legacy grade workbook parse error:',error); resolve({rows:[],issues:[`${file.name}: تعذر قراءة ملف الدرجات.`]}); }
+      };
+      reader.onerror=()=>resolve({rows:[],issues:[`${file.name}: تعذر فتح الملف.`]});
+      reader.readAsArrayBuffer(file);
+    })));
+    results.forEach(result=>{ legacyGradeImportRows.push(...result.rows); legacyGradeImportIssues.push(...result.issues); });
+    renderLegacyGradeImportPreview(files.length);
+  }finally{ showLoader(false); }
+}
+async function confirmLegacyGradeImport(){
+  const ready=legacyGradeImportRows.filter(row=>row.status==='ready');
+  if(!ready.length) return showToast('لا توجد درجات جاهزة للاستيراد');
+  if(!confirm(`سيتم استيراد ${ready.length} مقرر مجتاز فقط دون استبدال أي درجة محفوظة. متابعة؟`)) return;
+  showLoader(true);
+  try{
+    const now=new Date().toISOString();
+    const imported=[];
+    const skipped=[];
+    const enrollmentUpdates={};
+    for(const row of ready){
+      const gradeKey=('grade_'+row.student._fbKey+'_'+subjects[row.subjectIdx]._fbKey).replace(/[.#$[\]]/g,'_');
+      const payload={...row.grade,updatedAt:now,updatedBy:currentUser?.username||currentUser?.name||'admin',updatedRole:'admin',importedFromLegacy:true,importSourceFile:row.fileName,importedAt:now};
+      const transaction=await fbRef('grades/'+gradeKey).transaction(current=>legacyGradeHasData(current)?undefined:payload);
+      if(!transaction.committed){ skipped.push(row); continue; }
+      imported.push(row);
+      const enrolled=enrollmentsData.some(item=>item.studentKey===row.student._fbKey&&item.subjectKey===subjects[row.subjectIdx]._fbKey);
+      if(!enrolled){
+        const enrollmentKey=('enr_'+row.student._fbKey+'_'+subjects[row.subjectIdx]._fbKey).replace(/[.#$[\]]/g,'_');
+        enrollmentUpdates['enrollments/'+enrollmentKey]={studentKey:row.student._fbKey,subjectKey:subjects[row.subjectIdx]._fbKey,source:'legacy_grade_recovery',createdAt:now};
+      }
+    }
+    if(Object.keys(enrollmentUpdates).length) await firebase.database().ref('/').update(enrollmentUpdates);
+    if(imported.length) await saveActivityLog({action:'استرداد درجات النظام السابق',targetType:'legacy_grade_import',targetKey:'legacy_grade_import',targetLabel:'ملفات درجات سابقة',details:`تم استرداد ${imported.length} مقرر مجتاز من ${new Set(imported.map(row=>row.sourceName)).size} طالب، وتخطي ${skipped.length} سجل لحماية الدرجات المحفوظة.`});
+    await loadAllFromFirebase();
+    renderLegacyGradeImportPreview(new Set(legacyGradeImportRows.map(row=>row.fileName)).size);
+    showToast(`✅ تم استرداد ${imported.length} مقرر، وتخطي ${skipped.length} محفوظ مسبقًا`);
+  }catch(error){
+    console.error('confirmLegacyGradeImport error:',error);
+    showToast('⚠️ تعذر استرداد الدرجات؛ لم تُستبدل أي درجة موجودة');
+  }finally{ showLoader(false); }
 }
 
 // ══════════════════════════════════════════════
