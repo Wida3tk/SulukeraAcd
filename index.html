@@ -629,6 +629,30 @@ tr:hover td{background:#f8faff;}
         </div>
       </div>
 
+      <!-- EXAM SCHEDULES -->
+      <div class="page" id="page-exams">
+        <div class="card card-accent">
+          <div class="card-title">📝 إدارة جداول الاختبارات</div>
+          <div class="alert alert-info">اختاري الدفعة أولًا، ثم المقرر من شعبتها. أي تعديل محفوظ يظهر مباشرة للطلاب المرتبطين بالمقرر.</div>
+          <div class="form-row">
+            <div class="form-group"><label>الدفعة *</label><select id="examBatch" onchange="populateExamSubjectOptions()"></select></div>
+            <div class="form-group"><label>المقرر *</label><select id="examSubject" onchange="fillExamLecturerFromSubject()"></select></div>
+            <div class="form-group"><label>التاريخ *</label><input type="date" id="examDate"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>وقت البداية *</label><input type="time" id="examStartTime" value="18:00"></div>
+            <div class="form-group"><label>وقت النهاية *</label><input type="time" id="examEndTime" value="22:00"></div>
+            <div class="form-group"><label>اسم المحاضر</label><input type="text" id="examLecturerName"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>الفصل/الملاحظة</label><input type="text" id="examTermLabel" placeholder="مثال: الفصل الدراسي الرابع"></div>
+            <div class="form-group"><label>حالة النشر</label><select id="examPublished"><option value="true">منشور للطلاب</option><option value="false">مسودة مخفية</option></select></div>
+          </div>
+          <div style="display:flex;gap:8px"><button class="btn btn-success" onclick="saveExamSchedule()">💾 حفظ الموعد</button><button class="btn" id="examCancelEdit" onclick="resetExamScheduleForm()" style="display:none">إلغاء التعديل</button></div>
+        </div>
+        <div class="card card-accent"><div class="card-title">👁️ معاينة جداول الطلاب</div><div id="examSchedulesAdminList"></div></div>
+      </div>
+
       <!-- SETTINGS -->
       <div class="page" id="page-settings">
         <div class="card card-accent"><div class="card-title">⚙️ توزيع الدرجات</div>
@@ -1173,6 +1197,7 @@ async function loadAllFromFirebase(){
       : [];
     lecturerProductivityData = root.lecturerProductivity || {};
     scheduleData = root.schedule || {weekly:{}, units:{}};
+    examSchedulesData = root.examSchedules || {};
     studentAdminSheetsData = root.studentAdminSheets
       ? Object.entries(root.studentAdminSheets).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
@@ -1477,6 +1502,8 @@ let studentAdminSheetsData=[];
 let studentImportPreviewRows=[];
 let legacyGradeImportRows=[];
 let legacyGradeImportIssues=[];
+let examSchedulesData={};
+let editingExamScheduleKey='';
 let selectedAdvisorStudentIdx=-1;
 const ADVISOR_BRIDGE_ORIGIN='https://advisor-bridge.ro7e-entaa.workers.dev';
 let advisorAccessToken='';
@@ -2206,6 +2233,7 @@ const navConfig = {
     {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
     {id:'alerts',icon:'🔔',label:'التنبيهات'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
+    {id:'exams',icon:'📝',label:'الاختبارات'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'},
   ],
   lecturer: [
@@ -2232,7 +2260,7 @@ function renderNav() {
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
-  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
+  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', exams:'الاختبارات', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
   settings:'الإعدادات',mygrades:'بياناتي ودرجاتي',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
@@ -2283,6 +2311,7 @@ function refreshPage(p) {
   if (p==='programs') { renderProgramsPanel(); loadPackagesFromFirebase().then(renderPackagesList); }
   if (p==='batchplans') renderBatchPlansPage();
   if (p==='schedule') renderScheduleAdmin();
+  if (p==='exams') renderExamSchedulesAdmin();
   if (p==='semesters') renderSemestersPage();
   if (p==='alerts') renderAlertsPage();
 }
@@ -5701,6 +5730,107 @@ document.querySelectorAll('.modal-overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
 });
 window.addEventListener('load', function(){ initFirebase(); });
+
+// ══════════════════════════════════════════════
+//  EXAM SCHEDULES ADMIN
+// ══════════════════════════════════════════════
+function examAdminTime(time24){
+  if(!time24) return '—';
+  const [hour,minute]=String(time24).split(':').map(Number);
+  return `${hour%12||12}:${String(minute||0).padStart(2,'0')} ${hour>=12?'م':'ص'}`;
+}
+function examAdminDate(dateValue){
+  if(!dateValue) return '—';
+  const date=new Date(`${dateValue}T12:00:00+03:00`);
+  return new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{weekday:'long',year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Riyadh'}).format(date);
+}
+async function renderExamSchedulesAdmin(){
+  try{
+    const snapshot=await fbRef('examSchedules').get();
+    examSchedulesData=snapshot.exists()?snapshot.val():{};
+  }catch(error){ console.error('load exam schedules error',error); }
+  const batchSelect=document.getElementById('examBatch');
+  if(batchSelect){
+    const current=batchSelect.value;
+    const batches=getAllKnownBatches();
+    batchSelect.innerHTML='<option value="">-- اختر الدفعة --</option>'+batches.map(batch=>`<option value="${escapeHtml(batch)}">${escapeHtml(batch)}</option>`).join('');
+    if(batches.some(batch=>sameBatchName(batch,current))) batchSelect.value=batches.find(batch=>sameBatchName(batch,current));
+  }
+  populateExamSubjectOptions(document.getElementById('examSubject')?.value||'');
+  renderExamSchedulesAdminList();
+}
+function populateExamSubjectOptions(selectedKey=''){
+  const batch=document.getElementById('examBatch')?.value||'';
+  const subjectSelect=document.getElementById('examSubject');
+  if(!subjectSelect) return;
+  const offerings=subjects.filter(subject=>subject._fbKey&&batch&&sameBatchName(subject.batch,batch));
+  subjectSelect.innerHTML='<option value="">-- اختر المقرر --</option>'+offerings.map(subject=>`<option value="${subject._fbKey}">${escapeHtml(subject.name)}</option>`).join('');
+  if(offerings.some(subject=>subject._fbKey===selectedKey)) subjectSelect.value=selectedKey;
+  fillExamLecturerFromSubject();
+}
+function fillExamLecturerFromSubject(){
+  const subject=subjects.find(item=>item._fbKey===document.getElementById('examSubject')?.value);
+  const input=document.getElementById('examLecturerName');
+  if(subject&&input&&!editingExamScheduleKey) input.value=getLecturerName(subject.lecturerUserId)==='—'?'':getLecturerName(subject.lecturerUserId);
+}
+function resetExamScheduleForm(){
+  editingExamScheduleKey='';
+  ['examDate','examLecturerName','examTermLabel'].forEach(id=>{const element=document.getElementById(id);if(element) element.value='';});
+  const subject=document.getElementById('examSubject'); if(subject) subject.value='';
+  const start=document.getElementById('examStartTime'); if(start) start.value='18:00';
+  const end=document.getElementById('examEndTime'); if(end) end.value='22:00';
+  const published=document.getElementById('examPublished'); if(published) published.value='true';
+  const cancel=document.getElementById('examCancelEdit'); if(cancel) cancel.style.display='none';
+}
+function editExamSchedule(key){
+  const exam=examSchedulesData[key];
+  if(!exam) return showToast('تعذر العثور على موعد الاختبار');
+  editingExamScheduleKey=key;
+  const batch=document.getElementById('examBatch'); if(batch) batch.value=exam.batch||'';
+  populateExamSubjectOptions(exam.subjectKey||'');
+  document.getElementById('examSubject').value=exam.subjectKey||'';
+  document.getElementById('examDate').value=exam.date||'';
+  document.getElementById('examStartTime').value=exam.startTime||'18:00';
+  document.getElementById('examEndTime').value=exam.endTime||'22:00';
+  document.getElementById('examLecturerName').value=exam.lecturerName||'';
+  document.getElementById('examTermLabel').value=exam.termLabel||'';
+  document.getElementById('examPublished').value=exam.published===false?'false':'true';
+  document.getElementById('examCancelEdit').style.display='inline-flex';
+  document.getElementById('page-exams')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function saveExamSchedule(){
+  const batch=document.getElementById('examBatch')?.value||'';
+  const subjectKey=document.getElementById('examSubject')?.value||'';
+  const date=document.getElementById('examDate')?.value||'';
+  const startTime=document.getElementById('examStartTime')?.value||'';
+  const endTime=document.getElementById('examEndTime')?.value||'';
+  const subject=subjects.find(item=>item._fbKey===subjectKey);
+  if(!batch||!subject||!date||!startTime||!endTime) return showToast('⚠️ أكمل الدفعة والمقرر والتاريخ والوقت');
+  if(!sameBatchName(subject.batch,batch)) return showToast('⚠️ المقرر المختار لا يتبع الدفعة المحددة');
+  if(endTime<=startTime) return showToast('⚠️ وقت النهاية يجب أن يكون بعد وقت البداية');
+  const now=new Date().toISOString();
+  const key=editingExamScheduleKey||(`exam_${batch}_${subject.courseKey||subjectKey}_${date}_${Date.now()}`).replace(/[.#$[\]]/g,'_');
+  const previous=examSchedulesData[key]||{};
+  const payload={batch,subjectKey,courseKey:subject.courseKey||'',subjectName:subject.name,date,startTime,endTime,lecturerName:document.getElementById('examLecturerName')?.value.trim()||'',termLabel:document.getElementById('examTermLabel')?.value.trim()||'',published:document.getElementById('examPublished')?.value!=='false',source:previous.source||'admin_exam_schedule',createdAt:previous.createdAt||now,updatedAt:now,updatedBy:currentUser?.username||currentUser?.name||'admin'};
+  showLoader(true);
+  try{
+    await fbRef('examSchedules/'+key).set(payload);
+    examSchedulesData[key]=payload;
+    await saveActivityLog({action:editingExamScheduleKey?'تعديل موعد اختبار':'إضافة موعد اختبار',targetType:'exam_schedule',targetKey:key,targetLabel:`${subject.name} - ${batch}`,details:`${date} من ${startTime} إلى ${endTime} · ${payload.published?'منشور':'مسودة'}`});
+    resetExamScheduleForm();
+    renderExamSchedulesAdminList();
+    showToast('✅ تم حفظ موعد الاختبار وظهر للطلاب المستهدفين');
+  }catch(error){ console.error('save exam schedule error',error); showToast('⚠️ تعذر حفظ موعد الاختبار'); }
+  finally{ showLoader(false); }
+}
+function renderExamSchedulesAdminList(){
+  const host=document.getElementById('examSchedulesAdminList');
+  if(!host) return;
+  const rows=Object.entries(examSchedulesData||{}).map(([key,value])=>({key,...value})).sort((a,b)=>`${a.batch}|${a.date}|${a.startTime}`.localeCompare(`${b.batch}|${b.date}|${b.startTime}`));
+  if(!rows.length){ host.innerHTML='<div class="alert alert-info">لا توجد مواعيد اختبارات حتى الآن.</div>'; return; }
+  const batches=[...new Set(rows.map(row=>row.batch))];
+  host.innerHTML=batches.map(batch=>`<div style="margin-bottom:1.25rem"><div style="font-size:18px;font-weight:900;color:var(--primary-dark);margin-bottom:10px">${escapeHtml(batch)}</div><div style="display:grid;gap:10px">${rows.filter(row=>row.batch===batch).map(row=>`<div style="display:grid;grid-template-columns:150px 1fr 160px auto;gap:12px;align-items:center;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:white"><div style="padding:16px;background:var(--primary-dark);color:white;text-align:center;font-weight:800">${examAdminDate(row.date)}</div><div style="padding:14px"><strong>${escapeHtml(row.subjectName||'')}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:5px">${escapeHtml(row.lecturerName||'—')}${row.termLabel?' · '+escapeHtml(row.termLabel):''}</div></div><div style="padding:14px;text-align:center;font-weight:800">${examAdminTime(row.startTime)} – ${examAdminTime(row.endTime)}<div style="margin-top:5px"><span class="badge ${row.published===false?'badge-warn':'badge-pass'}">${row.published===false?'مسودة':'منشور'}</span></div></div><div style="padding:12px"><button class="btn btn-sm" onclick="editExamSchedule('${row.key}')">✏️ تعديل</button></div></div>`).join('')}</div></div>`).join('');
+}
 
 // ══════════════════════════════════════════════
 //  SCHEDULE ADMIN
