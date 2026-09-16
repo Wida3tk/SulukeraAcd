@@ -598,6 +598,8 @@ function getStudentPlanType(student){
   return '';
 }
 function isStudentEligibleForSubject(student,subject){
+  if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
+     !['course_04','course_05','course_06'].includes(subject?.courseKey)) return false;
   const eligible=Array.isArray(subject?.eligiblePlans)?subject.eligiblePlans:[];
   const plan=getStudentPlanType(student);
   return !!plan && (!eligible.length||eligible.includes(plan));

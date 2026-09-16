@@ -1831,6 +1831,8 @@ async function syncStudentFinanceFromOper(stdIdx){
   }
 }
 function studentEligibleForOffering(student,subject){
+  if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
+     !['course_04','course_05','course_06'].includes(subject?.courseKey)) return false;
   const plan=getExplicitStudentPlan(student);
   const eligible=subject?.eligiblePlans||[];
   return !!plan && (!eligible.length||eligible.includes(plan));
@@ -1847,6 +1849,8 @@ function getExplicitStudentPlan(student){
   return '';
 }
 function isStudentExplicitlyEligibleForOffering(student,subject){
+  if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
+     !['course_04','course_05','course_06'].includes(subject?.courseKey)) return false;
   const plan=getExplicitStudentPlan(student);
   const eligible=subject?.eligiblePlans||[];
   return !!plan && (!eligible.length||eligible.includes(plan));
