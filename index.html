@@ -793,10 +793,10 @@ tr:hover td{background:#f8faff;}
   </div>
 </div></div>
 
-<!-- MODAL: LEGACY GRADE IMPORT -->
+<!-- MODAL: EXCEL GRADE IMPORT -->
 <div class="modal-overlay" id="legacyGradeImportModal"><div class="modal" style="width:980px;">
-  <h3>استرداد درجات النظام السابق</h3>
-  <div class="alert alert-info">ارفعي ملفات Excel الخاصة بالطلاب. تقرأ الأداة الاسم من ورقة <strong>البيانات الرئيسية</strong>، وتستورد المقررات التي حالتها <strong>مجتاز</strong> فقط. راجعي تفصيل الدرجات في المعاينة ثم اعتمديها؛ لا تستبدل الأداة أي درجة محفوظة ولا تعدّل بناء المقررات أو توزيعها.</div>
+  <h3>استيراد درجات Excel</h3>
+  <div class="alert alert-info">ارفعي ملفات Excel السابقة الخاصة بالطلاب. تقرأ الأداة الاسم من ورقة <strong>البيانات الرئيسية</strong>، وتستورد المقررات التي حالتها <strong>مجتاز</strong> فقط. ستظهر معاينة كاملة قبل الاعتماد، ولن تُستبدل أي درجة محفوظة أو يتغير توزيع المقررات.</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
     <button class="btn btn-primary" onclick="triggerLegacyGradeImportFiles()">اختيار ملفات الدرجات</button>
     <input type="file" id="legacyGradeImportFiles" accept=".xlsx,.xls" multiple onchange="handleLegacyGradeImportFiles(event)" style="display:none;">
@@ -2260,7 +2260,8 @@ function goBack() {
 function renderTopbarActions(pageId) {
   const el=document.getElementById('topbarActions');
   if (pageId==='subjects'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="openCopySubjectsModal()">نسخ مقررات لدفعة</button><button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ مقرر جديد</button>`;
-  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل كلمات مضافة حديثًا</button><button class="btn btn-sm" onclick="openStudentImportModal()">استيراد Excel</button><button class="btn btn-sm" onclick="openLegacyGradeImportModal()">استرداد درجات سابقة</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إنشاء حسابات الطلاب الجدد</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='students'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-sm" onclick="downloadPendingStudentPasswords()">تحميل كلمات مضافة حديثًا</button><button class="btn btn-sm" onclick="openStudentImportModal()">استيراد طلاب Excel</button><button class="btn btn-sm" onclick="openLegacyGradeImportModal()">استيراد درجات Excel</button><button class="btn btn-warning btn-sm" onclick="generateStudentPasswords()">إنشاء حسابات الطلاب الجدد</button><button class="btn btn-primary btn-sm" onclick="openStudentModal()">+ طالب جديد</button>`;
+  else if (pageId==='grades'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openLegacyGradeImportModal()">📊 استيراد درجات Excel</button>`;
   else if (pageId==='users'&&canManageAcademicAdmin()) el.innerHTML=`<button class="btn btn-primary btn-sm" onclick="openUserModal()">+ مستخدم جديد</button>`;
   else el.innerHTML='';
 }
