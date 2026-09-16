@@ -1284,6 +1284,7 @@ function getStudentSubjects(studentFbKey){
   const student=dbData.students?.[studentFbKey]||currentUser?.data;
   const addSubject=(subjectKey, allowExplicitEnrollment=false)=>{
     const s=dbData.subjects?.[subjectKey];
+    if(s?.excludedStudents?.[studentFbKey]) return;
     if(s&&(allowExplicitEnrollment||isStudentEligibleForSubject(student,s))&&!result.find(r=>r.key===subjectKey))
       result.push({key:subjectKey,...s});
   };
@@ -1612,6 +1613,7 @@ function getSubjectStudents(subjectFbKey){
   const result=[];
   const addStudent=(studentKey)=>{
     const student=dbData.students?.[studentKey];
+    if(subject?.excludedStudents?.[studentKey]) return;
     if(student && student.accountStatus!=='withdrawn' && !result.find(r=>r.fbKey===studentKey))
       result.push({fbKey:studentKey,...student});
   };
