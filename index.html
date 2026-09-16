@@ -3811,8 +3811,15 @@ function openStudentProfile(stdIdx) {
   document.getElementById('topbarActions').innerHTML=`
     ${canEditStudentRecord()?`<button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">${isFinanceRole()?'💰 تحديث المالية':'✏️ تعديل'}</button>`:''}
     ${canManageAcademicAdmin()?`<button class="btn btn-sm" onclick="changeStudentPassword(${stdIdx})">🔐 كلمة المرور</button>`:''}
+    ${canManageAcademicAdmin()?`<button class="btn btn-success btn-sm" onclick="openStudentGradesPanel(${stdIdx})">📊 تعديل الدرجات</button>`:''}
     <button class="btn btn-primary btn-sm" onclick="openGradeReportModal(${stdIdx})">📄 كشف الدرجات</button>`;
   renderStudentProfile(stdIdx);
+}
+function openStudentGradesPanel(stdIdx){
+  if(!students[stdIdx]) return showToast('⚠️ تعذر العثور على الطالب');
+  if(!document.getElementById('page-student-profile')?.classList.contains('active')) openStudentProfile(stdIdx);
+  const gradesTab=[...document.querySelectorAll('#page-student-profile .profile-tab')].find(tab=>tab.getAttribute('onclick')?.includes("'grades'"));
+  if(gradesTab) switchProfileTab('grades',gradesTab);
 }
 function renderStudentAcademicProgressSheet(stdIdx, st, mySubjs){
   const rows=mySubjs.map((subject,order)=>{
@@ -4251,6 +4258,7 @@ function renderProfileGrades(stdIdx, mySubjs) {
         <div style="padding:10px 14px;background:${!isExamEntered(g)?'var(--warn-light)':total>=settings.gradeFail?'var(--success-light)':'var(--danger-light)'};border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
           <strong>📝 الاختبار النهائي</strong><span style="font-size:22px;font-weight:800">${g.exam??'—'}/${settings.exam}</span>
         </div>
+        ${canManageAcademicAdmin()?`<div style="margin-top:10px;text-align:left"><button class="btn btn-success btn-sm" onclick="openStudentGradeEditor(${stdIdx},${subj.idx})">✏️ تعديل درجات المقرر</button></div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -6859,6 +6867,7 @@ function renderStudentsTableFiltered(filtered){
       <td>${withdrawn?'<span class="badge badge-fail">منسحب</span>':`<span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}`}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn btn-sm btn-primary" onclick="openStudentProfile(${stdIdx})">👁️</button>
+        ${canManageAcademicAdmin()?`<button class="btn btn-success btn-sm" onclick="openStudentGradesPanel(${stdIdx})" title="تعديل الدرجات">📊</button>`:''}
         ${canEdit?`<button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">${isFinanceRole()?'💰':'✏️'}</button>`:''}
         ${canDelete?`<button class="btn btn-sm ${withdrawn?'btn-success':'btn-warning'}" onclick="toggleStudentWithdrawal(${stdIdx})" title="${withdrawn?'إعادة تفعيل الحساب':'تجميد حساب الطالب'}">${withdrawn?'تفعيل':'إيقاف'}</button>`:''}
         ${canDelete?`<button class="btn btn-danger btn-sm" onclick="deleteStudent(${stdIdx})">🗑️</button>`:''}
