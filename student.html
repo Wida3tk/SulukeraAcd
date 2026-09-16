@@ -1189,13 +1189,11 @@ function renderStudentGradesTab(){
   // تعرض صفحة الدرجات المقررات المفتوحة أو المكتملة فقط؛ المقررات المستقبلية تبقى في تبويب "مقرراتي".
   const allMySubjects = getStudentSubjects(currentUser.fbKey);
   const mySubjects=allMySubjects.filter(subject=>getStudentSubjectStage(st,subject)!=='planned');
-  const totals = mySubjects.map(s=>getGrade_data(currentUser.fbKey, s.key))
-    .filter(isExamEntered)
-    .map(calcTotal);
   const gradeRows = mySubjects.map(s=>getGrade_data(currentUser.fbKey, s.key)).filter(Boolean);
+  const totals = gradeRows.map(calcTotal);
   const avg = totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
   const hasFail = gradeRows.some(isFailingGrade);
-  const hasAnyGrades = totals.length>0;
+  const hasAnyGrades = gradeRows.length>0;
   // اللون: أحمر فقط إذا فيه تعثر حقيقي
   const avgColor = hasFail ? '#ff7070' : (hasAnyGrades ? '#55D7FF' : '#aabbcc');
 
@@ -1213,7 +1211,7 @@ function renderStudentGradesTab(){
       </div>
       <div class="avg-circle" style="border-color:${avgColor}">
         <div class="avg-num" style="color:${avgColor}">${avg}</div>
-        <div class="avg-label">المتوسط</div>
+        <div class="avg-label">${gradeRows.some(isExamEntered)?'المتوسط':'المتوسط الحالي'}</div>
       </div>
     </div>`;
 
@@ -1229,7 +1227,9 @@ function renderStudentGradesTab(){
       const status = display.status;
       const examDone = isExamEntered(g);
       const wkMax = settings.attend+settings.hw+settings.disc;
-      const grColor = !examDone?'#6b7a99':gr==='A'?'#1a7a3c':gr==='B'?'#0D40FC':gr==='C'?'#b35c00':'#c0392b';
+      const courseworkMax = wkMax*4;
+      const currentProgress = examDone?total:(courseworkMax?Math.min(100,Math.round((total/courseworkMax)*100)):0);
+      const grColor = !examDone?'var(--primary)':gr==='A'?'#1a7a3c':gr==='B'?'#0D40FC':gr==='C'?'#b35c00':'#c0392b';
       const lecName = getLecturerName(subj.lecturerUserId);
 
       html += `
@@ -1244,13 +1244,13 @@ function renderStudentGradesTab(){
           <div class="subject-card-body">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:0.8rem;padding:8px 12px;background:var(--bg);border-radius:8px;">
               <div>
-                <div style="font-size:32px;font-weight:900;color:${grColor};line-height:1">${examDone?total:'—'}</div>
-                <div style="font-size:10px;color:var(--muted)">${examDone?'من 100':'بانتظار الرصد النهائي'}</div>
+                <div style="font-size:32px;font-weight:900;color:${grColor};line-height:1">${total}</div>
+                <div style="font-size:10px;color:var(--muted)">${examDone?'من 100':`المجموع الحالي من ${courseworkMax}`}</div>
               </div>
               <div style="flex:1">
-                <div class="progress"><div class="progress-fill pf-${examDone?pc(total):'mid'}" style="width:${examDone?total:0}%"></div></div>
+                <div class="progress"><div class="progress-fill pf-${pc(currentProgress)}" style="width:${currentProgress}%"></div></div>
                 <div style="font-size:11px;color:${!examDone?'var(--muted)':total>=settings.gradeFail?'var(--success)':'var(--danger)'};margin-top:4px;font-weight:600">
-                  ${status}
+                  ${examDone?status:'النتيجة النهائية قيد الرصد'}
                 </div>
               </div>
             </div>
