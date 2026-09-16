@@ -1494,7 +1494,7 @@ function renderStudentExamsTab(){
       ${exams.length?`<div class="exam-schedule-list">${exams.map(exam=>{const formatted=formatExamDate(exam.date);return `
         <div class="exam-schedule-card">
           <div class="exam-date"><strong style="font-size:17px">${formatted.day}</strong><span style="font-size:12px;margin-top:5px">${formatted.date}</span></div>
-          <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span></div></div>
+          <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span>${exam.termLabel?` <span class="badge badge-student">${escapeHtml(exam.termLabel)}</span>`:''}</div></div>
           <div class="exam-time">${to12h(exam.startTime)} إلى ${to12h(exam.endTime)}</div>
         </div>`;}).join('')}</div>`:'<div class="empty">لا توجد اختبارات منشورة لمقرراتك حاليًا.</div>'}
     </div>`;
