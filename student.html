@@ -279,6 +279,12 @@ tr:hover td{background:#f8faff;}
 
 /* Weekly schedule */
 .schedule-grid{display:grid;grid-template-columns:80px repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.2rem;}
+.exam-motivation{background:linear-gradient(135deg,#0D40FC,#001442);color:#fff;border-radius:18px;padding:20px 24px;margin-bottom:18px;box-shadow:0 10px 24px rgba(13,64,252,.18);}
+.exam-schedule-list{display:grid;gap:12px;}
+.exam-schedule-card{display:grid;grid-template-columns:145px 1fr 150px;align-items:center;border:1px solid var(--border);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 5px 16px rgba(0,20,66,.06);}
+.exam-date{height:100%;padding:18px;background:#061a42;color:#fff;text-align:center;display:flex;flex-direction:column;justify-content:center;}
+.exam-course{padding:18px 22px;}.exam-time{padding:18px;text-align:center;color:var(--primary-dark);font-weight:800;background:#f4f7ff;height:100%;display:flex;align-items:center;justify-content:center;}
+@media(max-width:680px){.exam-schedule-card{grid-template-columns:1fr}.exam-date,.exam-time{padding:12px}.exam-course{text-align:center;padding:16px}}
 .sch-header{background:var(--dark);color:white;padding:10px 8px;text-align:center;font-size:12px;font-weight:700;}
 .sch-time{background:var(--bg);padding:8px 6px;text-align:center;font-size:10px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;min-height:52px;}
 .sch-cell{padding:4px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:52px;}
@@ -818,6 +824,7 @@ function showStudentView(){
     { id:'requests', label:'📝 طلباتي' },
     { id:'policies', label:'📘 السياسات' },
     { id:'account', label:'👤 حسابي' },
+    { id:'exams', label:'📝 الاختبارات' },
     { id:'schedule', label:'📅 جدولي' }
   ]);
   switchAppTab('home', document.querySelector('#appTabs .app-tab'));
@@ -1457,6 +1464,41 @@ function getNextUpcomingSlot(slots){
   }).sort((a,b)=>a.minutesScore-b.minutesScore);
   return scored[0]?.slot || null;
 }
+function getStudentExamSchedules(){
+  if(!currentUser?.fbKey) return [];
+  const student=currentUser.data||{};
+  const subjectKeys=new Set(getStudentSubjects(currentUser.fbKey).map(subject=>subject.key));
+  return Object.entries(dbData.examSchedules||{})
+    .map(([key,exam])=>({key,...exam}))
+    .filter(exam=>exam.published!==false && sameBatchName(exam.batch,student.batch) && subjectKeys.has(exam.subjectKey))
+    .sort((a,b)=>`${a.date||''}T${a.startTime||''}`.localeCompare(`${b.date||''}T${b.startTime||''}`));
+}
+function formatExamDate(dateValue){
+  if(!dateValue) return {day:'—',date:'—'};
+  const date=new Date(`${dateValue}T12:00:00+03:00`);
+  return {
+    day:new Intl.DateTimeFormat('ar-SA',{weekday:'long',timeZone:'Asia/Riyadh'}).format(date),
+    date:new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Riyadh'}).format(date)
+  };
+}
+function renderStudentExamsTab(){
+  const exams=getStudentExamSchedules();
+  document.getElementById('mainContent').innerHTML=`
+    <div class="exam-motivation">
+      <div style="font-size:22px;font-weight:900;margin-bottom:6px">كل التوفيق لكم! 🌟</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.86)">استعد بهدوء، وثق بما تعلمته؛ كل خطوة اجتهاد تقرّبك من هدفك.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">📝 جدول اختباراتي</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">تظهر هنا اختبارات مقرراتك وفق دفعتك وتوقيت المملكة العربية السعودية.</div>
+      ${exams.length?`<div class="exam-schedule-list">${exams.map(exam=>{const formatted=formatExamDate(exam.date);return `
+        <div class="exam-schedule-card">
+          <div class="exam-date"><strong style="font-size:17px">${formatted.day}</strong><span style="font-size:12px;margin-top:5px">${formatted.date}</span></div>
+          <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span></div></div>
+          <div class="exam-time">${to12h(exam.startTime)} إلى ${to12h(exam.endTime)}</div>
+        </div>`;}).join('')}</div>`:'<div class="empty">لا توجد اختبارات منشورة لمقرراتك حاليًا.</div>'}
+    </div>`;
+}
 function renderStudentPortalTab(tab){
   currentAppTab = tab;
   if(tab==='home') return renderStudentHomeTab();
@@ -1466,6 +1508,7 @@ function renderStudentPortalTab(tab){
   if(tab==='requests') return renderStudentRequestsTab();
   if(tab==='policies') return renderStudentPoliciesTab();
   if(tab==='account') return renderStudentAccountTab();
+  if(tab==='exams') return renderStudentExamsTab();
 }
 function renderLecturerPortalTab(tab){
   currentAppTab = tab;
