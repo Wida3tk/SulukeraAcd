@@ -3229,7 +3229,13 @@ function legacyGradeHasData(grade){
   if(!grade) return false;
   if(grade.examEntered===true) return true;
   return ['exam','w1_attend','w1_hw','w1_disc','w2_attend','w2_hw','w2_disc','w3_attend','w3_hw','w3_disc','w4_attend','w4_hw','w4_disc']
-    .some(field=>Number(grade[field]??grade[field.split('_')[0]]?.[field.split('_')[1]])!==0);
+    .some(field=>{
+      const [week,component]=field.split('_');
+      const rawValue=grade[field] ?? (component ? grade[week]?.[component] : grade[field]);
+      if(rawValue===null || rawValue===undefined || rawValue==='') return false;
+      const value=Number(rawValue);
+      return Number.isFinite(value) && value!==0;
+    });
 }
 function getLegacyCourseKey(sheetName,rows){
   const codeText=[sheetName,rows?.[2]?.[2],rows?.[2]?.[0]].map(String).join(' ');
@@ -3353,14 +3359,15 @@ function renderLegacyGradeImportPreview(fileCount){
   const ready=legacyGradeImportRows.filter(row=>row.status==='ready');
   const blocked=legacyGradeImportRows.filter(row=>row.status==='blocked').length+legacyGradeImportIssues.length;
   const existing=legacyGradeImportRows.filter(row=>row.status==='existing').length;
+  const imported=legacyGradeImportRows.filter(row=>row.status==='imported').length;
   if(summary){
     summary.className=ready.length?'alert alert-info':'alert alert-warn';
-    summary.innerHTML=`تمت قراءة <strong>${fileCount}</strong> ملف. الجاهز للاستيراد: <strong>${ready.length}</strong> مقرر، محفوظ مسبقًا: <strong>${existing}</strong>، يحتاج معالجة: <strong>${blocked}</strong>.`;
+    summary.innerHTML=`تمت قراءة <strong>${fileCount}</strong> ملف. الجاهز للاستيراد: <strong>${ready.length}</strong> مقرر، تم استيراده الآن: <strong>${imported}</strong>، محفوظ مسبقًا: <strong>${existing}</strong>، يحتاج معالجة: <strong>${blocked}</strong>.`;
   }
   if(confirmButton) confirmButton.disabled=!ready.length;
   if(!preview) return;
-  const statusLabel={ready:'جاهز',existing:'محفوظ مسبقًا',ignored:'متجاوز',blocked:'يحتاج معالجة'};
-  const statusClass={ready:'badge-pass',existing:'badge-info',ignored:'badge-student',blocked:'badge-fail'};
+  const statusLabel={ready:'جاهز',imported:'تم الاستيراد',existing:'محفوظ مسبقًا',ignored:'متجاوز',blocked:'يحتاج معالجة'};
+  const statusClass={ready:'badge-pass',imported:'badge-pass',existing:'badge-info',ignored:'badge-student',blocked:'badge-fail'};
   const issueHtml=legacyGradeImportIssues.length?`<div class="alert alert-warn" style="margin-bottom:10px;">${legacyGradeImportIssues.map(item=>escapeHtml(item)).join('<br>')}</div>`:'';
   if(!legacyGradeImportRows.length){ preview.innerHTML=issueHtml||'<div class="alert alert-warn">لم يتم العثور على مقررات قابلة للقراءة.</div>'; return; }
   preview.innerHTML=issueHtml+`<table><thead><tr><th>الملف</th><th>الطالب</th><th>المقرر</th><th>الدرجات المستردة</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>${legacyGradeImportRows.map(row=>{const breakdown=row.grade?`أ1 ${row.grade.w1_attend}/${row.grade.w1_hw}/${row.grade.w1_disc} · أ2 ${row.grade.w2_attend}/${row.grade.w2_hw}/${row.grade.w2_disc} · أ3 ${row.grade.w3_attend}/${row.grade.w3_hw}/${row.grade.w3_disc} · أ4 ${row.grade.w4_attend}/${row.grade.w4_hw}/${row.grade.w4_disc} · نهائي ${row.grade.exam}/${settings.exam}`:'—';return `<tr><td style="font-size:11px">${escapeHtml(row.fileName)}</td><td><strong>${escapeHtml(getStudentFullName(row.student))}</strong></td><td>${escapeHtml(row.courseName)}</td><td style="font-size:10px;line-height:1.7">${escapeHtml(breakdown)}</td><td><span class="badge ${statusClass[row.status]}">${statusLabel[row.status]}</span></td><td>${escapeHtml(row.note)}</td></tr>`;}).join('')}</tbody></table>`;
@@ -3400,7 +3407,9 @@ async function confirmLegacyGradeImport(){
       const gradeKey=('grade_'+row.student._fbKey+'_'+subjects[row.subjectIdx]._fbKey).replace(/[.#$[\]]/g,'_');
       const payload={...row.grade,updatedAt:now,updatedBy:currentUser?.username||currentUser?.name||'admin',updatedRole:'admin',importedFromLegacy:true,importSourceFile:row.fileName,importedAt:now};
       const transaction=await fbRef('grades/'+gradeKey).transaction(current=>legacyGradeHasData(current)?undefined:payload);
-      if(!transaction.committed){ skipped.push(row); continue; }
+      if(!transaction.committed){ row.status='existing'; row.note='ظهرت درجة محفوظة أثناء الاعتماد ولم تُستبدل'; skipped.push(row); continue; }
+      row.status='imported';
+      row.note='تم استيراد الدرجات بنجاح';
       imported.push(row);
       const enrolled=enrollmentsData.some(item=>item.studentKey===row.student._fbKey&&item.subjectKey===subjects[row.subjectIdx]._fbKey);
       if(!enrolled){
