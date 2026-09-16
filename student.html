@@ -475,6 +475,7 @@ let currentSubjectKey = null;
 let currentBatchName = null;
 let currentAppTab = 'home';
 let lecturerStudentSortMode = 'current';
+let examSchedulesLiveHandler = null;
 
 const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:80 };
 const STUDENT_MOTIVATIONS = [
@@ -771,6 +772,7 @@ async function changeMyPassword(){
 }
 
 function doLogout(){
+  stopExamSchedulesLiveUpdates();
   currentUser=null; dbData={};
   document.getElementById('appScreen').style.display='none';
   document.getElementById('appTabs').style.display='none';
@@ -804,6 +806,21 @@ async function loadAllData(){
   loader(false);
 }
 
+function startExamSchedulesLiveUpdates(){
+  stopExamSchedulesLiveUpdates();
+  examSchedulesLiveHandler=snapshot=>{
+    if(!currentUser) return;
+    dbData.examSchedules=snapshot.exists()?snapshot.val():{};
+    if(currentUser.role==='student'&&currentAppTab==='exams') renderStudentExamsTab();
+  };
+  fbRef('examSchedules').on('value',examSchedulesLiveHandler,error=>console.error('exam schedules live update error',error));
+}
+function stopExamSchedulesLiveUpdates(){
+  if(!examSchedulesLiveHandler) return;
+  fbRef('examSchedules').off('value',examSchedulesLiveHandler);
+  examSchedulesLiveHandler=null;
+}
+
 // ══════════════════════════════════════════════
 //  STUDENT VIEW
 // ══════════════════════════════════════════════
@@ -827,6 +844,7 @@ function showStudentView(){
     { id:'exams', label:'📝 الاختبارات' },
     { id:'schedule', label:'📅 جدولي' }
   ]);
+  startExamSchedulesLiveUpdates();
   switchAppTab('home', document.querySelector('#appTabs .app-tab'));
 }
 
@@ -921,7 +939,7 @@ function renderStudentHomeTab(){
           <button class="btn-out" onclick="switchAppTab('grades', document.querySelectorAll('.app-tab')[2])">📊 فتح الدرجات</button>
           <button class="btn-out" onclick="switchAppTab('requests', document.querySelectorAll('.app-tab')[4])">📝 رفع طلب</button>
           <button class="btn-out" onclick="switchAppTab('transcript', document.querySelectorAll('.app-tab')[3])">📄 كشف الدرجات</button>
-          <button class="btn-out" onclick="switchAppTab('schedule', document.querySelectorAll('.app-tab')[7])">📅 فتح الجدول</button>
+          <button class="btn-out" onclick="switchAppTab('schedule', getAppTabButtonById('schedule'))">📅 فتح الجدول</button>
         </div>
       </div>
     </div>
