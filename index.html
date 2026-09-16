@@ -796,7 +796,7 @@ tr:hover td{background:#f8faff;}
 <!-- MODAL: EXCEL GRADE IMPORT -->
 <div class="modal-overlay" id="legacyGradeImportModal"><div class="modal" style="width:980px;">
   <h3>استيراد درجات Excel</h3>
-  <div class="alert alert-info">ارفعي ملفات Excel السابقة الخاصة بالطلاب. تقرأ الأداة الاسم من ورقة <strong>البيانات الرئيسية</strong>، وتستورد المقررات التي حالتها <strong>مجتاز</strong> فقط. ستظهر معاينة كاملة قبل الاعتماد، ولن تُستبدل أي درجة محفوظة أو يتغير توزيع المقررات.</div>
+  <div class="alert alert-info">ارفعي ملفات Excel السابقة الخاصة بالطلاب. تقرأ الأداة الاسم من ورقة <strong>البيانات الرئيسية</strong>، ثم تراجع كل صفحة مقرر وتستورد الدرجات المكتوبة في جدول الأسابيع والاختبار. الصفحات الفارغة تُتجاوز تلقائيًا. ستظهر معاينة كاملة قبل الاعتماد، ولن تُستبدل أي درجة محفوظة أو يتغير توزيع المقررات.</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
     <button class="btn btn-primary" onclick="triggerLegacyGradeImportFiles()">اختيار ملفات الدرجات</button>
     <input type="file" id="legacyGradeImportFiles" accept=".xlsx,.xls" multiple onchange="handleLegacyGradeImportFiles(event)" style="display:none;">
@@ -3245,7 +3245,19 @@ function getLegacyWeekRow(rows,weekNumber){
 }
 function getLegacyExamValue(rows){
   const row=rows.find(item=>normalizeLegacyText((item||[]).slice(0,2).join(' ')).includes(normalizeLegacyText('الاختبار النهائي')));
-  return row ? legacyNumber(row[2]) : null;
+  if(!row) return null;
+  for(const index of [5,2,3,4]){
+    const value=legacyNumber(row[index]);
+    if(Number.isFinite(value)) return value;
+  }
+  return null;
+}
+function legacySheetHasEnteredGrades(rows){
+  const weekHasValue=[1,2,3,4].some(week=>{
+    const row=getLegacyWeekRow(rows,week);
+    return row && [2,3,4].some(index=>Number.isFinite(legacyNumber(row[index])));
+  });
+  return weekHasValue || Number.isFinite(getLegacyExamValue(rows));
 }
 function findLegacyStudent(fullName){
   const normalized=normalizeLegacyText(fullName);
@@ -3292,8 +3304,8 @@ function parseLegacyGradeWorkbook(workbook,fileName){
     const course=FIXED_COURSES.find(item=>item.key===courseKey);
     const completion=completionStatus[courseKey]||'';
     const base={fileName,sourceName,student:foundStudent.student,stdIdx:foundStudent.stdIdx,courseKey,courseName:course?.name||sheetName,completion};
-    if(normalizeLegacyText(completion)!==normalizeLegacyText('مجتاز')){
-      parsedRows.push({...base,status:'ignored',note:completion?`الحالة السابقة: ${completion}`:'غير مدرج كمقرر مجتاز'});
+    if(!legacySheetHasEnteredGrades(rows)){
+      parsedRows.push({...base,status:'ignored',note:'صفحة المقرر لا تحتوي درجات مدخلة'});
       return;
     }
     const subjectIdx=subjects.findIndex(subject=>subject.courseKey===courseKey&&sameBatchName(subject.batch,foundStudent.student.batch));
@@ -3314,14 +3326,15 @@ function parseLegacyGradeWorkbook(workbook,fileName){
       const fields=[['attend',weekRow?legacyNumber(weekRow[2]):null,settings.attend],['hw',weekRow?legacyNumber(weekRow[3]):null,settings.hw],['disc',weekRow?legacyNumber(weekRow[4]):null,settings.disc]];
       for(const [field,rawValue,max] of fields){
         // النموذج السابق يتضمن حالة موثقة لواجب 7/6؛ نعتمد الحد الحالي ونظهر التصحيح في المعاينة.
-        const value=field==='hw' && rawValue===7 && max===6 ? 6 : rawValue;
-        if(rawValue!==value) adjustments.push(`تم ضبط واجب الأسبوع ${week} من ${rawValue} إلى ${value}`);
+        const normalizedValue=Number.isFinite(rawValue)?rawValue:0;
+        const value=field==='hw' && normalizedValue===7 && max===6 ? 6 : normalizedValue;
+        if(Number.isFinite(rawValue)&&rawValue!==value) adjustments.push(`تم ضبط واجب الأسبوع ${week} من ${rawValue} إلى ${value}`);
         if(!legacyScoreIsValid(value,max)) invalidNote=`بيانات الأسبوع ${week} غير صالحة في ${field==='attend'?'الحضور':field==='hw'?'الواجب':'المناقشة'} (الحد ${max})`;
         grade[`w${week}_${field}`]=value;
       }
     }
     const exam=getLegacyExamValue(rows);
-    if(!legacyScoreIsValid(exam,settings.exam)) invalidNote=`درجة الاختبار النهائي غير صالحة (الحد ${settings.exam})`;
+    if(exam!==null&&!legacyScoreIsValid(exam,settings.exam)) invalidNote=`درجة الاختبار النهائي غير صالحة (الحد ${settings.exam})`;
     grade.exam=exam;
     grade.examEntered=Number.isFinite(exam);
     if(invalidNote){
@@ -3376,7 +3389,7 @@ async function handleLegacyGradeImportFiles(event){
 async function confirmLegacyGradeImport(){
   const ready=legacyGradeImportRows.filter(row=>row.status==='ready');
   if(!ready.length) return showToast('لا توجد درجات جاهزة للاستيراد');
-  if(!confirm(`سيتم استيراد ${ready.length} مقرر مجتاز فقط دون استبدال أي درجة محفوظة. متابعة؟`)) return;
+  if(!confirm(`سيتم استيراد درجات ${ready.length} مقرر من صفحات Excel دون استبدال أي درجة محفوظة. متابعة؟`)) return;
   showLoader(true);
   try{
     const now=new Date().toISOString();
@@ -3396,7 +3409,7 @@ async function confirmLegacyGradeImport(){
       }
     }
     if(Object.keys(enrollmentUpdates).length) await firebase.database().ref('/').update(enrollmentUpdates);
-    if(imported.length) await saveActivityLog({action:'استرداد درجات النظام السابق',targetType:'legacy_grade_import',targetKey:'legacy_grade_import',targetLabel:'ملفات درجات سابقة',details:`تم استرداد ${imported.length} مقرر مجتاز من ${new Set(imported.map(row=>row.sourceName)).size} طالب، وتخطي ${skipped.length} سجل لحماية الدرجات المحفوظة.`});
+    if(imported.length) await saveActivityLog({action:'استيراد درجات Excel',targetType:'legacy_grade_import',targetKey:'legacy_grade_import',targetLabel:'ملفات درجات Excel',details:`تم استيراد ${imported.length} مقرر من صفحات Excel لـ ${new Set(imported.map(row=>row.sourceName)).size} طالب، وتخطي ${skipped.length} سجل لحماية الدرجات المحفوظة.`});
     await loadAllFromFirebase();
     renderLegacyGradeImportPreview(new Set(legacyGradeImportRows.map(row=>row.fileName)).size);
     showToast(`✅ تم استرداد ${imported.length} مقرر، وتخطي ${skipped.length} محفوظ مسبقًا`);
