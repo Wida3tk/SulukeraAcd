@@ -468,6 +468,7 @@ let currentWeek = 1;
 let currentSubjectKey = null;
 let currentBatchName = null;
 let currentAppTab = 'home';
+let lecturerStudentSortMode = 'current';
 
 const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:80 };
 const STUDENT_MOTIVATIONS = [
@@ -1971,7 +1972,16 @@ function renderGradeInput(subjectKey, batchName){
       <div class="week-tab" onclick="selectWeek(0,this)">📝 اختبار نهائي</div>
     </div>
     <div class="card">
-      <div class="card-title" id="gradeTableTitle">إدخال درجات أسبوع 1 — ${subj.name}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+        <div class="card-title" id="gradeTableTitle" style="margin:0">إدخال درجات أسبوع 1 — ${subj.name}</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--muted)">
+          ترتيب الطلاب
+          <select onchange="applyLecturerStudentSort(this.value)" style="min-width:150px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:white;font-family:inherit">
+            <option value="current" ${lecturerStudentSortMode==='current'?'selected':''}>الترتيب الحالي</option>
+            <option value="alphabetical" ${lecturerStudentSortMode==='alphabetical'?'selected':''}>أبجديًا</option>
+          </select>
+        </label>
+      </div>
       <div style="overflow-x:auto"><table id="gradeTable">
         <thead id="gradeTableHead"></thead>
         <tbody id="gradeTableBody"></tbody>
@@ -1988,6 +1998,25 @@ function renderGradeInput(subjectKey, batchName){
 
   document.getElementById('lecSubjContent').innerHTML=html;
   renderWeekTable(1);
+  applyLecturerStudentSort(lecturerStudentSortMode);
+}
+
+function getLecturerStudentSortName(studentKey){
+  const student=dbData.students?.[studentKey]||{};
+  return [student.firstName,student.midName,student.lastName].filter(Boolean).join(' ').trim();
+}
+function sortLecturerTableRows(tbody,mode){
+  if(!tbody) return;
+  const rows=Array.from(tbody.querySelectorAll('tr[data-stkey]'));
+  rows.sort((a,b)=>mode==='alphabetical'
+    ? getLecturerStudentSortName(a.dataset.stkey).localeCompare(getLecturerStudentSortName(b.dataset.stkey),'ar',{sensitivity:'base'})
+    : Number(a.dataset.originalIndex)-Number(b.dataset.originalIndex));
+  rows.forEach(row=>tbody.appendChild(row));
+}
+function applyLecturerStudentSort(mode){
+  lecturerStudentSortMode=mode==='alphabetical'?'alphabetical':'current';
+  sortLecturerTableRows(document.getElementById('gradeTableBody'),lecturerStudentSortMode);
+  sortLecturerTableRows(document.getElementById('summaryTableBody'),lecturerStudentSortMode);
 }
 
 function selectWeek(w,btn){
@@ -2014,10 +2043,10 @@ function renderWeekTable(w){
 
   if(isExam){
     thead.innerHTML=`<tr><th>الطالب</th><th>الرقم</th><th>الاختبار (/${settings.exam})</th><th>المجموع</th><th>تصنيف</th><th>حالة</th></tr>`;
-    tbody.innerHTML=students.map(st=>{
+    tbody.innerHTML=students.map((st,rowIndex)=>{
       const g=getGrade_data(st.fbKey,currentSubjectKey);
       const tot=g?calcTotal(g):0; const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
-      return `<tr>
+      return `<tr data-stkey="${st.fbKey}" data-original-index="${rowIndex}">
         <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
         <td class="mono">${st.id}</td>
         <td><input class="grade-input" type="number" min="0" max="${settings.exam}"
@@ -2031,11 +2060,11 @@ function renderWeekTable(w){
     thead.innerHTML=`<tr><th>الطالب</th><th>الرقم</th>
       <th>حضور (/${settings.attend})</th><th>واجبات (/${settings.hw})</th><th>مناقشة (/${settings.disc})</th>
       <th>مجموع الأسبوع</th><th>الكلي</th></tr>`;
-    tbody.innerHTML=students.map(st=>{
+    tbody.innerHTML=students.map((st,rowIndex)=>{
       const g=getGrade_data(st.fbKey,currentSubjectKey);
       const wa=g?.[`w${w}_attend`]||0, wh=g?.[`w${w}_hw`]||0, wd=g?.[`w${w}_disc`]||0;
       const wt=wa+wh+wd; const tot=g?calcTotal(g):0;
-      return `<tr>
+      return `<tr data-stkey="${st.fbKey}" data-original-index="${rowIndex}">
         <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
         <td class="mono">${st.id}</td>
         <td><input class="grade-input" type="number" min="0" max="${settings.attend}"
@@ -2048,17 +2077,18 @@ function renderWeekTable(w){
       </tr>`;
     }).join('');
   }
+  applyLecturerStudentSort(lecturerStudentSortMode);
 }
 
 
 function buildSummaryHTML(subjectKey, students){
   return `<table>
     <thead><tr><th>الطالب</th><th>الرقم</th><th>المجموع</th><th>تصنيف</th><th>حالة</th></tr></thead>
-    <tbody>
-      ${students.map(st=>{
+    <tbody id="summaryTableBody">
+      ${students.map((st,rowIndex)=>{
         const g=getGrade_data(st.fbKey,subjectKey);
         const tot=g?calcTotal(g):0; const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
-        return `<tr>
+        return `<tr data-stkey="${st.fbKey}" data-original-index="${rowIndex}">
           <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
           <td class="mono">${st.id}</td>
           <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
@@ -2078,6 +2108,7 @@ function renderSummaryTable(subjectKey){
     ? all.filter(s=>normalizeBatchName(s.batch)===normalizeBatchName(currentBatchName))
     : all;
   el.innerHTML = buildSummaryHTML(subjectKey, students);
+  applyLecturerStudentSort(lecturerStudentSortMode);
 }
 
 async function saveGrades(){
