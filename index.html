@@ -4008,23 +4008,9 @@ function renderStudentAdminSheet(stdIdx, st){
         ${statusField('studentSheet_completionStatus','حالة الإنجاز',sheet.completionStatus||'in_progress',completionStatusOptions,sheet.completionStatusNotes,'ملاحظات الإنجاز')}
         ${statusField('studentSheet_certificateStatus','حالة الشهادة',sheet.certificateStatus||'not_eligible',certificateStatusOptions,sheet.certificateStatusNotes,'ملاحظات الشهادة')}
       </div>
-      <div style="margin-top:14px;background:#fff8e8;border:1px solid #f0cf85;border-radius:18px;padding:18px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><div><div style="font-size:15px;font-weight:900;color:#805500">استثناء الاختبارات</div><div style="font-size:11px;color:#8a6a27;margin-top:4px">تظهر للمحاضرين حالة الاستثناء فقط دون التفاصيل الطبية الداخلية.</div></div><span class="badge ${examException.active?'badge-warn':'badge-student'}">${examException.active?'استثناء نشط':'لا يوجد استثناء'}</span></div>
-        <div class="form-row">
-          <div class="form-group"><label>الحالة</label><select id="studentExamException_active"><option value="false" ${!examException.active?'selected':''}>لا يوجد استثناء نشط</option><option value="true" ${examException.active?'selected':''}>استثناء معتمد</option></select></div>
-          <div class="form-group"><label>نوع العذر</label><select id="studentExamException_type"><option value="medical" ${examException.type==='medical'?'selected':''}>عذر طبي</option><option value="family" ${examException.type==='family'?'selected':''}>ظرف عائلي</option><option value="technical" ${examException.type==='technical'?'selected':''}>خلل تقني</option><option value="other" ${examException.type==='other'?'selected':''}>ظرف آخر</option></select></div>
-          <div class="form-group"><label>نطاق الاستثناء</label><select id="studentExamException_subjectKey"><option value="">جميع اختبارات الدفعة</option>${subjects.filter(subject=>subject.students.includes(stdIdx)).map(subject=>`<option value="${subject._fbKey}" ${examException.subjectKey===subject._fbKey?'selected':''}>${escapeHtml(subject.name)}</option>`).join('')}</select></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>التأجيل من</label><input type="date" id="studentExamException_from" value="${escapeHtml(examException.fromDate||'')}"></div>
-          <div class="form-group"><label>الموعد البديل/حتى</label><input type="date" id="studentExamException_until" value="${escapeHtml(examException.untilDate||'')}"></div>
-          <div class="form-group"><label>المستند</label><select id="studentExamException_documentReceived"><option value="false" ${!examException.documentReceived?'selected':''}>لم يُسجل الاستلام</option><option value="true" ${examException.documentReceived?'selected':''}>تم استلام المستند</option></select></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>اسم/مرجع المستند الداخلي</label><input id="studentExamException_documentRef" value="${escapeHtml(examException.documentRef||'')}" placeholder="مثال: تقرير طبي 2026-09-18"></div>
-          <div class="form-group"><label>رسالة آمنة للمحاضر</label><input id="studentExamException_lecturerMessage" value="${escapeHtml(examException.lecturerMessage||'لدى الطالبة استثناء اختبارات معتمد من الإدارة.')}" placeholder="لا تضعي تفاصيل طبية"></div>
-        </div>
-        <div class="form-group"><label>تفاصيل داخلية للإدارة فقط</label><textarea id="studentExamException_internalNotes" style="min-height:90px" placeholder="تفاصيل العذر والمتابعة الداخلية">${escapeHtml(examException.internalNotes||'')}</textarea></div>
+      <div style="margin-top:14px;background:#fff8e8;border:1px solid #f0cf85;border-radius:16px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-warning" onclick="openStudentExamExceptionModal(${stdIdx})">⚠️ الاستثناءات</button><span class="badge ${examException.active?'badge-warn':'badge-student'}">${examException.active?'استثناء اختبارات نشط':'لا يوجد استثناء'}</span>${examException.active&&examException.untilDate?`<span style="font-size:11px;color:#805500">حتى ${escapeHtml(examException.untilDate)}</span>`:''}</div>
+        <div style="font-size:11px;color:#8a6a27">تظهر التفاصيل في مربع مستقل، ولا تُعرض المعلومات الطبية للمحاضرين.</div>
       </div>
       <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-top:14px;">
         <div style="background:#fff;border:1px solid #d9e4ff;border-radius:18px;padding:18px;">
@@ -4044,6 +4030,18 @@ function renderStudentAdminSheet(stdIdx, st){
       </div>
     </div>`;
 }
+function openStudentExamExceptionModal(stdIdx){
+  const st=students[stdIdx]; if(!st?._fbKey) return showToast('تعذر تحديد المتدرب');
+  const exception=examExceptionsData[st._fbKey]||{};
+  let overlay=document.getElementById('studentExamExceptionModal');
+  if(!overlay){overlay=document.createElement('div');overlay.className='modal-overlay';overlay.id='studentExamExceptionModal';document.body.appendChild(overlay);}
+  overlay.innerHTML=`<div class="modal" style="width:900px"><h3>⚠️ استثناءات الاختبارات — ${escapeHtml(getStudentFullName(st))}</h3><div class="alert alert-warn">هذه التفاصيل داخلية للإدارة. يظهر للمحاضرين وجود الاستثناء والرسالة الآمنة فقط، دون التفاصيل الطبية.</div><div class="form-row"><div class="form-group"><label>الحالة</label><select id="studentExamException_active"><option value="false" ${!exception.active?'selected':''}>لا يوجد استثناء نشط</option><option value="true" ${exception.active?'selected':''}>استثناء معتمد</option></select></div><div class="form-group"><label>نوع العذر</label><select id="studentExamException_type"><option value="medical" ${exception.type==='medical'?'selected':''}>عذر طبي</option><option value="family" ${exception.type==='family'?'selected':''}>ظرف عائلي</option><option value="technical" ${exception.type==='technical'?'selected':''}>خلل تقني</option><option value="other" ${exception.type==='other'?'selected':''}>ظرف آخر</option></select></div><div class="form-group"><label>نطاق الاستثناء</label><select id="studentExamException_subjectKey"><option value="">جميع اختبارات الدفعة</option>${subjects.filter(subject=>subject.students.includes(stdIdx)).map(subject=>`<option value="${subject._fbKey}" ${exception.subjectKey===subject._fbKey?'selected':''}>${escapeHtml(subject.name)}</option>`).join('')}</select></div></div><div class="form-row"><div class="form-group"><label>التأجيل من</label><input type="date" id="studentExamException_from" value="${escapeHtml(exception.fromDate||'')}"></div><div class="form-group"><label>الموعد البديل/حتى</label><input type="date" id="studentExamException_until" value="${escapeHtml(exception.untilDate||'')}"></div><div class="form-group"><label>المستند</label><select id="studentExamException_documentReceived"><option value="false" ${!exception.documentReceived?'selected':''}>لم يُسجل الاستلام</option><option value="true" ${exception.documentReceived?'selected':''}>تم استلام المستند</option></select></div></div><div class="form-row"><div class="form-group"><label>اسم/مرجع المستند الداخلي</label><input id="studentExamException_documentRef" value="${escapeHtml(exception.documentRef||'')}" placeholder="مثال: تقرير طبي 2026-09-18"></div><div class="form-group"><label>رسالة آمنة للمحاضر</label><input id="studentExamException_lecturerMessage" value="${escapeHtml(exception.lecturerMessage||'لدى الطالبة استثناء اختبارات معتمد من الإدارة.')}" placeholder="لا تضعي تفاصيل طبية"></div></div><div class="form-group"><label>تفاصيل داخلية للإدارة فقط</label><textarea id="studentExamException_internalNotes" style="min-height:110px" placeholder="تفاصيل العذر والمتابعة الداخلية">${escapeHtml(exception.internalNotes||'')}</textarea></div><div class="modal-actions"><button class="btn btn-primary" onclick="saveStudentExamExceptionModal(${stdIdx})">حفظ الاستثناء</button><button class="btn" onclick="closeModal('studentExamExceptionModal')">إلغاء</button></div></div>`;
+  overlay.classList.add('open');
+}
+async function saveStudentExamExceptionModal(stdIdx){
+  const saved=await saveStudentAdminSheetFromProfile(stdIdx);
+  if(saved){closeModal('studentExamExceptionModal');renderStudentProfile(stdIdx);}
+}
 async function saveStudentAdminSheetFromProfile(stdIdx){
   const st=students[stdIdx];
   if(!st?._fbKey) return showToast('تعذر تحديد المتدرب');
@@ -4060,8 +4058,9 @@ async function saveStudentAdminSheetFromProfile(stdIdx){
     updatedAt:new Date().toISOString(),
     updatedBy:currentUser?.username||currentUser?.name||'system'
   };
+  const exceptionForm=document.getElementById('studentExamException_active');
   const subjectKey=document.getElementById('studentExamException_subjectKey')?.value||'';
-  const exceptionPayload={
+  const exceptionPayload=exceptionForm?{
     studentKey:st._fbKey,
     active:document.getElementById('studentExamException_active')?.value==='true',
     type:document.getElementById('studentExamException_type')?.value||'medical',
@@ -4075,23 +4074,27 @@ async function saveStudentAdminSheetFromProfile(stdIdx){
     internalNotes:document.getElementById('studentExamException_internalNotes')?.value.trim()||'',
     updatedAt:new Date().toISOString(),
     updatedBy:currentUser?.username||currentUser?.name||'system'
-  };
+  }:null;
   try{
     await saveStudentAdminSheetToFirebase(payload);
-    await fbRef('studentExamExceptions/'+st._fbKey).set(exceptionPayload);
-    examExceptionsData[st._fbKey]=exceptionPayload;
+    if(exceptionPayload){
+      await fbRef('studentExamExceptions/'+st._fbKey).set(exceptionPayload);
+      examExceptionsData[st._fbKey]=exceptionPayload;
+    }
     await saveActivityLog({
       action:'تحديث بطاقة المتدرب الإدارية',
       targetType:'student_admin_sheet',
       targetKey:st._fbKey,
       targetLabel:getStudentFullName(st),
       studentKey:st._fbKey,
-      details:`تم حفظ البطاقة الإدارية · استثناء الاختبارات: ${exceptionPayload.active?'نشط':'غير نشط'}`
+      details:`تم حفظ البطاقة الإدارية${exceptionPayload?` · استثناء الاختبارات: ${exceptionPayload.active?'نشط':'غير نشط'}`:''}`
     });
     showToast('تم حفظ البطاقة الإدارية');
+    return true;
   }catch(e){
     console.error('saveStudentAdminSheetFromProfile error:',e);
     showToast('تعذر حفظ البطاقة الإدارية');
+    return false;
   }
 }
 function updateStudentGradeEditorResult(){
