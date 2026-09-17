@@ -47,6 +47,11 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;background:var(-
 .nav-item.active{background:linear-gradient(135deg,#174de8,#0D40FC);color:white;font-weight:800;border-color:rgba(133,231,255,.65);box-shadow:0 7px 16px rgba(0,0,0,.18),inset 0 1px rgba(255,255,255,.16);}
 .nav-icon{font-size:15px;width:24px;height:24px;display:grid;place-items:center;text-align:center;border-radius:7px;background:rgba(255,255,255,.08);}
 .nav-item.active .nav-icon{background:rgba(255,255,255,.17);}
+.nav-count-badge{margin-right:auto;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#e33b2f;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;box-shadow:0 3px 8px rgba(227,59,47,.35);}
+.request-board{display:grid;gap:14px}.request-card{border:1px solid var(--border);border-radius:16px;background:#fff;overflow:hidden;box-shadow:0 5px 16px rgba(0,20,66,.06)}
+.request-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px 16px;background:#f8faff;border-bottom:1px solid var(--border)}
+.request-card-body{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(240px,.75fr);gap:16px;padding:16px}.request-card-actions{display:flex;gap:7px;flex-wrap:wrap;padding:12px 16px;background:#fbfcff;border-top:1px solid var(--border)}
+@media(max-width:780px){.request-card-body{grid-template-columns:1fr}}
 .sidebar-footer{padding:.85rem 1.15rem;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.1);}
 .btn-logout{font-size:11px;color:rgba(238,245,255,.75);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:7px;padding:5px 12px;cursor:pointer;font-family:inherit;}
 .btn-logout:hover{color:white;border-color:#55D7FF;background:rgba(85,215,255,.12);}
@@ -2257,8 +2262,18 @@ function renderNav() {
   const menu=document.getElementById('navMenu');
   menu.innerHTML=(navConfig[currentUser.role]||[]).map((item,idx)=>
     `<div class="nav-item ${idx===0?'active':''}" data-page-id="${item.id}" onclick="navTo('${item.id}',this)">
-      <span class="nav-icon">${item.icon}</span>${item.label}</div>`
+      <span class="nav-icon">${item.icon}</span>${item.label}${item.id==='alerts'&&getPendingStudentRequestCount()?`<span class="nav-count-badge" id="studentRequestsNavBadge">${getPendingStudentRequestCount()}</span>`:''}</div>`
   ).join('');
+}
+function getPendingStudentRequestCount(){
+  return studentRequestsData.filter(request=>!request.status||['pending','returned_to_admin'].includes(request.status)).length;
+}
+function updateStudentRequestsNavBadge(){
+  const item=document.querySelector('.nav-item[data-page-id="alerts"]');
+  if(!item) return;
+  item.querySelector('#studentRequestsNavBadge')?.remove();
+  const count=getPendingStudentRequestCount();
+  if(count) item.insertAdjacentHTML('beforeend',`<span class="nav-count-badge" id="studentRequestsNavBadge">${count}</span>`);
 }
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',academicadvisor:'المرشد الأكاديمي',
@@ -7170,6 +7185,9 @@ function renderAlertsPage(){
       const studentIdx = students.findIndex(student=>student._fbKey===request.studentKey);
       const student = studentIdx >= 0 ? students[studentIdx] : null;
       return {...request, studentIdx, student, statusMeta:getStudentRequestStatusMeta(request.status)};
+    }).sort((a,b)=>{
+      const priority=status=>!status||['pending','returned_to_admin'].includes(status)?0:status==='awaiting_lecturer_review'?1:status==='approved'?2:3;
+      return priority(a.status)-priority(b.status)||(b.createdAt||'').localeCompare(a.createdAt||'');
     });
     const pendingCount = requests.filter(request=>!request.status || request.status==='pending' || request.status==='returned_to_admin').length;
     const awaitingLecturerCount = requests.filter(request=>request.status==='awaiting_lecturer_review').length;
@@ -7189,25 +7207,11 @@ function renderAlertsPage(){
           <span class="badge badge-fail">مرفوضة: ${rejectedCount}</span>
           ${dueExamReturns.length?`<span class="badge badge-warn">حان فتح الاختبارات: ${dueExamReturns.length}</span>`:''}
         </div>
-        <div class="table-wrap"><table>
-          <thead><tr><th>الطالب</th><th>الدفعة</th><th>نوع الطلب</th><th>التفاصيل</th><th>ملاحظة الإدارة</th><th>تاريخ الرفع</th><th>الحالة</th><th>إجراء</th></tr></thead>
-          <tbody>${requests.map(request=>`<tr>
-            <td><strong>${request.student ? getStudentFullName(request.student) : 'طالب غير مرتبط'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.student?.id || '—'}</div></td>
-            <td><span class="badge badge-student">${request.student?.batch || '—'}</span></td>
-            <td>${getStudentRequestTypeLabel(request.type)}${request.subjectName?`<div style="font-size:11px;color:var(--primary);margin-top:4px">المقرر: ${escapeHtml(request.subjectName)}</div>`:''}${request.returnDate?`<div style="font-size:11px;color:${request.returnDate<=todayIso?'var(--danger)':'var(--primary)'};margin-top:4px">تاريخ العودة: ${escapeHtml(request.returnDate)}${request.status==='approved'&&request.returnDate<=todayIso?' · حان فتح الاختبار':''}</div>`:''}</td>
-            <td style="min-width:260px"><strong>${request.title || '—'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.details || '—'}</div>${request.lecturerNote?`<div style="font-size:11px;color:var(--primary-dark);margin-top:7px">ملاحظة عضو هيئة التدريس: ${escapeHtml(request.lecturerNote)}</div>`:''}</td>
-            <td style="min-width:230px">
-              <textarea id="${getRequestAdminNoteInputId(request._fbKey)}" placeholder="اكتبي ملاحظة تظهر للطالب عند مراجعة الطلب" style="width:100%;min-height:84px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;">${request.adminNote || ''}</textarea>
-              ${request.reviewedAt?`<div style="font-size:10px;color:var(--text-muted);margin-top:6px">آخر مراجعة: ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')} ${request.reviewedBy?`· ${request.reviewedBy}`:''}</div>`:''}
-            </td>
-            <td>${request.createdAt ? new Date(request.createdAt).toLocaleDateString('ar-SA') : '—'}</td>
-            <td><span class="badge ${request.statusMeta.className}">${request.statusMeta.label}</span></td>
-            <td style="display:flex;gap:4px;flex-wrap:wrap;">
-              ${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">ملف الطالب</button>`:''}
-              ${request.type==='grade_review' ? (request.status==='awaiting_lecturer_review' ? '<span style="font-size:11px;color:var(--text-muted)">بانتظار معالجة عضو هيئة التدريس</span>' : request.status==='completed' ? '<span style="font-size:11px;color:var(--success)">تم اعتماد المراجعة</span>' : `<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة لعضو هيئة التدريس</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض الطلب</button>` ) : request.type==='exam_postponement' ? (request.status==='approved'?`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">فتح الاختبارات</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">إلغاء الاستثناء</button>`:request.status==='completed'?'<span style="font-size:11px;color:var(--success)">تم فتح الاختبارات</span>':`<button class="btn btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول التأجيل</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):`<button class="btn btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">إنجاز</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}
-            </td>
-          </tr>`).join('')}</tbody>
-        </table></div>`;
+        <div class="request-board">${requests.map(request=>`<article class="request-card">
+          <header class="request-card-head"><div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong style="font-size:15px">${escapeHtml(request.student?getStudentFullName(request.student):'طالب غير مرتبط')}</strong><span class="badge badge-student">${escapeHtml(request.student?.batch||'—')}</span><span class="badge ${request.statusMeta.className}">${request.statusMeta.label}</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:5px">${escapeHtml(request.student?.id||'—')} · رُفع في ${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</div></div><div style="font-weight:900;color:var(--primary-dark)">${getStudentRequestTypeLabel(request.type)}</div></header>
+          <div class="request-card-body"><div><div style="font-size:15px;font-weight:900;margin-bottom:7px">${escapeHtml(request.title||'—')}</div><div style="font-size:12px;line-height:1.9;color:var(--text)">${escapeHtml(request.details||'—')}</div>${request.subjectName?`<div style="margin-top:8px"><span class="badge badge-info">المقرر: ${escapeHtml(request.subjectName)}</span></div>`:''}${request.returnDate?`<div style="margin-top:8px;color:${request.returnDate<=todayIso?'var(--danger)':'var(--primary)'};font-weight:800">تاريخ العودة: ${escapeHtml(request.returnDate)}${request.status==='approved'&&request.returnDate<=todayIso?' · حان فتح الاختبار':''}</div>`:''}${request.lecturerNote?`<div class="alert alert-info" style="margin-top:10px">ملاحظة عضو هيئة التدريس: ${escapeHtml(request.lecturerNote)}</div>`:''}</div><div><label style="font-size:11px;font-weight:800;display:block;margin-bottom:6px">ملاحظة تظهر للطالب</label><textarea id="${getRequestAdminNoteInputId(request._fbKey)}" placeholder="اكتبي نتيجة المراجعة أو سبب القرار" style="width:100%;min-height:105px">${escapeHtml(request.adminNote||'')}</textarea>${request.reviewedAt?`<div style="font-size:10px;color:var(--text-muted);margin-top:6px">آخر مراجعة: ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')}${request.reviewedBy?` · ${escapeHtml(request.reviewedBy)}`:''}</div>`:''}</div></div>
+          <footer class="request-card-actions">${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">👤 ملف الطالب</button>`:''}${request.type==='grade_review'?(request.status==='awaiting_lecturer_review'?'<span class="badge badge-admin">بانتظار عضو هيئة التدريس</span>':request.status==='completed'?'<span class="badge badge-pass">تم اعتماد المراجعة</span>':`<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة للمحاضر</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):request.type==='exam_postponement'?(request.status==='approved'?`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">فتح الاختبارات</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">إلغاء الاستثناء</button>`:request.status==='completed'?'<span class="badge badge-pass">تم فتح الاختبارات</span>':`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول التأجيل</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">إنجاز</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}</footer>
+        </article>`).join('')}</div>`;
     }
   }
 }
@@ -7248,6 +7252,7 @@ async function updateStudentRequestStatus(requestKey, status){
     request.reviewedAt = reviewedAt;
     request.reviewedBy = currentUser?.username || currentUser?.id || 'admin';
     Object.assign(request,payload);
+    updateStudentRequestsNavBadge();
     await saveActivityLog({
       action:nextStatus==='awaiting_lecturer_review'?'إحالة طلب مراجعة درجات':'مراجعة طلب طالب',
       targetType:'student_request',
