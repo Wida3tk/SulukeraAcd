@@ -476,6 +476,7 @@ let currentBatchName = null;
 let currentAppTab = 'home';
 let lecturerStudentSortMode = 'current';
 let examSchedulesLiveHandler = null;
+let examExceptionsLiveHandler = null;
 
 const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:80 };
 const STUDENT_MOTIVATIONS = [
@@ -814,11 +815,16 @@ function startExamSchedulesLiveUpdates(){
     if(currentUser.role==='student'&&currentAppTab==='exams') renderStudentExamsTab();
   };
   fbRef('examSchedules').on('value',examSchedulesLiveHandler,error=>console.error('exam schedules live update error',error));
+  examExceptionsLiveHandler=snapshot=>{
+    if(!currentUser) return;
+    dbData.studentExamExceptions=snapshot.exists()?snapshot.val():{};
+    if(currentUser.role==='student'&&currentAppTab==='exams') renderStudentExamsTab();
+  };
+  fbRef('studentExamExceptions').on('value',examExceptionsLiveHandler,error=>console.error('exam exceptions live update error',error));
 }
 function stopExamSchedulesLiveUpdates(){
-  if(!examSchedulesLiveHandler) return;
-  fbRef('examSchedules').off('value',examSchedulesLiveHandler);
-  examSchedulesLiveHandler=null;
+  if(examSchedulesLiveHandler){fbRef('examSchedules').off('value',examSchedulesLiveHandler);examSchedulesLiveHandler=null;}
+  if(examExceptionsLiveHandler){fbRef('studentExamExceptions').off('value',examExceptionsLiveHandler);examExceptionsLiveHandler=null;}
 }
 
 // ══════════════════════════════════════════════
@@ -1061,8 +1067,9 @@ function renderStudentRequestsTab(){
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
       <div class="card-title">📝 رفع طلب جديد</div>
-      <div class="field"><label>نوع الطلب</label><select id="studentRequestType" onchange="toggleStudentGradeReviewSubject()"><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option></select></div>
+      <div class="field"><label>نوع الطلب</label><select id="studentRequestType" onchange="toggleStudentRequestFields()"><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="exam_postponement">طلب تأجيل الاختبارات</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option></select></div>
       <div class="field" id="studentGradeReviewSubjectField" style="display:none"><label>المقرر المطلوب مراجعته</label><select id="studentGradeReviewSubject"><option value="">-- اختر المقرر --</option>${mySubjects.map(subject=>`<option value="${subject.key}">${subject.name}${subject.batch?` — ${subject.batch}`:''}</option>`).join('')}</select></div>
+      <div class="field" id="studentExamReturnDateField" style="display:none"><label>تاريخ العودة المتوقع *</label><input type="date" id="studentExamReturnDate"><div style="font-size:11px;color:var(--muted);margin-top:5px">بعد الموافقة ستبقى الاختبارات مخفية حتى تعيد الإدارة فتحها في تاريخ العودة.</div></div>
       <div class="field"><label>عنوان الطلب</label><input type="text" id="studentRequestTitle" placeholder="اكتب عنوانًا مختصرًا"></div>
       <div class="field"><label>تفاصيل الطلب</label><textarea id="studentRequestDetails" placeholder="اكتب تفاصيل الطلب بوضوح"></textarea></div>
       <div style="margin:0 0 14px;padding:12px 14px;background:#fff8e8;border:1px solid #f0d48b;border-right:4px solid #b35c00;border-radius:10px;font-size:12px;line-height:1.7;color:#5a430d;">
@@ -1074,7 +1081,7 @@ function renderStudentRequestsTab(){
       <div class="card-title">📂 الطلبات السابقة</div>
       ${requests.length?`<div class="table-wrap"><table><thead><tr><th>النوع</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th><th>متابعة الإدارة</th></tr></thead><tbody>${requests.map(request=>`
         <tr>
-          <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='grade_review'?'مراجعة درجات':'دعم أكاديمي'}</td>
+          <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='exam_postponement'?'تأجيل الاختبارات':request.type==='grade_review'?'مراجعة درجات':'دعم أكاديمي'}${request.returnDate?`<div style="font-size:11px;color:var(--primary);margin-top:4px">العودة: ${escapeHtml(request.returnDate)}</div>`:''}</td>
           <td><strong>${request.title||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${request.details||''}</div></td>
           <td>${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</td>
           <td><span class="badge ${getStudentRequestStatusMeta(request.status).className}">${getStudentRequestStatusMeta(request.status).label}</span></td>
@@ -1086,10 +1093,13 @@ function renderStudentRequestsTab(){
         </tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد طلبات مرفوعة حتى الآن</div>'}
     </div>`;
 }
-function toggleStudentGradeReviewSubject(){
-  const isGradeReview=document.getElementById('studentRequestType')?.value==='grade_review';
+function toggleStudentRequestFields(){
+  const type=document.getElementById('studentRequestType')?.value;
+  const isGradeReview=type==='grade_review';
   const field=document.getElementById('studentGradeReviewSubjectField');
   if(field) field.style.display=isGradeReview?'block':'none';
+  const returnDateField=document.getElementById('studentExamReturnDateField');
+  if(returnDateField) returnDateField.style.display=type==='exam_postponement'?'block':'none';
 }
 
 function renderStudentPoliciesTab(){
@@ -1192,9 +1202,11 @@ async function submitStudentRequest(){
   const titleInput=document.getElementById('studentRequestTitle')?.value.trim();
   const title=type==='grade_review'&&!titleInput&&subject ? `طلب مراجعة درجات: ${subject.name}` : titleInput;
   const details = document.getElementById('studentRequestDetails')?.value.trim();
+  const returnDate=type==='exam_postponement'?document.getElementById('studentExamReturnDate')?.value||'':'';
   if(type==='grade_review'&&!subject) return toast('يرجى اختيار المقرر المطلوب مراجعته');
+  if(type==='exam_postponement'&&!returnDate) return toast('يرجى تحديد تاريخ العودة المتوقع');
   if(!title || !details) return toast('يرجى تعبئة عنوان الطلب وتفاصيله');
-  const payload = { studentKey: currentUser.fbKey, type, title, details, subjectKey:subject?.key||'', subjectName:subject?.name||'', status:'pending', adminNote:'', lecturerNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
+  const payload = { studentKey: currentUser.fbKey, type, title, details, returnDate, subjectKey:subject?.key||'', subjectName:subject?.name||'', status:'pending', adminNote:'', lecturerNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
   const requestKey = 'req_'+Date.now();
   await fbRef('studentRequests/'+requestKey).set(payload);
   if(!dbData.studentRequests) dbData.studentRequests = {};
@@ -1484,6 +1496,7 @@ function getNextUpcomingSlot(slots){
 }
 function getStudentExamSchedules(){
   if(!currentUser?.fbKey) return [];
+  if(dbData.studentExamExceptions?.[currentUser.fbKey]?.active) return [];
   const student=currentUser.data||{};
   const subjectKeys=new Set(getStudentSubjects(currentUser.fbKey).map(subject=>subject.key));
   return Object.entries(dbData.examSchedules||{})
@@ -1501,6 +1514,7 @@ function formatExamDate(dateValue){
 }
 function renderStudentExamsTab(){
   const exams=getStudentExamSchedules();
+  const exception=dbData.studentExamExceptions?.[currentUser.fbKey];
   document.getElementById('mainContent').innerHTML=`
     <div class="exam-motivation">
       <div style="font-size:22px;font-weight:900;margin-bottom:6px">كل التوفيق لكم! 🌟</div>
@@ -1509,7 +1523,7 @@ function renderStudentExamsTab(){
     <div class="card">
       <div class="card-title">📝 جدول اختباراتي</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">تظهر هنا اختبارات مقرراتك وفق دفعتك وتوقيت المملكة العربية السعودية.</div>
-      ${exams.length?`<div class="exam-schedule-list">${exams.map(exam=>{const formatted=formatExamDate(exam.date);return `
+      ${exception?.active?`<div class="alert alert-warn"><strong>يوجد تأجيل اختبارات معتمد.</strong><br>اختباراتك مخفية مؤقتًا حتى تعتمد الإدارة إعادة فتحها${exception.untilDate?` في تاريخ العودة ${escapeHtml(exception.untilDate)}`:''}.</div>`:exams.length?`<div class="exam-schedule-list">${exams.map(exam=>{const formatted=formatExamDate(exam.date);return `
         <div class="exam-schedule-card">
           <div class="exam-date"><strong style="font-size:17px">${formatted.day}</strong><span style="font-size:12px;margin-top:5px">${formatted.date}</span></div>
           <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span>${exam.termLabel?` <span class="badge badge-student">${escapeHtml(exam.termLabel)}</span>`:''}</div></div>

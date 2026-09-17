@@ -1667,6 +1667,7 @@ function getStudentRequestTypeLabel(type){
   return ({
     leave:'طلب إجازة',
     postpone:'طلب تأجيل',
+    exam_postponement:'طلب تأجيل الاختبارات',
     grade_review:'طلب مراجعة درجات',
     academic_support:'طلب دعم أكاديمي'
   })[type] || 'طلب عام';
@@ -2466,7 +2467,10 @@ function renderAdminDashboard(){
     !item.student.financeSnapshot && (!item.student.totalAmount || !item.financial.installments.length)
   );
   const unscheduledBatches=batches.filter(item=>item.studentCount>0 && !item.scheduledCount);
+  const todayIso=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
+  const dueExamReturns=Object.values(examExceptionsData||{}).filter(item=>item.active&&item.untilDate&&item.untilDate<=todayIso);
   const actions=[];
+  if(dueExamReturns.length) actions.push({tone:'danger',title:'حان فتح اختبارات مؤجلة',count:dueExamReturns.length,action:"navTo('alerts',null)",detail:'راجعي طلبات تأجيل الاختبارات وافتحيها للطلاب المستحقين.'});
   if(pendingRequests.length) actions.push({tone:'warn',title:'طلبات طلاب بانتظار المراجعة',count:pendingRequests.length,action:"navTo('alerts',null)",detail:'افتح الطلبات واعتمد الإجراء المناسب.'});
   if(advisorFollowUps.length) actions.push({tone:'danger',title:'حالات تحتاج متابعة أكاديمية',count:advisorFollowUps.length,action:"navTo('academicadvisor',null)",detail:'راجِع الحالات المسجلة لدى المرشد الأكاديمي.'});
   if(incompleteStudents.length) actions.push({tone:'info',title:'بطاقات طلاب ناقصة البيانات',count:incompleteStudents.length,action:"navTo('students',null)",detail:'استكمل وسائل التواصل أو بيانات البرنامج والدفعة.'});
@@ -7171,6 +7175,8 @@ function renderAlertsPage(){
     const awaitingLecturerCount = requests.filter(request=>request.status==='awaiting_lecturer_review').length;
     const completedCount = requests.filter(request=>request.status==='approved' || request.status==='completed').length;
     const rejectedCount = requests.filter(request=>request.status==='rejected').length;
+    const todayIso=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
+    const dueExamReturns=requests.filter(request=>request.type==='exam_postponement'&&request.status==='approved'&&request.returnDate&&request.returnDate<=todayIso);
 
     if(!requests.length){
       requestsEl.innerHTML='<div class="alert alert-info">لا توجد طلبات مرفوعة من الطلاب حتى الآن</div>';
@@ -7181,13 +7187,14 @@ function renderAlertsPage(){
           <span class="badge badge-admin">لدى عضو هيئة التدريس: ${awaitingLecturerCount}</span>
           <span class="badge badge-pass">منجزة أو مقبولة: ${completedCount}</span>
           <span class="badge badge-fail">مرفوضة: ${rejectedCount}</span>
+          ${dueExamReturns.length?`<span class="badge badge-warn">حان فتح الاختبارات: ${dueExamReturns.length}</span>`:''}
         </div>
         <div class="table-wrap"><table>
           <thead><tr><th>الطالب</th><th>الدفعة</th><th>نوع الطلب</th><th>التفاصيل</th><th>ملاحظة الإدارة</th><th>تاريخ الرفع</th><th>الحالة</th><th>إجراء</th></tr></thead>
           <tbody>${requests.map(request=>`<tr>
             <td><strong>${request.student ? getStudentFullName(request.student) : 'طالب غير مرتبط'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.student?.id || '—'}</div></td>
             <td><span class="badge badge-student">${request.student?.batch || '—'}</span></td>
-            <td>${getStudentRequestTypeLabel(request.type)}${request.subjectName?`<div style="font-size:11px;color:var(--primary);margin-top:4px">المقرر: ${escapeHtml(request.subjectName)}</div>`:''}</td>
+            <td>${getStudentRequestTypeLabel(request.type)}${request.subjectName?`<div style="font-size:11px;color:var(--primary);margin-top:4px">المقرر: ${escapeHtml(request.subjectName)}</div>`:''}${request.returnDate?`<div style="font-size:11px;color:${request.returnDate<=todayIso?'var(--danger)':'var(--primary)'};margin-top:4px">تاريخ العودة: ${escapeHtml(request.returnDate)}${request.status==='approved'&&request.returnDate<=todayIso?' · حان فتح الاختبار':''}</div>`:''}</td>
             <td style="min-width:260px"><strong>${request.title || '—'}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${request.details || '—'}</div>${request.lecturerNote?`<div style="font-size:11px;color:var(--primary-dark);margin-top:7px">ملاحظة عضو هيئة التدريس: ${escapeHtml(request.lecturerNote)}</div>`:''}</td>
             <td style="min-width:230px">
               <textarea id="${getRequestAdminNoteInputId(request._fbKey)}" placeholder="اكتبي ملاحظة تظهر للطالب عند مراجعة الطلب" style="width:100%;min-height:84px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;">${request.adminNote || ''}</textarea>
@@ -7197,7 +7204,7 @@ function renderAlertsPage(){
             <td><span class="badge ${request.statusMeta.className}">${request.statusMeta.label}</span></td>
             <td style="display:flex;gap:4px;flex-wrap:wrap;">
               ${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">ملف الطالب</button>`:''}
-              ${request.type==='grade_review' ? (request.status==='awaiting_lecturer_review' ? '<span style="font-size:11px;color:var(--text-muted)">بانتظار معالجة عضو هيئة التدريس</span>' : request.status==='completed' ? '<span style="font-size:11px;color:var(--success)">تم اعتماد المراجعة</span>' : `<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة لعضو هيئة التدريس</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض الطلب</button>` ) : `<button class="btn btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">إنجاز</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}
+              ${request.type==='grade_review' ? (request.status==='awaiting_lecturer_review' ? '<span style="font-size:11px;color:var(--text-muted)">بانتظار معالجة عضو هيئة التدريس</span>' : request.status==='completed' ? '<span style="font-size:11px;color:var(--success)">تم اعتماد المراجعة</span>' : `<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة لعضو هيئة التدريس</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض الطلب</button>` ) : request.type==='exam_postponement' ? (request.status==='approved'?`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">فتح الاختبارات</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">إلغاء الاستثناء</button>`:request.status==='completed'?'<span style="font-size:11px;color:var(--success)">تم فتح الاختبارات</span>':`<button class="btn btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول التأجيل</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):`<button class="btn btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">إنجاز</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}
             </td>
           </tr>`).join('')}</tbody>
         </table></div>`;
@@ -7224,6 +7231,18 @@ async function updateStudentRequestStatus(requestKey, status){
       assignedToLecturerBy:nextStatus==='awaiting_lecturer_review' ? (currentUser?.username || currentUser?.id || 'admin') : (request.assignedToLecturerBy||'')
     };
     await fbRef('studentRequests/'+requestKey).update(payload);
+    if(request.type==='exam_postponement'&&request.studentKey){
+      const currentException=examExceptionsData[request.studentKey]||{};
+      if(nextStatus==='approved'){
+        const exceptionPayload={studentKey:request.studentKey,active:true,type:'exam_postponement',subjectKey:'',subjectName:'',fromDate:reviewedAt.slice(0,10),untilDate:request.returnDate||'',documentReceived:false,documentRef:'',lecturerMessage:'لدى الطالب تأجيل اختبارات معتمد من الإدارة.',internalNotes:`طلب الطالب: ${request.details||''}`,sourceRequestKey:requestKey,updatedAt:reviewedAt,updatedBy:currentUser?.username||currentUser?.id||'admin'};
+        await fbRef('studentExamExceptions/'+request.studentKey).set(exceptionPayload);
+        examExceptionsData[request.studentKey]=exceptionPayload;
+      }else if(['completed','rejected'].includes(nextStatus)&&currentException.sourceRequestKey===requestKey){
+        const reopened={...currentException,active:false,reopenedAt:nextStatus==='completed'?reviewedAt:(currentException.reopenedAt||''),updatedAt:reviewedAt,updatedBy:currentUser?.username||currentUser?.id||'admin'};
+        await fbRef('studentExamExceptions/'+request.studentKey).set(reopened);
+        examExceptionsData[request.studentKey]=reopened;
+      }
+    }
     request.status = nextStatus;
     request.adminNote = adminNote;
     request.reviewedAt = reviewedAt;
