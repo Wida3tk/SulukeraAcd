@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>التحقق من إفادة سلوكيرا</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700;800&display=swap');
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f0f4ff;color:#020716;font-family:'IBM Plex Sans Arabic',Tahoma,Arial}.card{width:min(620px,92vw);background:#fff;border:1px solid #d0dcf8;border-radius:18px;padding:28px;box-shadow:0 12px 40px rgba(13,64,252,.12)}.brand{font-size:30px;font-weight:900;color:#0D40FC}.status{margin:24px 0;padding:18px;border-radius:12px;font-weight:800}.loading{background:#eef3ff;color:#1839a8}.draft{background:#fff5e6;color:#8a4b00}.valid{background:#eafaf0;color:#146b35}.invalid{background:#fdf0ef;color:#9b2d22}.row{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #edf1fb}.muted{color:#66708d;font-size:12px}</style>
+</head>
+<body><main class="card"><div class="brand">سلوكيرا</div><div class="muted">خدمة التحقق من الإفادات</div><div id="result" class="status loading">جاري التحقق من الرمز...</div><div id="details"></div></main>
+<script>
+firebase.initializeApp({apiKey:"AIzaSyCbzP7PACrvRfjwGESFhupi1by1f33IM6I",authDomain:"sulukeraacd.firebaseapp.com",databaseURL:"https://sulukeraacd-default-rtdb.firebaseio.com",projectId:"sulukeraacd",storageBucket:"sulukeraacd.firebasestorage.app",messagingSenderId:"373919022309",appId:"1:373919022309:web:64648d54f63c3660cae80c"});
+const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+async function verify(){
+ const code=new URLSearchParams(location.search).get('code')||''; const result=document.getElementById('result'); const details=document.getElementById('details');
+ if(!/^[a-f0-9]{36}$/i.test(code)){result.className='status invalid';result.textContent='رمز التحقق غير صالح.';return}
+ try{
+  const snap=await firebase.database().ref('certificateDrafts/'+code).get();
+  if(!snap.exists()){result.className='status invalid';result.textContent='لم يتم العثور على إفادة بهذا الرمز.';return}
+  const record=snap.val();
+  if(!record.published){result.className='status draft';result.textContent='هذه مسودة تجريبية غير منشورة، ولا تعد إفادة رسمية.';details.innerHTML=`<div class="row"><span>رقم المسودة</span><strong>${escapeHtml(record.certificateNumber)}</strong></div>`;return}
+  result.className='status valid';result.textContent='إفادة صحيحة وصادرة عن سلوكيرا.';
+  details.innerHTML=`<div class="row"><span>رقم الإفادة</span><strong>${escapeHtml(record.certificateNumber)}</strong></div><div class="row"><span>اسم الطالب</span><strong>${escapeHtml(record.studentName)}</strong></div><div class="row"><span>نوع الإفادة</span><strong>${escapeHtml(record.title)}</strong></div><div class="row"><span>تاريخ الإصدار</span><strong>${escapeHtml(record.issuedAt?.slice(0,10)||'—')}</strong></div>`;
+ }catch(e){result.className='status invalid';result.textContent='تعذر التحقق الآن. يرجى المحاولة لاحقًا.';console.error(e)}
+}
+verify();
+</script></body></html>

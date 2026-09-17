@@ -1067,9 +1067,10 @@ function renderStudentRequestsTab(){
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
       <div class="card-title">📝 رفع طلب جديد</div>
-      <div class="field"><label>نوع الطلب</label><select id="studentRequestType" onchange="toggleStudentRequestFields()"><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="exam_postponement">طلب تأجيل الاختبارات</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option></select></div>
+      <div class="field"><label>نوع الطلب</label><select id="studentRequestType" onchange="toggleStudentRequestFields()"><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="exam_postponement">طلب تأجيل الاختبارات</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option><option value="certificate_request">طلب إفادة</option></select></div>
       <div class="field" id="studentGradeReviewSubjectField" style="display:none"><label>المقرر المطلوب مراجعته</label><select id="studentGradeReviewSubject"><option value="">-- اختر المقرر --</option>${mySubjects.map(subject=>`<option value="${subject.key}">${subject.name}${subject.batch?` — ${subject.batch}`:''}</option>`).join('')}</select></div>
       <div class="field" id="studentExamReturnDateField" style="display:none"><label>تاريخ العودة المتوقع *</label><input type="date" id="studentExamReturnDate"><div style="font-size:11px;color:var(--muted);margin-top:5px">بعد الموافقة ستبقى الاختبارات مخفية حتى تعيد الإدارة فتحها في تاريخ العودة.</div></div>
+      <div id="studentCertificateFields" style="display:none"><div class="field"><label>نوع الإفادة *</label><select id="studentCertificateType"><option value="study">إفادة دراسة</option><option value="training">موافقة تدريب أو إشراف</option></select></div><div class="field"><label>الجهة المرسل إليها *</label><input id="studentCertificateRecipient" placeholder="مثال: مركز عبور — فرع الجبيل"></div><div class="field"><label>الغرض من الإفادة</label><input id="studentCertificatePurpose" placeholder="مثال: استكمال متطلبات التدريب العملي"></div><div style="font-size:11px;color:var(--muted);margin:-6px 0 12px">ستراجع الإدارة الصياغة وتجهز الإفادة الرسمية. لا تظهر المسودة غير المعتمدة للطالب.</div></div>
       <div class="field"><label>عنوان الطلب</label><input type="text" id="studentRequestTitle" placeholder="اكتب عنوانًا مختصرًا"></div>
       <div class="field"><label>تفاصيل الطلب</label><textarea id="studentRequestDetails" placeholder="اكتب تفاصيل الطلب بوضوح"></textarea></div>
       <div style="margin:0 0 14px;padding:12px 14px;background:#fff8e8;border:1px solid #f0d48b;border-right:4px solid #b35c00;border-radius:10px;font-size:12px;line-height:1.7;color:#5a430d;">
@@ -1081,7 +1082,7 @@ function renderStudentRequestsTab(){
       <div class="card-title">📂 الطلبات السابقة</div>
       ${requests.length?`<div class="table-wrap"><table><thead><tr><th>النوع</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th><th>متابعة الإدارة</th></tr></thead><tbody>${requests.map(request=>`
         <tr>
-          <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='exam_postponement'?'تأجيل الاختبارات':request.type==='grade_review'?'مراجعة درجات':'دعم أكاديمي'}${request.returnDate?`<div style="font-size:11px;color:var(--primary);margin-top:4px">العودة: ${escapeHtml(request.returnDate)}</div>`:''}</td>
+          <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='exam_postponement'?'تأجيل الاختبارات':request.type==='grade_review'?'مراجعة درجات':request.type==='certificate_request'?'طلب إفادة':'دعم أكاديمي'}${request.returnDate?`<div style="font-size:11px;color:var(--primary);margin-top:4px">العودة: ${escapeHtml(request.returnDate)}</div>`:''}</td>
           <td><strong>${request.title||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${request.details||''}</div></td>
           <td>${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</td>
           <td><span class="badge ${getStudentRequestStatusMeta(request.status).className}">${getStudentRequestStatusMeta(request.status).label}</span></td>
@@ -1100,6 +1101,8 @@ function toggleStudentRequestFields(){
   if(field) field.style.display=isGradeReview?'block':'none';
   const returnDateField=document.getElementById('studentExamReturnDateField');
   if(returnDateField) returnDateField.style.display=type==='exam_postponement'?'block':'none';
+  const certificateFields=document.getElementById('studentCertificateFields');
+  if(certificateFields) certificateFields.style.display=type==='certificate_request'?'block':'none';
 }
 
 function renderStudentPoliciesTab(){
@@ -1203,10 +1206,14 @@ async function submitStudentRequest(){
   const title=type==='grade_review'&&!titleInput&&subject ? `طلب مراجعة درجات: ${subject.name}` : titleInput;
   const details = document.getElementById('studentRequestDetails')?.value.trim();
   const returnDate=type==='exam_postponement'?document.getElementById('studentExamReturnDate')?.value||'':'';
+  const certificateType=type==='certificate_request'?document.getElementById('studentCertificateType')?.value||'study':'';
+  const recipientEntity=type==='certificate_request'?document.getElementById('studentCertificateRecipient')?.value.trim()||'':'';
+  const certificatePurpose=type==='certificate_request'?document.getElementById('studentCertificatePurpose')?.value.trim()||'':'';
   if(type==='grade_review'&&!subject) return toast('يرجى اختيار المقرر المطلوب مراجعته');
   if(type==='exam_postponement'&&!returnDate) return toast('يرجى تحديد تاريخ العودة المتوقع');
+  if(type==='certificate_request'&&!recipientEntity) return toast('يرجى كتابة الجهة المرسل إليها');
   if(!title || !details) return toast('يرجى تعبئة عنوان الطلب وتفاصيله');
-  const payload = { studentKey: currentUser.fbKey, type, title, details, returnDate, subjectKey:subject?.key||'', subjectName:subject?.name||'', status:'pending', adminNote:'', lecturerNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
+  const payload = { studentKey: currentUser.fbKey, type, title, details, returnDate, certificateType, recipientEntity, certificatePurpose, subjectKey:subject?.key||'', subjectName:subject?.name||'', status:'pending', adminNote:'', lecturerNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
   const requestKey = 'req_'+Date.now();
   await fbRef('studentRequests/'+requestKey).set(payload);
   if(!dbData.studentRequests) dbData.studentRequests = {};
@@ -1390,6 +1397,9 @@ function getStudentRequests(){
     .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
 }
 function getStudentRequestStatusMeta(status){
+  if(status==='certificate_draft') return {label:'تجهيز الإفادة لدى الإدارة',className:'badge-info'};
+  if(status==='awaiting_stamp') return {label:'بانتظار الختم',className:'badge-warn'};
+  if(status==='issued') return {label:'تم إصدار الإفادة',className:'badge-pass'};
   if(status==='awaiting_lecturer_review') return {label:'لدى عضو هيئة التدريس',className:'badge-info'};
   if(status==='completed') return {label:'تمت معالجة الطلب',className:'badge-pass'};
   if(status==='returned_to_admin') return {label:'قيد مراجعة الإدارة',className:'badge-warn'};

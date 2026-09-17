@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="vendor/qrcode.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root{--primary:#0D40FC;--primary-dark:#001442;--primary-light:#55D7FF;--neon:#55D7FF;--bg:#f0f4ff;--surface:#ffffff;--border:#d0dcf8;--text:#020716;--text-muted:#4a5580;--text-light:#8090bb;--danger:#c0392b;--danger-light:#fdf0ef;--success:#1a7a3c;--success-light:#eafaf0;--warning:#b35c00;--warning-light:#fff5e6;--radius:10px;--radius-lg:14px;--shadow:0 2px 12px rgba(13,64,252,0.08);--shadow-md:0 4px 20px rgba(13,64,252,0.13);}
@@ -364,6 +365,9 @@ tr:hover td{background:#f8faff;}
 
       <!-- STUDENT PROFILE -->
       <div class="page" id="page-student-profile"><div id="studentProfileContent"></div></div>
+
+      <!-- CERTIFICATE LAB (ADMIN TRIAL ONLY) -->
+      <div class="page" id="page-certificates"><div id="certificateLabContent"></div></div>
 
       <!-- CARDS -->
       <div class="page" id="page-cards">
@@ -1676,10 +1680,14 @@ function getStudentRequestTypeLabel(type){
     postpone:'طلب تأجيل',
     exam_postponement:'طلب تأجيل الاختبارات',
     grade_review:'طلب مراجعة درجات',
-    academic_support:'طلب دعم أكاديمي'
+    academic_support:'طلب دعم أكاديمي',
+    certificate_request:'طلب إفادة'
   })[type] || 'طلب عام';
 }
 function getStudentRequestStatusMeta(status){
+  if(status==='certificate_draft') return {label:'مسودة إفادة تجريبية', className:'badge-info'};
+  if(status==='awaiting_stamp') return {label:'بانتظار الختم', className:'badge-warn'};
+  if(status==='issued') return {label:'تم إصدار الإفادة', className:'badge-pass'};
   if(status==='awaiting_lecturer_review') return {label:'لدى عضو هيئة التدريس', className:'badge-admin'};
   if(status==='returned_to_admin') return {label:'عادت للإدارة', className:'badge-warn'};
   if(status==='approved') return {label:'مقبول', className:'badge-pass'};
@@ -2242,6 +2250,7 @@ const navConfig = {
     {id:'batchplans',icon:'🧩',label:'خطط الدفعات والمقررات'},
     {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
     {id:'alerts',icon:'🔔',label:'التنبيهات'},
+    {id:'certificates',icon:'📄',label:'الإفادات التجريبية'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'exams',icon:'📝',label:'الاختبارات'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'},
@@ -2281,7 +2290,7 @@ const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
   grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', exams:'الاختبارات', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
-  settings:'الإعدادات',mygrades:'بياناتي ودرجاتي',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
+  settings:'الإعدادات',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
   const lecturerSections={lecturercurrent:'lecturer-current-courses',lecturerfinished:'lecturer-finished-courses'};
@@ -2334,6 +2343,7 @@ function refreshPage(p) {
   if (p==='exams') renderExamSchedulesAdmin();
   if (p==='semesters') renderSemestersPage();
   if (p==='alerts') renderAlertsPage();
+  if (p==='certificates') renderCertificateLab();
 }
 
 // ══════════════════════════════════════════════
@@ -7212,10 +7222,88 @@ function renderAlertsPage(){
         <div class="request-board">${requests.map(request=>`<article class="request-card">
           <header class="request-card-head"><div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong style="font-size:15px">${escapeHtml(request.student?getStudentFullName(request.student):'طالب غير مرتبط')}</strong><span class="badge badge-student">${escapeHtml(request.student?.batch||'—')}</span><span class="badge ${request.statusMeta.className}">${request.statusMeta.label}</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:5px">${escapeHtml(request.student?.id||'—')} · رُفع في ${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</div></div><span class="request-type-badge">${getStudentRequestTypeLabel(request.type)}</span></header>
           <div class="request-card-body"><div><div style="font-size:15px;font-weight:900;margin-bottom:7px">${escapeHtml(request.title||'—')}</div><div style="font-size:12px;line-height:1.9;color:var(--text)">${escapeHtml(request.details||'—')}</div>${request.subjectName?`<div style="margin-top:8px"><span class="badge badge-info">المقرر: ${escapeHtml(request.subjectName)}</span></div>`:''}${request.returnDate?`<div style="margin-top:8px;color:${request.returnDate<=todayIso?'var(--danger)':'var(--primary)'};font-weight:800">تاريخ العودة: ${escapeHtml(request.returnDate)}${request.status==='approved'&&request.returnDate<=todayIso?' · حان فتح الاختبار':''}</div>`:''}${request.lecturerNote?`<div class="alert alert-info" style="margin-top:10px">ملاحظة عضو هيئة التدريس: ${escapeHtml(request.lecturerNote)}</div>`:''}</div><div><label style="font-size:12px;font-weight:900;display:block;margin-bottom:7px;color:var(--primary-dark)">ملاحظات الإدارة للطالب</label><textarea class="request-admin-note" id="${getRequestAdminNoteInputId(request._fbKey)}" placeholder="اكتبي ملاحظات الإدارة التي ستظهر للطالب">${escapeHtml(request.adminNote||'')}</textarea>${request.reviewedAt?`<div style="font-size:10px;color:var(--text-muted);margin-top:6px">آخر مراجعة: ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')}${request.reviewedBy?` · ${escapeHtml(request.reviewedBy)}`:''}</div>`:''}</div></div>
-          <footer class="request-card-actions">${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">👤 ملف الطالب</button>`:''}${request.type==='grade_review'?(request.status==='awaiting_lecturer_review'?'<span class="badge badge-admin">بانتظار عضو هيئة التدريس</span>':request.status==='completed'?'<span class="badge badge-pass">تم اعتماد المراجعة</span>':`<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة للمحاضر</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):request.type==='exam_postponement'?(request.status==='approved'?`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">فتح الاختبارات</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">إلغاء الاستثناء</button>`:request.status==='completed'?'<span class="badge badge-pass">تم فتح الاختبارات</span>':`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول التأجيل</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">إنجاز</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}</footer>
+          <footer class="request-card-actions">${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">👤 ملف الطالب</button>`:''}${request.type==='certificate_request'?`<button class="btn btn-primary btn-sm" onclick="openCertificateStudio('${request._fbKey}')">📄 تجهيز الإفادة التجريبية</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`:request.type==='grade_review'?(request.status==='awaiting_lecturer_review'?'<span class="badge badge-admin">بانتظار عضو هيئة التدريس</span>':request.status==='completed'?'<span class="badge badge-pass">تم اعتماد المراجعة</span>':`<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة للمحاضر</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):request.type==='exam_postponement'?(request.status==='approved'?`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">فتح الاختبارات</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">إلغاء الاستثناء</button>`:request.status==='completed'?'<span class="badge badge-pass">تم فتح الاختبارات</span>':`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول التأجيل</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">إنجاز</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}</footer>
         </article>`).join('')}</div>`;
     }
   }
+}
+
+function renderCertificateLab(){
+  const host=document.getElementById('certificateLabContent'); if(!host) return;
+  const sorted=[...students].sort((a,b)=>getStudentFullName(a).localeCompare(getStudentFullName(b),'ar'));
+  host.innerHTML=`<div class="card card-accent"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div class="card-title">📄 مختبر الإفادات</div><div style="font-size:12px;color:var(--text-muted);line-height:1.8">أنشئي إفادة تجريبية، راجعي الصياغة والختم وQR ثم اطبعيها كـPDF. لا تظهر أي نتيجة للطالب من هذه الصفحة.</div></div><span class="badge badge-warn">تجريبي — غير منشور</span></div><div class="alert alert-info" style="margin-top:14px">يُولّد النظام رقمًا ورمز تحقق جديدين تلقائيًا. الختم التجريبي يبقى على جهاز الإدارة ولا يُرفع إلى حسابات الطلاب.</div><div style="display:grid;grid-template-columns:minmax(240px,1.2fr) minmax(190px,.8fr) minmax(220px,1fr);gap:12px;align-items:end;margin-top:16px"><div class="form-group" style="margin:0"><label>اختيار الطالب *</label><select id="certificateLabStudent"><option value="">-- اختر طالبًا --</option>${sorted.map(student=>`<option value="${escapeHtml(student._fbKey)}">${escapeHtml(getStudentFullName(student))} — ${escapeHtml(student.id||'')}</option>`).join('')}</select></div><div class="form-group" style="margin:0"><label>نوع الإفادة</label><select id="certificateLabType"><option value="study">إفادة دراسة</option><option value="training">موافقة تدريب أو إشراف</option></select></div><div class="form-group" style="margin:0"><label>الجهة المرسل إليها</label><input id="certificateLabRecipient" placeholder="إلى من يهمه الأمر"></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn btn-primary" onclick="openStandaloneCertificateStudio()">فتح محرر الإفادة</button><button class="btn" onclick="document.getElementById('certificateLabStudent').value='';document.getElementById('certificateLabRecipient').value=''">مسح الاختيار</button></div></div><div class="card"><div class="card-title">طريقة التجربة</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"><div class="info-item"><div class="info-item-label">1. إعداد المسودة</div><div class="info-item-value" style="font-size:13px">اختيار الطالب والقالب وتعديل النص.</div></div><div class="info-item"><div class="info-item-label">2. الاعتماد التجريبي</div><div class="info-item-value" style="font-size:13px">إضافة اسم المعتمد والختم المحلي.</div></div><div class="info-item"><div class="info-item-label">3. المعاينة</div><div class="info-item-value" style="font-size:13px">اختبار QR والطباعة كـPDF بعلامة تجريبية.</div></div></div></div>`;
+}
+function openStandaloneCertificateStudio(){
+  const studentKey=document.getElementById('certificateLabStudent')?.value||''; const student=students.find(item=>item._fbKey===studentKey);
+  if(!student) return showToast('⚠️ اختاري طالبًا أولًا');
+  const key='trial_'+studentKey; let request=studentRequestsData.find(item=>item._fbKey===key);
+  const values={_fbKey:key,studentKey,type:'certificate_request',certificateType:document.getElementById('certificateLabType')?.value||'study',recipientEntity:document.getElementById('certificateLabRecipient')?.value.trim()||'إلى من يهمه الأمر',title:'تجربة إفادة مستقلة',details:'مسودة أنشأتها الإدارة من مختبر الإفادات',status:'certificate_draft',standaloneTrial:true};
+  if(request) Object.assign(request,values); else studentRequestsData.push(values);
+  openCertificateStudio(key);
+}
+function certificateToken(){
+  const bytes=new Uint8Array(18); crypto.getRandomValues(bytes);
+  return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+}
+function certificateNumber(){
+  const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'}).replaceAll('-','');
+  return `SUL-${day}-${Math.floor(1000+Math.random()*9000)}`;
+}
+function certificateDefaultBody(type,studentName){
+  if(type==='training') return `نفيدكم علمًا بأن ${studentName} ملتحقة حاليًا ببرنامج شهادة تحليل السلوك، والذي يهدف إلى تأهيل المتدربين علميًا ومهنيًا وفق المعايير المعتمدة في مجال تحليل السلوك.\n\nومن متطلبات البرنامج استكمال ساعات الإشراف العملي والعمل مع حالات فعلية داخل المراكز، بما يتيح تطبيق المعارف والمهارات المكتسبة في بيئة مهنية واقعية.\n\nوعليه، نرجو منكم التكرم بالموافقة على إتاحة الفرصة لها لاستكمال تدريبها العملي لديكم.\n\nوتفضلوا بقبول فائق الاحترام والتقدير.`;
+  return `نفيدكم علمًا بأن ${studentName} ملتحقة ببرنامج شهادة تحليل السلوك (QASP-S)، والذي يهدف إلى تأهيل المتدربين علميًا ومهنيًا وفق المعايير المعتمدة في مجال تحليل السلوك.\n\nويتضمن البرنامج دراسة الأسس العلمية والمفاهيم النظرية والتطبيقية في تحليل السلوك، وإجراءات التقييم، وتصميم وتنفيذ البرامج السلوكية، وقياس السلوك وتحليل البيانات، إلى جانب المعايير المهنية والأخلاقية ذات الصلة بالممارسة.\n\nوقد أُصدرت هذه الإفادة بناءً على طلبها، لاستخدامها فيما خُصصت له، دون أدنى مسؤولية.\n\nوتفضلوا بقبول فائق الاحترام والتقدير.`;
+}
+function ensureCertificateStudio(){
+  let overlay=document.getElementById('certificateStudioModal');
+  if(overlay) return overlay;
+  overlay=document.createElement('div'); overlay.className='modal-overlay'; overlay.id='certificateStudioModal';
+  overlay.innerHTML=`<div class="modal" style="width:900px"><h3>📄 استديو الإفادة — نسخة تجريبية</h3><div class="alert alert-warn">هذه المرحلة للإدارة فقط. الحفظ ينشئ مسودة ورقم تحقق وQR، ولا ينشر الإفادة للطالب.</div><input type="hidden" id="certRequestKey"><input type="hidden" id="certToken"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label>نوع الإفادة</label><select id="certType" onchange="refreshCertificateBody()"><option value="study">إفادة دراسة</option><option value="training">موافقة تدريب أو إشراف</option></select></div><div class="form-group"><label>رقم الإفادة</label><input id="certNumber" readonly></div><div class="form-group"><label>الجهة المرسل إليها</label><input id="certRecipient"></div><div class="form-group"><label>عنوان الإفادة</label><input id="certTitle"></div></div><div class="form-group"><label>نص الإفادة — قابل للتعديل</label><textarea id="certBody" style="min-height:230px;line-height:1.9"></textarea></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="form-group"><label>اسم المعتمد</label><input id="certApproverName" placeholder="اسم المسؤول"></div><div class="form-group"><label>صفة المعتمد</label><input id="certApproverTitle" placeholder="مثال: الإدارة الأكاديمية"></div></div><div class="form-group"><label>الختم التجريبي (PNG أو JPG — يحفظ على هذا الجهاز فقط)</label><input type="file" id="certStampFile" accept="image/png,image/jpeg" onchange="saveTrialStamp(this)"><div style="font-size:11px;color:var(--text-muted);margin-top:5px" id="certStampState"></div></div><div class="modal-actions"><button class="btn btn-primary" onclick="saveCertificateDraft()">💾 حفظ المسودة وQR</button><button class="btn btn-success" onclick="previewCertificate()">👁️ معاينة وطباعة</button><button class="btn" onclick="closeModal('certificateStudioModal')">إغلاق</button></div></div>`;
+  document.body.appendChild(overlay); return overlay;
+}
+async function openCertificateStudio(requestKey){
+  const request=studentRequestsData.find(item=>item._fbKey===requestKey); if(!request) return showToast('⚠️ لم يتم العثور على الطلب');
+  const student=students.find(item=>item._fbKey===request.studentKey); if(!student) return showToast('⚠️ الطالب غير مرتبط بالطلب');
+  const overlay=ensureCertificateStudio(); overlay.dataset.standaloneTrial=request.standaloneTrial?'true':'false';
+  let draft={}; try{if(request.certificateVerificationToken){const snap=await fbRef('certificateDrafts/'+request.certificateVerificationToken).get(); draft=snap.val()||{};}}catch(e){console.warn(e)}
+  const fullName=getStudentFullName(student); const type=draft.type||request.certificateType||'study';
+  document.getElementById('certRequestKey').value=requestKey;
+  document.getElementById('certToken').value=draft.verificationToken||certificateToken();
+  document.getElementById('certType').value=type;
+  document.getElementById('certNumber').value=draft.certificateNumber||certificateNumber();
+  document.getElementById('certRecipient').value=draft.recipientEntity||request.recipientEntity||'إلى من يهمه الأمر';
+  document.getElementById('certTitle').value=draft.title||(type==='training'?'خطاب موافقة على التدريب والإشراف':'إفادة دراسة');
+  document.getElementById('certBody').value=draft.body||certificateDefaultBody(type,fullName);
+  document.getElementById('certApproverName').value=draft.approverName||'';
+  document.getElementById('certApproverTitle').value=draft.approverTitle||'الإدارة الأكاديمية';
+  document.getElementById('certStampState').textContent=localStorage.getItem('sulukera_trial_stamp')?'تم تحميل ختم تجريبي على هذا الجهاز.':'لم يتم تحميل ختم تجريبي.';
+  overlay.dataset.studentName=fullName; overlay.dataset.studentId=student.id||''; overlay.classList.add('open');
+}
+function refreshCertificateBody(){
+  const modal=document.getElementById('certificateStudioModal'); const type=document.getElementById('certType')?.value||'study';
+  document.getElementById('certTitle').value=type==='training'?'خطاب موافقة على التدريب والإشراف':'إفادة دراسة';
+  document.getElementById('certBody').value=certificateDefaultBody(type,modal?.dataset.studentName||'الطالبة');
+}
+function saveTrialStamp(input){
+  const file=input.files?.[0]; if(!file) return; if(file.size>600000) return showToast('⚠️ حجم الختم يجب ألا يتجاوز 600 كيلوبايت');
+  const reader=new FileReader(); reader.onload=()=>{localStorage.setItem('sulukera_trial_stamp',reader.result); document.getElementById('certStampState').textContent='تم تحميل ختم تجريبي على هذا الجهاز.'; showToast('✅ تم حفظ الختم التجريبي محليًا');}; reader.readAsDataURL(file);
+}
+function collectCertificateDraft(){
+  const modal=document.getElementById('certificateStudioModal');
+  return {requestKey:document.getElementById('certRequestKey').value,verificationToken:document.getElementById('certToken').value,certificateNumber:document.getElementById('certNumber').value,type:document.getElementById('certType').value,recipientEntity:document.getElementById('certRecipient').value.trim(),title:document.getElementById('certTitle').value.trim(),body:document.getElementById('certBody').value.trim(),approverName:document.getElementById('certApproverName').value.trim(),approverTitle:document.getElementById('certApproverTitle').value.trim(),studentName:modal?.dataset.studentName||'',studentId:modal?.dataset.studentId||'',status:'draft',published:false,updatedAt:new Date().toISOString(),updatedBy:currentUser?.username||currentUser?.id||'admin'};
+}
+async function saveCertificateDraft(){
+  const draft=collectCertificateDraft(); if(!draft.recipientEntity||!draft.title||!draft.body) return showToast('⚠️ أكمل الجهة والعنوان ونص الإفادة');
+  try{await fbRef('certificateDrafts/'+draft.verificationToken).set(draft); const standalone=document.getElementById('certificateStudioModal')?.dataset.standaloneTrial==='true'; if(!standalone){await fbRef('studentRequests/'+draft.requestKey).update({status:'certificate_draft',certificateDraftKey:draft.verificationToken,certificateVerificationToken:draft.verificationToken,certificateNumber:draft.certificateNumber,reviewedAt:draft.updatedAt,reviewedBy:draft.updatedBy});} const req=studentRequestsData.find(x=>x._fbKey===draft.requestKey); if(req) Object.assign(req,{status:'certificate_draft',certificateDraftKey:draft.verificationToken,certificateVerificationToken:draft.verificationToken,certificateNumber:draft.certificateNumber}); showToast('✅ حُفظت المسودة التجريبية وتم توليد QR تلقائيًا'); if(!standalone) renderAlertsPage();}
+  catch(e){console.error(e);showToast('⚠️ تعذر حفظ مسودة الإفادة');}
+}
+function certificateVerificationUrl(token){return new URL(`verify.html?code=${encodeURIComponent(token)}`,location.href).href;}
+function previewCertificate(){
+  const draft=collectCertificateDraft(); if(!draft.body) return showToast('⚠️ أدخل نص الإفادة');
+  const verifyUrl=certificateVerificationUrl(draft.verificationToken); let qrData='';
+  try{const qr=qrcode(0,'M'); qr.addData(verifyUrl); qr.make(); qrData=qr.createDataURL(5,8);}catch(e){console.error(e)}
+  const stamp=localStorage.getItem('sulukera_trial_stamp')||''; const body=escapeHtml(draft.body).replaceAll('\n','<br>');
+  const win=window.open('','_blank'); if(!win) return showToast('⚠️ اسمح بالنوافذ المنبثقة لعرض الإفادة');
+  win.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(draft.certificateNumber)}</title><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Tahoma,Arial;color:#09142f}.page{width:210mm;min-height:297mm;padding:22mm 20mm 18mm;position:relative;background:#fff}.brand{color:#0D40FC;font-size:32px;font-weight:900}.line{height:3px;background:#0D40FC;margin:14px 0 42px}.trial{position:absolute;inset:44% 10%;transform:rotate(-18deg);font-size:48px;color:rgba(192,57,43,.12);font-weight:900;text-align:center}.meta{display:flex;justify-content:space-between;direction:ltr;font-size:12px}.recipient{font-weight:800;margin-bottom:24px}.title{text-align:center;color:#0D40FC;font-size:24px;margin:0 0 28px}.body{font-size:16px;line-height:2.1;text-align:justify}.approval{display:flex;justify-content:space-between;align-items:end;margin-top:34px}.stamp{max-width:120px;max-height:100px;opacity:.85}.verify{display:flex;gap:12px;align-items:center;direction:ltr;font-size:10px}.verify img{width:92px;height:92px}.footer{position:absolute;bottom:14mm;left:20mm;right:20mm;border-top:1px solid #cbd6f2;padding-top:8px;font-size:10px;color:#536080;text-align:center}.no-print{position:fixed;top:12px;left:12px}@media print{.no-print{display:none}}</style></head><body><button class="no-print" onclick="print()">طباعة / حفظ PDF</button><main class="page"><div class="trial">نسخة تجريبية غير منشورة</div><div class="meta"><span>${new Date().toLocaleDateString('en-GB',{timeZone:'Asia/Riyadh'})}</span><span>${escapeHtml(draft.certificateNumber)}</span></div><div class="brand">سلوكيرا</div><div class="line"></div><h1 class="title">${escapeHtml(draft.title)}</h1><div class="recipient">إلى: ${escapeHtml(draft.recipientEntity)}</div><div class="body">${body}</div><div class="approval"><div><strong>${escapeHtml(draft.approverName||'المعتمد')}</strong><br>${escapeHtml(draft.approverTitle||'الإدارة الأكاديمية')}${stamp?`<br><img class="stamp" src="${stamp}">`:''}</div><div class="verify">${qrData?`<img src="${qrData}">`:''}<div>رمز التحقق<br>${escapeHtml(draft.verificationToken.slice(0,12).toUpperCase())}<br>نسخة تجريبية</div></div></div><div class="footer">هذه مسودة تجريبية غير صالحة للاستخدام الرسمي ولا تظهر للطالب.</div></main></body></html>`); win.document.close();
 }
 
 async function updateStudentRequestStatus(requestKey, status){
