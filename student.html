@@ -2025,8 +2025,10 @@ function renderGradeInput(subjectKey, batchName){
     ? allStudents.filter(s=>normalizeBatchName(s.batch)===normalizeBatchName(batchName))
     : allStudents;
   const wkMax = settings.attend+settings.hw+settings.disc;
+  const exceptionStudents=students.map(student=>({student,exception:getActiveExamException(student.fbKey,subjectKey)})).filter(item=>item.exception);
 
   let html=`
+    ${exceptionStudents.length?`<div class="card" style="border-right:5px solid var(--warning);background:#fff9e9"><div style="font-size:15px;font-weight:900;color:#805500;margin-bottom:8px">⚠️ استثناءات اختبارات معتمدة</div>${exceptionStudents.map(item=>`<div style="padding:8px 0;border-bottom:1px solid #f0dfb7"><strong>${escapeHtml(getStudentDisplayName(item.student))}</strong> — ${escapeHtml(item.exception.lecturerMessage||'لدى الطالب استثناء اختبارات معتمد من الإدارة.')}${item.exception.untilDate?` <span class="badge badge-warn">حتى ${escapeHtml(item.exception.untilDate)}</span>`:''}</div>`).join('')}</div>`:''}
     <div class="week-tabs">
       <div class="week-tab active" onclick="selectWeek(1,this)">📅 أسبوع 1</div>
       <div class="week-tab" onclick="selectWeek(2,this)">📅 أسبوع 2</div>
@@ -2067,6 +2069,12 @@ function renderGradeInput(subjectKey, batchName){
 function getLecturerStudentSortName(studentKey){
   const student=dbData.students?.[studentKey]||{};
   return [student.firstName,student.midName,student.lastName].filter(Boolean).join(' ').trim();
+}
+function getActiveExamException(studentKey,subjectKey=''){
+  const exception=dbData.studentExamExceptions?.[studentKey];
+  if(!exception?.active) return null;
+  if(exception.subjectKey&&subjectKey&&exception.subjectKey!==subjectKey) return null;
+  return exception;
 }
 function sortLecturerTableRows(tbody,mode){
   if(!tbody) return;
@@ -2110,7 +2118,7 @@ function renderWeekTable(w){
       const g=getGrade_data(st.fbKey,currentSubjectKey);
       const tot=g?calcTotal(g):0; const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
       return `<tr data-stkey="${st.fbKey}" data-original-index="${rowIndex}">
-        <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
+        <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong>${getActiveExamException(st.fbKey,currentSubjectKey)?'<div><span class="badge badge-warn" style="margin-top:4px">استثناء اختبار</span></div>':''}</td>
         <td class="mono">${st.id}</td>
         <td><input class="grade-input" type="number" min="0" max="${settings.exam}"
           value="${g?.exam??''}" data-stkey="${st.fbKey}" data-field="exam"></td>
@@ -2128,7 +2136,7 @@ function renderWeekTable(w){
       const wa=g?.[`w${w}_attend`]||0, wh=g?.[`w${w}_hw`]||0, wd=g?.[`w${w}_disc`]||0;
       const wt=wa+wh+wd; const tot=g?calcTotal(g):0;
       return `<tr data-stkey="${st.fbKey}" data-original-index="${rowIndex}">
-        <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
+        <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong>${getActiveExamException(st.fbKey,currentSubjectKey)?'<div><span class="badge badge-warn" style="margin-top:4px">استثناء اختبار</span></div>':''}</td>
         <td class="mono">${st.id}</td>
         <td><input class="grade-input" type="number" min="0" max="${settings.attend}"
           value="${wa||''}" data-stkey="${st.fbKey}" data-field="w${w}_attend"></td>
@@ -2152,7 +2160,7 @@ function buildSummaryHTML(subjectKey, students){
         const g=getGrade_data(st.fbKey,subjectKey);
         const tot=g?calcTotal(g):0; const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
         return `<tr data-stkey="${st.fbKey}" data-original-index="${rowIndex}">
-          <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong></td>
+          <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong>${getActiveExamException(st.fbKey,currentSubjectKey)?'<div><span class="badge badge-warn" style="margin-top:4px">استثناء اختبار</span></div>':''}</td>
           <td class="mono">${st.id}</td>
           <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
           <td><span class="badge badge-${display.className}">${gr}</span></td>
