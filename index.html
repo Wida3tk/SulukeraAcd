@@ -48,6 +48,7 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;background:var(-
 .nav-item.active{background:linear-gradient(135deg,#174de8,#0D40FC);color:white;font-weight:800;border-color:rgba(133,231,255,.65);box-shadow:0 7px 16px rgba(0,0,0,.18),inset 0 1px rgba(255,255,255,.16);}
 .nav-icon{font-size:15px;width:24px;height:24px;display:grid;place-items:center;text-align:center;border-radius:7px;background:rgba(255,255,255,.08);}
 .nav-item.active .nav-icon{background:rgba(255,255,255,.17);}
+.nav-group{margin:7px 0;border-top:1px solid rgba(255,255,255,.07);padding-top:6px}.nav-group:first-of-type{border-top:0}.nav-group-head{width:100%;display:flex;align-items:center;gap:8px;padding:8px 11px;border:0;background:transparent;color:#9bb2df;cursor:pointer;font-family:inherit;font-size:10px;font-weight:900;text-align:right;letter-spacing:.15px}.nav-group-head:hover{color:#fff}.nav-group-head-icon{font-size:13px}.nav-group-arrow{margin-right:auto;font-size:10px;transition:transform .18s}.nav-group.open .nav-group-arrow{transform:rotate(180deg)}.nav-group-items{display:none;padding:0 4px 3px}.nav-group.open .nav-group-items{display:block}.nav-group-items .nav-item{padding:8px 10px;margin:2px 0}.nav-group-items .nav-icon{width:22px;height:22px;font-size:14px}.nav-dashboard{margin-bottom:8px}
 .nav-count-badge{margin-right:auto;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#e33b2f;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;box-shadow:0 3px 8px rgba(227,59,47,.35);}
 .request-board{display:grid;gap:14px}.request-card{border:1px solid var(--border);border-radius:16px;background:#fff;overflow:hidden;box-shadow:0 5px 16px rgba(0,20,66,.06)}
 .request-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px 16px;background:#f8faff;border-bottom:1px solid var(--border)}
@@ -2269,12 +2270,51 @@ const navConfig = {
     {id:'mygrades',icon:'📊',label:'بياناتي ودرجاتي'},
   ],
 };
+const adminNavGroups=[
+  {id:'followup',icon:'🔎',label:'الرئيسية والمتابعة',items:[
+    {id:'alerts',icon:'🔔',label:'الطلبات والتنبيهات'},
+    {id:'academicadvisor',icon:'🧭',label:'المرشد الأكاديمي'},
+    {id:'productivity',icon:'⏱️',label:'الساعات الإنتاجية'}
+  ]},
+  {id:'students',icon:'👩‍🎓',label:'الطلاب والسجلات',items:[
+    {id:'students',icon:'👩‍🎓',label:'قائمة الطلاب'},
+    {id:'cards',icon:'🪪',label:'بطاقات الطلاب'},
+    {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
+    {id:'reports',icon:'📋',label:'التقارير الأكاديمية'},
+    {id:'certificates',icon:'📄',label:'الإفادات التجريبية'}
+  ]},
+  {id:'academic',icon:'📚',label:'الدراسة والاختبارات',items:[
+    {id:'subjects',icon:'📖',label:'المواد الدراسية'},
+    {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
+    {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
+    {id:'exams',icon:'📝',label:'الاختبارات'},
+    {id:'batchplans',icon:'🧩',label:'الخطط الدراسية'}
+  ]},
+  {id:'system',icon:'🏛️',label:'الهيكل والنظام',items:[
+    {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
+    {id:'users',icon:'👥',label:'المحاضرون والمستخدمون'},
+    {id:'settings',icon:'⚙️',label:'الإعدادات'}
+  ]}
+];
+function navItemMarkup(item,isActive=false){
+  return `<div class="nav-item ${isActive?'active':''}" data-page-id="${item.id}" onclick="navTo('${item.id}',this)"><span class="nav-icon">${item.icon}</span>${item.label}${item.id==='alerts'&&getPendingStudentRequestCount()?`<span class="nav-count-badge" id="studentRequestsNavBadge">${getPendingStudentRequestCount()}</span>`:''}</div>`;
+}
 function renderNav() {
   const menu=document.getElementById('navMenu');
+  if(currentUser.role==='admin'){
+    const remembered=localStorage.getItem('sulukera_admin_nav_group')||'followup';
+    menu.innerHTML=`${navItemMarkup({id:'dashboard',icon:'🏠',label:'لوحة التحكم'},true).replace('nav-item ','nav-item nav-dashboard ')}${adminNavGroups.map(group=>`<section class="nav-group ${group.id===remembered?'open':''}" data-nav-group="${group.id}"><button class="nav-group-head" onclick="toggleNavGroup('${group.id}')"><span class="nav-group-head-icon">${group.icon}</span><span>${group.label}</span><span class="nav-group-arrow">⌄</span></button><div class="nav-group-items">${group.items.map(item=>navItemMarkup(item)).join('')}</div></section>`).join('')}`;
+    return;
+  }
   menu.innerHTML=(navConfig[currentUser.role]||[]).map((item,idx)=>
-    `<div class="nav-item ${idx===0?'active':''}" data-page-id="${item.id}" onclick="navTo('${item.id}',this)">
-      <span class="nav-icon">${item.icon}</span>${item.label}${item.id==='alerts'&&getPendingStudentRequestCount()?`<span class="nav-count-badge" id="studentRequestsNavBadge">${getPendingStudentRequestCount()}</span>`:''}</div>`
+    navItemMarkup(item,idx===0)
   ).join('');
+}
+function toggleNavGroup(groupId){
+  const target=document.querySelector(`.nav-group[data-nav-group="${groupId}"]`); if(!target) return;
+  const willOpen=!target.classList.contains('open');
+  document.querySelectorAll('.nav-group').forEach(group=>group.classList.remove('open'));
+  if(willOpen){target.classList.add('open');localStorage.setItem('sulukera_admin_nav_group',groupId);}
 }
 function getPendingStudentRequestCount(){
   return studentRequestsData.filter(request=>!request.status||['pending','returned_to_admin'].includes(request.status)).length;
@@ -2287,9 +2327,9 @@ function updateStudentRequestsNavBadge(){
   if(count) item.insertAdjacentHTML('beforeend',`<span class="nav-count-badge" id="studentRequestsNavBadge">${count}</span>`);
 }
 const pageTitles={
-  dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'إدارة الطلاب',academicadvisor:'المرشد الأكاديمي',
-  'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'إدارة الحسابات',
-  grades:'إدخال الدرجات',reports:'التقارير',programs:'البرامج والمسارات والدفعات', batchplans:'خطط الدفعات والمقررات', alerts:'التنبيهات والمتابعة', schedule:'الجدول الأكاديمي', exams:'الاختبارات', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
+  dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
+  'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'المحاضرون والمستخدمون',
+  grades:'إدخال الدرجات',reports:'التقارير الأكاديمية',programs:'البرامج والمسارات والدفعات', batchplans:'الخطط الدراسية', alerts:'الطلبات والتنبيهات', schedule:'الجدول الأكاديمي', exams:'الاختبارات', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
   settings:'الإعدادات',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
@@ -2297,7 +2337,11 @@ function navTo(pageId, el) {
   const resolvedPageId=lecturerSections[pageId]?'dashboard':pageId;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const activeItem=el||document.querySelector(`.nav-item[data-page-id="${pageId}"]`);
-  if (activeItem) activeItem.classList.add('active');
+  if (activeItem) {
+    activeItem.classList.add('active');
+    const group=activeItem.closest('.nav-group');
+    if(group){document.querySelectorAll('.nav-group').forEach(item=>item.classList.remove('open'));group.classList.add('open');localStorage.setItem('sulukera_admin_nav_group',group.dataset.navGroup||'followup');}
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const pg=document.getElementById('page-'+resolvedPageId);
   if (pg) { pg.classList.add('active'); refreshPage(resolvedPageId); }
