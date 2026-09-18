@@ -6082,6 +6082,11 @@ async function publishExamQuestionDraft(){
     const response=await fetch(EXAM_API_BASE+'/admin/exams',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+await firebaseUser.getIdToken()},body:JSON.stringify({scheduleKey:key,batch:exam.batch,subjectKey:exam.subjectKey,subjectName:exam.subjectName,opensAt,closesAt,durationMinutes:120,maxAttempts:2,status:'published',questions:examBuilderQuestions})});
     const result=await response.json();
     if(!response.ok) throw new Error(result.error||'تعذر نشر الاختبار');
+    const activeExceptions=Object.entries(examExceptionsData||{}).filter(([,exception])=>exception?.active&&(!exception.subjectKey||exception.subjectKey===exam.subjectKey));
+    for(const [studentKey,exception] of activeExceptions){
+      const student=students.find(item=>item._fbKey===studentKey);
+      if(student&&sameBatchName(student.batch,exam.batch)) await syncStudentExamExceptionToService(student,exception);
+    }
     saveExamQuestionDraft();
     showToast(`✅ تم نشر الاختبار بأمان · ${result.questionCount} سؤال · ${result.total}/20`);
   }catch(error){ console.error('publish exam error',error); showToast('⚠️ تعذر نشر الاختبار: '+error.message); }
