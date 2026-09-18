@@ -423,6 +423,7 @@ const firebaseConfig = {
   messagingSenderId: "373919022309",
   appId: "1:373919022309:web:64648d54f63c3660cae80c"
 };
+const EXAM_API_BASE='https://sulukera-exams.ro7e-entaa.workers.dev';
 
 function initFB(){
   try{ firebase.initializeApp(firebaseConfig); }
@@ -487,6 +488,9 @@ let lecturerStudentSortMode = 'current';
 let examSchedulesLiveHandler = null;
 let examExceptionsLiveHandler = null;
 let examExceptionsLivePath = 'studentExamExceptions';
+let secureExamList=[];
+let activeSecureAttempt=null;
+let secureExamTimer=null;
 
 const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:80 };
 const STUDENT_MOTIVATIONS = [
@@ -1542,7 +1546,77 @@ function renderStudentExamsTab(){
           <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span>${exam.termLabel?` <span class="badge badge-student">${escapeHtml(exam.termLabel)}</span>`:''}</div></div>
           <div class="exam-time">${to12h(exam.startTime)} إلى ${to12h(exam.endTime)}</div>
         </div>`;}).join('')}</div>`:'<div class="empty">لا توجد اختبارات منشورة لمقرراتك حاليًا.</div>'}
-    </div>`;
+    </div>
+    <div class="card"><div class="card-title">🔐 الاختبارات الإلكترونية</div><div id="secureExamArea"><div class="empty">جاري التحقق من الاختبارات المتاحة...</div></div></div>`;
+  loadSecureStudentExams();
+}
+async function secureExamRequest(path,options={}){
+  const user=firebase.auth().currentUser;
+  if(!user) throw new Error('انتهت جلسة الدخول');
+  const response=await fetch(EXAM_API_BASE+path,{...options,headers:{'Content-Type':'application/json','Authorization':'Bearer '+await user.getIdToken(),...(options.headers||{})}});
+  const result=await response.json();
+  if(!response.ok) throw new Error(result.error||'تعذر الاتصال بنظام الاختبارات');
+  return result;
+}
+async function loadSecureStudentExams(){
+  const host=document.getElementById('secureExamArea');
+  if(!host) return;
+  try{
+    const result=await secureExamRequest('/student/exams');
+    secureExamList=result.exams||[];
+    renderSecureExamCards();
+  }catch(error){console.error('load secure exams error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل الاختبارات الإلكترونية الآن. حدّثي الصفحة أو تواصلي مع الإدارة.</div>';}
+}
+function renderSecureExamCards(){
+  const host=document.getElementById('secureExamArea');
+  if(!host) return;
+  if(!secureExamList.length){host.innerHTML='<div class="empty">لا توجد اختبارات إلكترونية منشورة حاليًا.</div>';return;}
+  const now=Date.now();
+  host.innerHTML=`<div style="display:grid;gap:12px">${secureExamList.map(exam=>{
+    const opens=new Date(exam.opensAt).getTime(),closes=new Date(exam.closesAt).getTime(),isOpen=now>=opens&&now<=closes;
+    const submitted=exam.attempts.filter(attempt=>attempt.status==='submitted');
+    const remaining=Math.max(0,exam.maxAttempts-exam.attempts.length);
+    const best=exam.evaluated?Math.max(...submitted.map(attempt=>Number(attempt.score)||0)):null;
+    return `<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:white"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName)}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">متاح: ${new Date(exam.opensAt).toLocaleString('ar-SA')} — ${new Date(exam.closesAt).toLocaleString('ar-SA')}</div><div style="font-size:12px;color:var(--muted);margin-top:5px">مدة المحاولة ${exam.durationMinutes} دقيقة · ${exam.maxAttempts} محاولات</div></div><span class="badge ${isOpen?'badge-pass':'badge-warn'}">${isOpen?'متاح الآن':now<opens?'لم يبدأ':'انتهى'}</span></div>
+      ${submitted.length?`<div class="alert alert-info" style="margin-top:12px">${submitted.map(attempt=>`المحاولة ${attempt.attemptNo}: ${exam.evaluated?`${attempt.score}/20`:`${attempt.wrongCount} إجابات خاطئة`}`).join(' · ')}${exam.evaluated?`<br><strong>أعلى درجة: ${best}/20</strong>`:''}</div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${isOpen&&remaining>0&&!exam.evaluated?`<button class="btn btn-primary" onclick="startSecureExam('${exam.id}')">${submitted.length?'بدء المحاولة الثانية':'بدء الاختبار'}</button>`:''}${submitted.length&&!exam.evaluated?`<button class="btn btn-success" onclick="renderSecureEvaluation('${exam.id}')">تقييم المقرر وإظهار الدرجة</button>`:''}${remaining===0&&!exam.evaluated?'<span class="badge badge-warn">استُنفدت المحاولات — أكملي التقييم لإظهار الدرجة</span>':''}</div></div>`;
+  }).join('')}</div>`;
+}
+async function startSecureExam(examId){
+  try{
+    loader(true);
+    activeSecureAttempt=await secureExamRequest(`/student/exams/${examId}/start`,{method:'POST',body:'{}'});
+    activeSecureAttempt.examId=examId;
+    renderSecureAttempt();
+  }catch(error){toast('⚠️ '+secureExamErrorMessage(error.message));}
+  finally{loader(false);}
+}
+function secureExamErrorMessage(code){return ({EXAM_NOT_AVAILABLE:'الاختبار غير متاح في هذا الوقت',NO_ATTEMPTS_REMAINING:'لا توجد محاولات متبقية',ATTEMPT_EXPIRED:'انتهى وقت المحاولة',ATTEMPT_ALREADY_SUBMITTED:'تم تسليم هذه المحاولة مسبقًا'})[code]||code;}
+function renderSecureAttempt(){
+  if(!activeSecureAttempt) return;
+  clearInterval(secureExamTimer);
+  document.getElementById('mainContent').innerHTML=`<div class="card" id="secureAttemptPanel" oncopy="return false" oncut="return false" onpaste="return false" oncontextmenu="return false"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="card-title">المحاولة ${activeSecureAttempt.attemptNo}</div><div id="secureExamCountdown" class="badge badge-warn"></div></div><div class="alert alert-warn">لا تغلقي الصفحة أثناء المحاولة. تُحفظ الإجابات عند الضغط على تسليم.</div><form id="secureExamForm"><div style="display:grid;gap:14px">${activeSecureAttempt.questions.map((question,index)=>`<div style="border:1px solid var(--border);border-radius:12px;padding:15px"><div style="font-weight:900;margin-bottom:10px">${index+1}. ${escapeHtml(question.prompt)} <span class="badge badge-info">${question.points} درجة</span></div>${question.choices.map((choice,choiceIndex)=>`<label style="display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer"><input type="radio" name="question_${question.id}" value="${choiceIndex}"><span>${escapeHtml(choice)}</span></label>`).join('')}</div>`).join('')}</div><button type="button" class="btn btn-primary" style="margin-top:16px" onclick="submitSecureAttempt()">تسليم المحاولة</button></form></div>`;
+  const update=()=>{const remaining=Math.max(0,new Date(activeSecureAttempt.expiresAt).getTime()-Date.now()),minutes=Math.floor(remaining/60000),seconds=Math.floor((remaining%60000)/1000),label=document.getElementById('secureExamCountdown');if(label)label.textContent=`الوقت المتبقي ${minutes}:${String(seconds).padStart(2,'0')}`;if(!remaining){clearInterval(secureExamTimer);submitSecureAttempt(true);}};
+  update();secureExamTimer=setInterval(update,1000);
+}
+async function submitSecureAttempt(auto=false){
+  if(!activeSecureAttempt) return;
+  if(!auto&&!confirm('هل أنت متأكد من تسليم هذه المحاولة؟')) return;
+  const answers={};
+  activeSecureAttempt.questions.forEach(question=>{const selected=document.querySelector(`input[name="question_${question.id}"]:checked`);if(selected)answers[question.id]=Number(selected.value);});
+  try{loader(true);const result=await secureExamRequest(`/student/attempts/${activeSecureAttempt.attemptId}/submit`,{method:'POST',body:JSON.stringify({answers})});clearInterval(secureExamTimer);activeSecureAttempt=null;toast(`✅ تم التسليم · ${result.wrongCount} إجابات خاطئة${result.attemptsRemaining?` · متبقي ${result.attemptsRemaining} محاولة`:''}`);renderStudentExamsTab();}
+  catch(error){toast('⚠️ '+secureExamErrorMessage(error.message));}
+  finally{loader(false);}
+}
+function renderSecureEvaluation(examId){
+  document.getElementById('secureExamArea').innerHTML=`<div style="border:1px solid var(--border);border-radius:14px;padding:16px"><div style="font-size:17px;font-weight:900;margin-bottom:12px">تقييم المقرر</div><div class="form-group"><label>وضوح المحتوى</label><select id="evalContent"><option value="">-- اختاري --</option><option value="5">ممتاز</option><option value="4">جيد جدًا</option><option value="3">جيد</option><option value="2">مقبول</option><option value="1">ضعيف</option></select></div><div class="form-group"><label>الاستفادة من المقرر</label><select id="evalBenefit"><option value="">-- اختاري --</option><option value="5">ممتازة</option><option value="4">جيدة جدًا</option><option value="3">جيدة</option><option value="2">مقبولة</option><option value="1">ضعيفة</option></select></div><div class="form-group"><label>ملاحظات إضافية</label><textarea id="evalNotes" rows="3" style="width:100%"></textarea></div><div style="display:flex;gap:8px"><button class="btn btn-success" onclick="submitSecureEvaluation('${examId}')">إرسال التقييم وإظهار الدرجة</button><button class="btn" onclick="renderSecureExamCards()">رجوع</button></div></div>`;
+}
+async function submitSecureEvaluation(examId){
+  const content=document.getElementById('evalContent')?.value,benefit=document.getElementById('evalBenefit')?.value;
+  if(!content||!benefit) return toast('⚠️ أكملي عناصر التقييم');
+  try{loader(true);const result=await secureExamRequest(`/student/exams/${examId}/evaluation`,{method:'POST',body:JSON.stringify({responses:{content:Number(content),benefit:Number(benefit),notes:document.getElementById('evalNotes')?.value.trim()||''}})});toast(`✅ تم التقييم · أعلى درجة ${result.bestScore}/20`);await loadSecureStudentExams();}
+  catch(error){toast('⚠️ '+secureExamErrorMessage(error.message));}
+  finally{loader(false);}
 }
 function renderStudentPortalTab(tab){
   currentAppTab = tab;
