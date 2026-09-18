@@ -1,28 +1,51 @@
 {
   "rules": {
-    ".read": "auth != null && root.child('users').child(auth.uid).exists()",
+    ".read": "auth != null && root.child('users').child(auth.uid).exists() && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || root.child('users').child(auth.uid).child('role').val() === 'finance')",
     ".write": false,
-    "users": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "students": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "grades": { ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')" },
-    "lecturerFollowUps": { ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')" },
+    "users": {
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$uid": { ".read": "auth != null && auth.uid === $uid" }
+    },
+    "students": {
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$studentKey": { ".read": "auth != null && root.child('users').child(auth.uid).child('studentKey').val() === $studentKey" }
+    },
+    "grades": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'student' && query.orderByChild === 'studentKey' && query.equalTo === root.child('users').child(auth.uid).child('studentKey').val()",
+      ".indexOn": ["studentKey"],
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')"
+    },
+    "enrollments": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'student' && query.orderByChild === 'studentKey' && query.equalTo === root.child('users').child(auth.uid).child('studentKey').val()",
+      ".indexOn": ["studentKey"],
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
     "studentRequests": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'student' && query.orderByChild === 'studentKey' && query.equalTo === root.child('users').child(auth.uid).child('studentKey').val()",
+      ".indexOn": ["studentKey"],
       "$requestId": {
         ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || (root.child('users').child(auth.uid).child('role').val() === 'student' && newData.child('studentKey').val() === root.child('users').child(auth.uid).child('studentKey').val()))"
       }
     },
+    "studentExamExceptions": {
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$studentKey": { ".read": "auth != null && root.child('users').child(auth.uid).child('studentKey').val() === $studentKey" }
+    },
+    "lecturerDirectory": {
+      ".read": "auth != null && root.child('users').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+    "settings": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "packages": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "subjects": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "semesters": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "schedule": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "examSchedules": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "programs": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "curriculumTemplate": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "courseCatalog": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "lecturerFollowUps": { ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')" },
     "activityLogs": { ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')" },
-    "subjects": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "enrollments": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "programs": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "packages": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "settings": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "semesters": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "curriculumTemplate": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "courseCatalog": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "schedule": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "examSchedules": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "studentExamExceptions": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "advisorCases": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "studentAdminSheets": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "certificateDrafts": {

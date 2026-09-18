@@ -4514,6 +4514,8 @@ async function saveUser() {
     // 1. احفظ ملف المستخدم المرتبط بحساب Firebase Authentication
     const existingUser = users.find(u=>u.username===username)||{};
     await fbRef('users/'+userFbKey).set({name,username,role,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+    if(role==='lecturer') await fbRef('lecturerDirectory/'+username).set({name,updatedAt:new Date().toISOString()});
+    else await fbRef('lecturerDirectory/'+username).remove();
 
     // 2. حدّث lecturerUserId لكل مادة مباشرة في Firebase (بدون إعادة كتابة كامل السجل)
     if(role==='lecturer'){
@@ -4548,6 +4550,7 @@ async function deleteUser(i) {
   const user=users[i];
   const updates={};
   updates['users/'+(user._fbKey||user.id||user.username)]=null;
+  if(user.username) updates['lecturerDirectory/'+user.username]=null;
   subjects.forEach(s=>{
     if(s._fbKey && [user.username,user.id,user._fbKey].includes(s.lecturerUserId)){
       updates['subjects/'+s._fbKey+'/lecturerUserId']=null;

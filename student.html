@@ -486,6 +486,7 @@ let currentAppTab = 'home';
 let lecturerStudentSortMode = 'current';
 let examSchedulesLiveHandler = null;
 let examExceptionsLiveHandler = null;
+let examExceptionsLivePath = 'studentExamExceptions';
 
 const settings = { attend:5, hw:5, disc:5, exam:40, gradeA:85, gradeB:70, gradeC:60, gradeFail:80 };
 const STUDENT_MOTIVATIONS = [
@@ -773,8 +774,24 @@ async function doLogout(){
 // ══════════════════════════════════════════════
 async function loadAllData(){
   loader(true);
-  const snap = await fbRef('/').get();
-  dbData = snap.exists() ? snap.val() : {};
+  if(currentUser?.role==='student'){
+    const studentKey=currentUser.fbKey;
+    const queryForStudent=path=>fbRef(path).orderByChild('studentKey').equalTo(studentKey).get();
+    const [settingsSnap,packagesSnap,subjectsSnap,semestersSnap,scheduleSnap,examsSnap,directorySnap,studentSnap,enrollmentsSnap,gradesSnap,requestsSnap,exceptionSnap]=await Promise.all([
+      fbRef('settings').get(),fbRef('packages').get(),fbRef('subjects').get(),fbRef('semesters').get(),fbRef('schedule').get(),fbRef('examSchedules').get(),fbRef('lecturerDirectory').get(),fbRef('students/'+studentKey).get(),queryForStudent('enrollments'),queryForStudent('grades'),queryForStudent('studentRequests'),fbRef('studentExamExceptions/'+studentKey).get()
+    ]);
+    const value=snapshot=>snapshot.exists()?snapshot.val():{};
+    const directory=value(directorySnap);
+    dbData={
+      settings:value(settingsSnap),packages:value(packagesSnap),subjects:value(subjectsSnap),semesters:value(semestersSnap),schedule:value(scheduleSnap),examSchedules:value(examsSnap),
+      students:studentSnap.exists()?{[studentKey]:studentSnap.val()}: {},enrollments:value(enrollmentsSnap),grades:value(gradesSnap),studentRequests:value(requestsSnap),
+      studentExamExceptions:exceptionSnap.exists()?{[studentKey]:exceptionSnap.val()}: {},
+      users:Object.fromEntries(Object.entries(directory).map(([username,profile])=>[username,{...profile,username,role:'lecturer'}]))
+    };
+  }else{
+    const snap = await fbRef('/').get();
+    dbData = snap.exists() ? snap.val() : {};
+  }
   // Load settings if available
   if(dbData.settings){
     const s=dbData.settings;
@@ -798,16 +815,19 @@ function startExamSchedulesLiveUpdates(){
     if(currentUser.role==='student'&&currentAppTab==='exams') renderStudentExamsTab();
   };
   fbRef('examSchedules').on('value',examSchedulesLiveHandler,error=>console.error('exam schedules live update error',error));
+  examExceptionsLivePath=currentUser?.role==='student' ? `studentExamExceptions/${currentUser.fbKey}` : 'studentExamExceptions';
   examExceptionsLiveHandler=snapshot=>{
     if(!currentUser) return;
-    dbData.studentExamExceptions=snapshot.exists()?snapshot.val():{};
+    dbData.studentExamExceptions=currentUser.role==='student'
+      ? (snapshot.exists()?{[currentUser.fbKey]:snapshot.val()}:{})
+      : (snapshot.exists()?snapshot.val():{});
     if(currentUser.role==='student'&&currentAppTab==='exams') renderStudentExamsTab();
   };
-  fbRef('studentExamExceptions').on('value',examExceptionsLiveHandler,error=>console.error('exam exceptions live update error',error));
+  fbRef(examExceptionsLivePath).on('value',examExceptionsLiveHandler,error=>console.error('exam exceptions live update error',error));
 }
 function stopExamSchedulesLiveUpdates(){
   if(examSchedulesLiveHandler){fbRef('examSchedules').off('value',examSchedulesLiveHandler);examSchedulesLiveHandler=null;}
-  if(examExceptionsLiveHandler){fbRef('studentExamExceptions').off('value',examExceptionsLiveHandler);examExceptionsLiveHandler=null;}
+  if(examExceptionsLiveHandler){fbRef(examExceptionsLivePath).off('value',examExceptionsLiveHandler);examExceptionsLiveHandler=null;}
 }
 
 // ══════════════════════════════════════════════
