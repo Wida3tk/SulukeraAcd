@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Student Information System (SIS) | نظام معلومات الطالب</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="vendor/qrcode.js"></script>
@@ -1030,6 +1031,15 @@ function initFirebase(){
 }
 function fbDB(){ return firebase.database(); }
 function fbRef(path){ return firebase.database().ref(path); }
+async function firebaseLoginEmail(username){
+  const normalized=String(username||'').trim().toLowerCase();
+  const digest=await sha256(normalized);
+  return `${digest}@login.sulukera.invalid`;
+}
+async function signInFirebaseAccount(username,password){
+  const credential=await firebase.auth().signInWithEmailAndPassword(await firebaseLoginEmail(username),password);
+  return credential.user;
+}
 
 function randomPassword(len=10){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -2173,21 +2183,17 @@ async function doLogin(){
   const btn=document.querySelector('.btn-login');
   if(btn){btn.textContent='⏳ جاري التحقق...';btn.disabled=true;}
   try{
-    const snap=await fbRef('users').get();
-    if(snap.exists()){
-      const allUsers=Object.entries(snap.val()).map(([k,v])=>({...v,_fbKey:k}));
-      const matches=allUsers.filter(u=>u.username===username&&u.role===loginRole);
-      let user=null;
-      for(const candidate of matches){
-        if(await verifyUserPassword(candidate,password)){ user=candidate; break; }
-      }
-      if(!user){
+    const authUser=await signInFirebaseAccount(username,password);
+    const userSnap=await fbRef('users/'+authUser.uid).get();
+    if(userSnap.exists()){
+      const user={...userSnap.val(),_fbKey:authUser.uid};
+      if(user.username!==username||user.role!==loginRole){
+        await firebase.auth().signOut();
         document.getElementById('loginError').style.display='block';
         if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
         return;
       }
-      await upgradeLegacyPassword(user,password);
-      currentUser={...user};
+      currentUser={...user,authUid:authUser.uid};
       if(loginRole==='student'){
         const stdIdx=students.findIndex(s=>s.id===username);
         if(stdIdx<0){
@@ -2203,7 +2209,7 @@ async function doLogin(){
       if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
       return;
     }
-  }catch(e){console.warn('Firebase auth error:',e);}
+  }catch(e){console.warn('Firebase auth error:',e?.code||e);}
   document.getElementById('loginError').style.display='block';
   if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
 }
@@ -2233,7 +2239,8 @@ async function _finishLogin() {
   // لا تُجرى أي هجرة بيانات تلقائية عند الدخول؛ تغيير مفاتيح الطلاب يحتاج
   // تحديث التسجيلات والدرجات معاً ولا يجوز تنفيذه بصمت.
 }
-function doLogout() {
+async function doLogout() {
+  try{ await firebase.auth().signOut(); }catch(error){ console.warn('Firebase sign-out error',error); }
   currentUser=null;
   students=[]; subjects=[]; grades={}; users=[]; programsData=[];
   document.getElementById('appShell').style.display='none';

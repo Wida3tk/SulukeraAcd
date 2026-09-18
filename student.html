@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Student Information System (SIS) | نظام معلومات الطالب</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
@@ -428,6 +429,14 @@ function initFB(){
   catch(e){ if(e.code!=='app/duplicate-app') console.error(e); }
 }
 function fbRef(path){ return firebase.database().ref(path); }
+async function firebaseLoginEmail(username){
+  const normalized=String(username||'').trim().toLowerCase();
+  return `${await sha256(normalized)}@login.sulukera.invalid`;
+}
+async function signInFirebaseAccount(username,password){
+  const credential=await firebase.auth().signInWithEmailAndPassword(await firebaseLoginEmail(username),password);
+  return credential.user;
+}
 
 async function sha256(text){
   const data=new TextEncoder().encode(text);
@@ -665,32 +674,21 @@ async function doLogin(){
       const sid = document.getElementById('studentId').value.trim().toUpperCase();
       const pass = document.getElementById('studentPassword')?.value || '';
       if(!sid||!pass){ fail(); return; }
-
-      const snap = await fbRef('students').get();
-      if(!snap.exists()){ fail(); return; }
-
-      let found = null;
-      Object.entries(snap.val()).forEach(([k,v])=>{
-        if((v.id||'').toUpperCase()===sid) found={...v,_fbKey:k};
-      });
-      if(!found){ fail(); return; }
-
-      const userSnap = await fbRef('users').get();
-      let authUser = null, authKey = null;
-      if(userSnap.exists()){
-        Object.entries(userSnap.val()).forEach(([k,v])=>{
-          if(v.username===sid && v.role==='student'){ authUser={...v,_fbKey:k}; authKey=k; }
-        });
-      }
+      const firebaseUser=await signInFirebaseAccount(sid,pass);
+      const authKey=firebaseUser.uid;
+      const userSnap=await fbRef('users/'+authKey).get();
+      const authUser=userSnap.exists()?{...userSnap.val(),_fbKey:authKey}:null;
+      if(!authUser||authUser.role!=='student'||String(authUser.username||'').toUpperCase()!==sid){ await firebase.auth().signOut(); fail(); return; }
+      const studentKey=authUser.studentKey||('std_'+sid.replace(/[^a-zA-Z0-9]/g,'_'));
+      const studentSnap=await fbRef('students/'+studentKey).get();
+      const found=studentSnap.exists()?{...studentSnap.val(),_fbKey:studentKey}:null;
+      if(!found){ await firebase.auth().signOut(); fail(); return; }
       if(found.accountStatus==='withdrawn' || authUser?.accountStatus==='withdrawn'){
         showErr('الحساب موقوف حاليًا. يرجى التواصل مع الإدارة الأكاديمية.');
         btn.textContent=loginLabel; btn.disabled=false;
         return;
       }
-      if(!authUser || !(await verifyUserPassword(authUser,pass))){ fail(); return; }
-      await upgradeLegacyPassword(authKey,authUser,pass);
-
-      currentUser = {role:'student', data:found, fbKey:found._fbKey, authKey, authUser};
+      currentUser = {role:'student', data:found, fbKey:found._fbKey, authKey, authUser,authUid:firebaseUser.uid};
       await loadAllData();
       showStudentView();
 
@@ -698,21 +696,12 @@ async function doLogin(){
       const uname = document.getElementById('lecUsername').value.trim();
       const pass  = document.getElementById('lecPassword').value;
       if(!uname||!pass){ fail(); return; }
+      const firebaseUser=await signInFirebaseAccount(uname,pass);
+      const snap=await fbRef('users/'+firebaseUser.uid).get();
+      const found=snap.exists()?{...snap.val(),_fbKey:firebaseUser.uid}:null;
+      if(!found||found.role!=='lecturer'||found.username!==uname){ await firebase.auth().signOut(); fail(); return; }
 
-      const snap = await fbRef('users').get();
-      if(!snap.exists()){ fail(); return; }
-
-      let found = null;
-      for(const [k,v] of Object.entries(snap.val())){
-        if(v.username===uname && v.role==='lecturer' && await verifyUserPassword(v,pass)){
-          found={...v,_fbKey:k};
-          await upgradeLegacyPassword(k,v,pass);
-          break;
-        }
-      }
-      if(!found){ fail(); return; }
-
-      currentUser = {role:'lecturer', data:found, fbKey:found._fbKey, authKey:found._fbKey, authUser:found};
+      currentUser = {role:'lecturer', data:found, fbKey:found._fbKey, authKey:found._fbKey, authUser:found,authUid:firebaseUser.uid};
       await loadAllData();
       showLecturerView();
     }
@@ -762,9 +751,7 @@ async function changeMyPassword(){
       return;
     }
 
-    const fields=await passwordFields(newPass);
-    await fbRef('users/'+currentUser.authKey).update(fields);
-    currentUser.authUser={...authUser,...fields};
+    await firebase.auth().currentUser.updatePassword(newPass);
     toast('تم تغيير كلمة المرور');
   }catch(e){
     console.error('Change password error:',e);
@@ -772,8 +759,9 @@ async function changeMyPassword(){
   }
 }
 
-function doLogout(){
+async function doLogout(){
   stopExamSchedulesLiveUpdates();
+  try{ await firebase.auth().signOut(); }catch(error){ console.warn('Firebase sign-out error',error); }
   currentUser=null; dbData={};
   document.getElementById('appScreen').style.display='none';
   document.getElementById('appTabs').style.display='none';
