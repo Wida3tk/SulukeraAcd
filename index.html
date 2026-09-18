@@ -647,6 +647,8 @@ tr:hover td{background:#f8faff;}
         <div class="card card-accent">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">بنك أسئلة الاختبارات</div><div style="font-size:12px;color:var(--text-muted)">جهزي الأسئلة والاختيارات والإجابة الصحيحة ودرجاتها في النموذج الموحد. يجب أن يكون مجموع درجات كل اختبار 20.</div></div><a class="btn btn-primary" href="templates/%D9%86%D9%85%D9%88%D8%B0%D8%AC%20%D8%A7%D8%B3%D8%AA%D9%8A%D8%B1%D8%A7%D8%AF%20%D8%A3%D8%B3%D8%A6%D9%84%D8%A9%20%D8%A7%D9%84%D8%A7%D8%AE%D8%AA%D8%A8%D8%A7%D8%B1%D8%A7%D8%AA.xlsx" download>تحميل نموذج Excel للأسئلة</a></div>
           <div class="alert alert-warn" style="margin-top:12px">مفاتيح الإجابات والتصحيح ستبقى في الخادم المحمي، ولن تُحفظ في صفحة الطالب أو تُرسل إلى متصفحه.</div>
+          <div style="display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end;margin-top:14px"><div class="form-group" style="margin:0"><label>الاختبار الذي تريدين تجهيز أسئلته</label><select id="examBuilderSchedule" onchange="loadExamQuestionDraft()"><option value="">-- اختاري اختبارًا من الجداول --</option></select></div><label class="btn btn-primary" style="cursor:pointer;text-align:center">استيراد ملف Excel<input type="file" id="examQuestionsFile" accept=".xlsx,.xls" onchange="importExamQuestionsFile(this)" style="display:none"></label></div>
+          <div id="examQuestionBuilder" style="margin-top:14px"></div>
         </div>
         <div class="card card-accent">
           <div class="card-title">📝 إدارة جداول الاختبارات</div>
@@ -5888,6 +5890,142 @@ async function renderExamSchedulesAdmin(){
   }
   populateExamSubjectOptions(document.getElementById('examSubject')?.value||'');
   renderExamSchedulesAdminList();
+  populateExamBuilderScheduleOptions();
+}
+
+const EXAM_QUESTION_DRAFTS_STORAGE_KEY='sulukera_exam_question_drafts_v1';
+let examBuilderQuestions=[];
+let examBuilderImportIssues=[];
+
+function getExamQuestionDraftStore(){
+  try{
+    const value=JSON.parse(localStorage.getItem(EXAM_QUESTION_DRAFTS_STORAGE_KEY)||'{}');
+    return value&&typeof value==='object'?value:{};
+  }catch(error){ return {}; }
+}
+function populateExamBuilderScheduleOptions(){
+  const select=document.getElementById('examBuilderSchedule');
+  if(!select) return;
+  const current=select.value;
+  const rows=Object.entries(examSchedulesData||{}).map(([key,value])=>({key,...value})).sort((a,b)=>`${a.batch}|${a.date}|${a.subjectName}`.localeCompare(`${b.batch}|${b.date}|${b.subjectName}`));
+  select.innerHTML='<option value="">-- اختاري اختبارًا من الجداول --</option>'+rows.map(row=>`<option value="${escapeHtml(row.key)}">${escapeHtml(row.batch||'')} — ${escapeHtml(row.subjectName||'')} — ${escapeHtml(row.date||'')}</option>`).join('');
+  if(rows.some(row=>row.key===current)) select.value=current;
+  else if(current) loadExamQuestionDraft();
+}
+function loadExamQuestionDraft(){
+  const key=document.getElementById('examBuilderSchedule')?.value||'';
+  examBuilderImportIssues=[];
+  if(!key){ examBuilderQuestions=[]; renderExamQuestionBuilder(); return; }
+  const draft=getExamQuestionDraftStore()[key];
+  examBuilderQuestions=Array.isArray(draft?.questions)?draft.questions.map(normalizeExamQuestion):[];
+  renderExamQuestionBuilder();
+}
+function normalizeExamAnswer(value){
+  const answer=String(value||'').trim().toUpperCase();
+  return ({'أ':'A','ا':'A','A':'A','ب':'B','B':'B','ج':'C','C':'C','د':'D','D':'D'})[answer]||'';
+}
+function normalizeExamQuestion(question={}){
+  return {text:String(question.text||''),choiceA:String(question.choiceA||''),choiceB:String(question.choiceB||''),choiceC:String(question.choiceC||''),choiceD:String(question.choiceD||''),answer:normalizeExamAnswer(question.answer),points:Number(question.points)||0};
+}
+function validateExamBuilderQuestions(){
+  const issues=[];
+  if(!examBuilderQuestions.length) issues.push('أضيفي سؤالًا واحدًا على الأقل.');
+  examBuilderQuestions.forEach((question,index)=>{
+    if(!question.text.trim()) issues.push(`السؤال ${index+1}: نص السؤال فارغ.`);
+    if(!question.choiceA.trim()||!question.choiceB.trim()||!question.choiceC.trim()||!question.choiceD.trim()) issues.push(`السؤال ${index+1}: يجب إدخال الخيارات الأربعة.`);
+    if(!['A','B','C','D'].includes(question.answer)) issues.push(`السؤال ${index+1}: حددي الإجابة الصحيحة.`);
+    if(!(Number(question.points)>0)) issues.push(`السؤال ${index+1}: الدرجة يجب أن تكون أكبر من صفر.`);
+  });
+  const total=examBuilderQuestions.reduce((sum,question)=>sum+(Number(question.points)||0),0);
+  if(Math.abs(total-20)>0.001) issues.push(`مجموع الدرجات الحالي ${total} من 20.`);
+  return {issues,total};
+}
+function renderExamQuestionBuilder(){
+  const host=document.getElementById('examQuestionBuilder');
+  if(!host) return;
+  const key=document.getElementById('examBuilderSchedule')?.value||'';
+  if(!key){ host.innerHTML='<div class="alert alert-info">اختاري اختبارًا من القائمة لفتح صفحة أسئلته.</div>'; return; }
+  const exam=examSchedulesData[key]||{};
+  const validation=validateExamBuilderQuestions();
+  const allIssues=[...examBuilderImportIssues,...validation.issues];
+  host.innerHTML=`<div style="border:1px solid var(--border);border-radius:14px;background:#f8faff;padding:14px">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong>${escapeHtml(exam.subjectName||'الاختبار')}</strong><div style="font-size:12px;color:var(--text-muted);margin-top:4px">${escapeHtml(exam.batch||'')} · ${escapeHtml(exam.date||'')}</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><span class="badge badge-info">${examBuilderQuestions.length} سؤال</span><span class="badge ${Math.abs(validation.total-20)<0.001?'badge-pass':'badge-warn'}">${validation.total} / 20 درجة</span><span class="badge badge-warn">محفوظ محليًا فقط</span></div></div>
+    ${allIssues.length?`<div class="alert alert-warn" style="margin-top:12px"><strong>تحتاج المراجعة:</strong><ul style="margin:7px 18px 0">${allIssues.slice(0,12).map(issue=>`<li>${escapeHtml(issue)}</li>`).join('')}</ul>${allIssues.length>12?`<div>و${allIssues.length-12} ملاحظات أخرى.</div>`:''}</div>`:'<div class="alert alert-success" style="margin-top:12px">✅ الأسئلة مكتملة ومجموع الدرجات 20.</div>'}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button class="btn btn-primary" onclick="addExamQuestion()">＋ إضافة سؤال يدويًا</button><button class="btn btn-success" onclick="saveExamQuestionDraft()">💾 حفظ المسودة</button>${examBuilderQuestions.length?'<button class="btn" onclick="clearExamQuestionDraft()">مسح المسودة</button>':''}</div>
+    <div style="display:grid;gap:12px">${examBuilderQuestions.map((question,index)=>renderExamQuestionCard(question,index)).join('')}</div>
+  </div>`;
+}
+function renderExamQuestionCard(question,index){
+  const answerOptions=[['','-- الإجابة --'],['A','أ'],['B','ب'],['C','ج'],['D','د']].map(([value,label])=>`<option value="${value}" ${question.answer===value?'selected':''}>${label}</option>`).join('');
+  return `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><strong>السؤال ${index+1}</strong><button class="btn btn-sm" style="color:#b42318" onclick="removeExamQuestion(${index})">حذف</button></div>
+    <div class="form-group"><label>نص السؤال</label><textarea rows="2" onchange="updateExamQuestion(${index},'text',this.value)" style="width:100%">${escapeHtml(question.text)}</textarea></div>
+    <div class="form-row"><div class="form-group"><label>الاختيار أ</label><input value="${escapeHtml(question.choiceA)}" onchange="updateExamQuestion(${index},'choiceA',this.value)"></div><div class="form-group"><label>الاختيار ب</label><input value="${escapeHtml(question.choiceB)}" onchange="updateExamQuestion(${index},'choiceB',this.value)"></div></div>
+    <div class="form-row"><div class="form-group"><label>الاختيار ج</label><input value="${escapeHtml(question.choiceC)}" onchange="updateExamQuestion(${index},'choiceC',this.value)"></div><div class="form-group"><label>الاختيار د</label><input value="${escapeHtml(question.choiceD)}" onchange="updateExamQuestion(${index},'choiceD',this.value)"></div></div>
+    <div class="form-row"><div class="form-group"><label>الإجابة الصحيحة</label><select onchange="updateExamQuestion(${index},'answer',this.value)">${answerOptions}</select></div><div class="form-group"><label>درجة السؤال</label><input type="number" min="0.25" step="0.25" value="${question.points||''}" onchange="updateExamQuestion(${index},'points',this.value)"></div></div>
+  </div>`;
+}
+function addExamQuestion(){
+  examBuilderQuestions.push(normalizeExamQuestion({points:1}));
+  examBuilderImportIssues=[];
+  renderExamQuestionBuilder();
+}
+function updateExamQuestion(index,field,value){
+  if(!examBuilderQuestions[index]) return;
+  examBuilderQuestions[index][field]=field==='points'?Number(value)||0:value;
+  examBuilderImportIssues=[];
+  renderExamQuestionBuilder();
+}
+function removeExamQuestion(index){
+  if(!confirm(`حذف السؤال ${index+1} من المسودة؟`)) return;
+  examBuilderQuestions.splice(index,1);
+  renderExamQuestionBuilder();
+}
+function saveExamQuestionDraft(){
+  const key=document.getElementById('examBuilderSchedule')?.value||'';
+  if(!key) return showToast('⚠️ اختاري الاختبار أولًا');
+  const validation=validateExamBuilderQuestions();
+  if(validation.issues.length){ renderExamQuestionBuilder(); return showToast('⚠️ راجعي ملاحظات الأسئلة قبل الحفظ'); }
+  const store=getExamQuestionDraftStore();
+  const exam=examSchedulesData[key]||{};
+  store[key]={examKey:key,batch:exam.batch||'',subjectName:exam.subjectName||'',updatedAt:new Date().toISOString(),questions:examBuilderQuestions.map(normalizeExamQuestion)};
+  localStorage.setItem(EXAM_QUESTION_DRAFTS_STORAGE_KEY,JSON.stringify(store));
+  showToast('✅ تم حفظ مسودة الأسئلة على هذا الجهاز');
+  renderExamQuestionBuilder();
+}
+function clearExamQuestionDraft(){
+  if(!confirm('مسح جميع أسئلة هذا الاختبار من المسودة المحلية؟')) return;
+  const key=document.getElementById('examBuilderSchedule')?.value||'';
+  const store=getExamQuestionDraftStore();
+  delete store[key];
+  localStorage.setItem(EXAM_QUESTION_DRAFTS_STORAGE_KEY,JSON.stringify(store));
+  examBuilderQuestions=[]; examBuilderImportIssues=[];
+  renderExamQuestionBuilder();
+}
+async function importExamQuestionsFile(input){
+  const file=input?.files?.[0];
+  const key=document.getElementById('examBuilderSchedule')?.value||'';
+  if(!key){ if(input) input.value=''; return showToast('⚠️ اختاري الاختبار قبل الاستيراد'); }
+  if(!file) return;
+  try{
+    const workbook=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const sheet=workbook.Sheets['الأسئلة']||workbook.Sheets[workbook.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+    const imported=[]; const issues=[];
+    rows.forEach((row,index)=>{
+      const text=String(row['نص السؤال']||'').trim();
+      if(!text) return;
+      const question=normalizeExamQuestion({text,choiceA:row['الاختيار أ'],choiceB:row['الاختيار ب'],choiceC:row['الاختيار ج'],choiceD:row['الاختيار د'],answer:row['الإجابة الصحيحة'],points:row['الدرجة']});
+      if(!question.answer) issues.push(`صف ${index+2}: رمز الإجابة الصحيحة غير معروف.`);
+      imported.push(question);
+    });
+    if(!imported.length) throw new Error('لم يتم العثور على أسئلة تحت عمود نص السؤال');
+    if(examBuilderQuestions.length&&!confirm('سيتم استبدال الأسئلة الحالية بمحتوى الملف. هل تريدين المتابعة؟')) return;
+    examBuilderQuestions=imported;
+    examBuilderImportIssues=issues;
+    renderExamQuestionBuilder();
+    showToast(`✅ تمت قراءة ${imported.length} سؤالًا؛ راجعيها ثم احفظي المسودة`);
+  }catch(error){ console.error('exam questions import error',error); showToast('⚠️ تعذر قراءة الملف: '+(error.message||'ملف غير صالح')); }
+  finally{ if(input) input.value=''; }
 }
 function populateExamSubjectOptions(selectedKey=''){
   const batch=document.getElementById('examBatch')?.value||'';
@@ -5949,6 +6087,7 @@ async function saveExamSchedule(){
     await saveActivityLog({action:editingExamScheduleKey?'تعديل موعد اختبار':'إضافة موعد اختبار',targetType:'exam_schedule',targetKey:key,targetLabel:`${subject.name} - ${batch}`,details:`${date} من ${startTime} إلى ${endTime} · ${payload.published?'منشور':'مسودة'}`});
     resetExamScheduleForm();
     renderExamSchedulesAdminList();
+    populateExamBuilderScheduleOptions();
     showToast('✅ تم حفظ موعد الاختبار وظهر للطلاب المستهدفين');
   }catch(error){ console.error('save exam schedule error',error); showToast('⚠️ تعذر حفظ موعد الاختبار'); }
   finally{ showLoader(false); }
