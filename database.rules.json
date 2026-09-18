@@ -25,7 +25,10 @@
     "studentExamExceptions": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "advisorCases": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "studentAdminSheets": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
-    "certificateDrafts": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "certificateDrafts": {
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$token": { ".read": "data.child('published').val() === true" }
+    },
     "lecturerProductivity": { ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" }
   }
 }
