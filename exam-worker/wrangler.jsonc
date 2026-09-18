@@ -1,0 +1,12 @@
+{
+  "name": "sulukera-exams",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-18",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sulukera-exams",
+      "database_id": "48012e4b-5b00-47f4-8d7c-a9ff3a61520a"
+    }
+  ]
+}

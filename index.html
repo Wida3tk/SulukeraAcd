@@ -2289,6 +2289,7 @@ const navConfig = {
     {id:'mygrades',icon:'📊',label:'بياناتي ودرجاتي'},
   ],
 };
+const EXAM_API_BASE='https://sulukera-exams.ro7e-entaa.workers.dev';
 const adminNavGroups=[
   {id:'followup',icon:'🔎',label:'الرئيسية والمتابعة',items:[
     {id:'alerts',icon:'🔔',label:'الطلبات والتنبيهات'},
@@ -5967,7 +5968,7 @@ function renderExamQuestionBuilder(){
   host.innerHTML=`<div style="border:1px solid var(--border);border-radius:14px;background:#f8faff;padding:14px">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong>${escapeHtml(exam.subjectName||'الاختبار')}</strong><div style="font-size:12px;color:var(--text-muted);margin-top:4px">${escapeHtml(exam.batch||'')} · ${escapeHtml(exam.date||'')}</div></div><div style="display:flex;gap:7px;flex-wrap:wrap"><span class="badge badge-info">${examBuilderQuestions.length} سؤال</span><span class="badge ${Math.abs(validation.total-20)<0.001?'badge-pass':'badge-warn'}">${validation.total} / 20 درجة</span><span class="badge badge-warn">محفوظ محليًا فقط</span></div></div>
     ${allIssues.length?`<div class="alert alert-warn" style="margin-top:12px"><strong>تحتاج المراجعة:</strong><ul style="margin:7px 18px 0">${allIssues.slice(0,12).map(issue=>`<li>${escapeHtml(issue)}</li>`).join('')}</ul>${allIssues.length>12?`<div>و${allIssues.length-12} ملاحظات أخرى.</div>`:''}</div>`:'<div class="alert alert-success" style="margin-top:12px">✅ الأسئلة مكتملة ومجموع الدرجات 20.</div>'}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button class="btn btn-primary" onclick="addExamQuestion()">＋ إضافة سؤال يدويًا</button><button class="btn btn-success" onclick="saveExamQuestionDraft()">💾 حفظ المسودة</button>${examBuilderQuestions.length?'<button class="btn" onclick="clearExamQuestionDraft()">مسح المسودة</button>':''}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button class="btn btn-primary" onclick="addExamQuestion()">＋ إضافة سؤال يدويًا</button><button class="btn btn-success" onclick="saveExamQuestionDraft()">💾 حفظ المسودة</button><button class="btn btn-primary" onclick="publishExamQuestionDraft()" ${validation.issues.length?'disabled title="أكملي الأسئلة واجعلي المجموع 20 أولًا"':''}>🔐 اعتماد ونشر الاختبار</button>${examBuilderQuestions.length?'<button class="btn" onclick="clearExamQuestionDraft()">مسح المسودة</button>':''}</div>
     <div style="display:grid;gap:12px">${examBuilderQuestions.map((question,index)=>renderExamQuestionCard(question,index)).join('')}</div>
   </div>`;
 }
@@ -6007,6 +6008,27 @@ function saveExamQuestionDraft(){
   localStorage.setItem(EXAM_QUESTION_DRAFTS_STORAGE_KEY,JSON.stringify(store));
   showToast('✅ تم حفظ مسودة الأسئلة على هذا الجهاز');
   renderExamQuestionBuilder();
+}
+async function publishExamQuestionDraft(){
+  const key=document.getElementById('examBuilderSchedule')?.value||'';
+  const exam=examSchedulesData[key];
+  const validation=validateExamBuilderQuestions();
+  if(!exam||validation.issues.length) return showToast('⚠️ راجعي الأسئلة ومجموع الدرجات قبل النشر');
+  if(currentUser?.role!=='admin') return showToast('⚠️ النشر متاح للإدارة فقط');
+  const firebaseUser=firebase.auth().currentUser;
+  if(!firebaseUser) return showToast('⚠️ انتهت جلسة الدخول؛ سجلي الدخول مجددًا');
+  const opensAt=`${exam.date}T${exam.startTime||'18:00'}:00+03:00`;
+  const closesAt=`${exam.date}T${exam.endTime||'22:00'}:00+03:00`;
+  if(!confirm(`اعتماد ونشر اختبار ${exam.subjectName||''} للدفعة ${exam.batch||''}؟`)) return;
+  showLoader(true);
+  try{
+    const response=await fetch(EXAM_API_BASE+'/admin/exams',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+await firebaseUser.getIdToken()},body:JSON.stringify({scheduleKey:key,batch:exam.batch,subjectKey:exam.subjectKey,subjectName:exam.subjectName,opensAt,closesAt,durationMinutes:120,maxAttempts:2,status:'published',questions:examBuilderQuestions})});
+    const result=await response.json();
+    if(!response.ok) throw new Error(result.error||'تعذر نشر الاختبار');
+    saveExamQuestionDraft();
+    showToast(`✅ تم نشر الاختبار بأمان · ${result.questionCount} سؤال · ${result.total}/20`);
+  }catch(error){ console.error('publish exam error',error); showToast('⚠️ تعذر نشر الاختبار: '+error.message); }
+  finally{ showLoader(false); }
 }
 function clearExamQuestionDraft(){
   if(!confirm('مسح جميع أسئلة هذا الاختبار من المسودة المحلية؟')) return;
