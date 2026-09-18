@@ -729,15 +729,10 @@ async function changeMyPassword(){
   if(!currentPass) return;
 
   try{
-    const authSnap=await fbRef('users/'+currentUser.authKey).get();
-    const authUser=authSnap.exists()
-      ? {...authSnap.val(),_fbKey:currentUser.authKey}
-      : currentUser.authUser;
-
-    if(!(await verifyUserPassword(authUser,currentPass))){
-      toast('كلمة المرور الحالية غير صحيحة');
-      return;
-    }
+    const firebaseUser=firebase.auth().currentUser;
+    if(!firebaseUser) throw new Error('AUTH_SESSION_MISSING');
+    const credential=firebase.auth.EmailAuthProvider.credential(await firebaseLoginEmail(currentUser.authUser?.username||currentUser.data?.id),currentPass);
+    await firebaseUser.reauthenticateWithCredential(credential);
 
     const newPass=prompt('أدخل كلمة المرور الجديدة (6 أحرف على الأقل):');
     if(!newPass || newPass.length<6){
@@ -751,7 +746,7 @@ async function changeMyPassword(){
       return;
     }
 
-    await firebase.auth().currentUser.updatePassword(newPass);
+    await firebaseUser.updatePassword(newPass);
     toast('تم تغيير كلمة المرور');
   }catch(e){
     console.error('Change password error:',e);

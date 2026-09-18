@@ -1040,6 +1040,15 @@ async function signInFirebaseAccount(username,password){
   const credential=await firebase.auth().signInWithEmailAndPassword(await firebaseLoginEmail(username),password);
   return credential.user;
 }
+async function provisionFirebaseAuthAccount(username,password){
+  const response=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(firebaseConfig.apiKey)}`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:await firebaseLoginEmail(username),password,returnSecureToken:false})
+  });
+  const result=await response.json();
+  if(!response.ok) throw new Error(result?.error?.message||'AUTH_ACCOUNT_CREATE_FAILED');
+  return result.localId;
+}
 
 function randomPassword(len=10){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -1313,17 +1322,13 @@ async function saveStudentToFirebase(stdIdx, passw){
     });
   }
 
-  // .set() with deterministic key = always same record, no duplicates
-  await fbRef('students/'+fbKey).set(stdData);
-
-  // Save/update user account
+  let authUid='';
   if(passw){
-    const userKey = 'user_' + st.id.replace(/[^a-zA-Z0-9]/g,'_');
-    await fbRef('users/'+userKey).set(await userRecord({
-      name:getStudentFullName(st), username:st.id,
-      role:'student'
-    }, passw));
+    authUid=await provisionFirebaseAuthAccount(st.id,passw);
   }
+  const updates={['students/'+fbKey]:stdData};
+  if(authUid) updates['users/'+authUid]={name:getStudentFullName(st),username:st.id,role:'student',studentKey:fbKey,authProvider:'firebase',createdAt:new Date().toISOString()};
+  await firebase.database().ref('/').update(updates);
 }
 
 async function saveAdvisorCaseToFirebase(record){
@@ -4473,10 +4478,12 @@ async function saveUser() {
   const role=document.getElementById('userRole').value;
   const subjs=role==='lecturer'?Array.from(document.getElementById('userSubjects').selectedOptions).map(o=>parseInt(o.value)):[];
   if (!name||!username) return showToast('⚠️ أدخل الاسم واسم المستخدم');
+  if(editingUserIdx>=0&&password) return showToast('⚠️ تعديل كلمة المرور يتم من حساب المستخدم بعد تسجيل الدخول');
   if(users.some((u,i)=>i!==editingUserIdx&&u.username.toLowerCase()===username.toLowerCase()))
     return showToast('⚠️ اسم المستخدم مستخدم مسبقاً');
 
-  let userFbKey = username; // استخدم username كمعرّف ثابت في Firebase
+  let userFbKey = username;
+  const isNewUser=editingUserIdx<0;
 
   if (editingUserIdx>=0) {
     const u=users[editingUserIdx];
@@ -4492,7 +4499,9 @@ async function saveUser() {
     }
   } else {
     if (!password) return showToast('⚠️ أدخل كلمة المرور');
-    const nu={id:username,_fbKey:username,name,username,password,role,subjects:subjs};
+    try{ userFbKey=await provisionFirebaseAuthAccount(username,password); }
+    catch(error){ console.error('Create auth account error',error); return showToast(error.message==='EMAIL_EXISTS'?'⚠️ يوجد حساب دخول بهذا الاسم':'⚠️ تعذر إنشاء حساب الدخول الآمن'); }
+    const nu={id:username,_fbKey:userFbKey,name,username,role,subjects:subjs,authProvider:'firebase'};
     users.push(nu);
     if (role==='lecturer'){
       subjs.forEach(si=>{ if(subjects[si]) subjects[si].lecturerUserId=username; });
@@ -4502,12 +4511,9 @@ async function saveUser() {
   closeModal('userModal'); renderUsersTable();
 
   try{
-    // 1. احفظ المستخدم
+    // 1. احفظ ملف المستخدم المرتبط بحساب Firebase Authentication
     const existingUser = users.find(u=>u.username===username)||{};
-    await fbRef('users/'+userFbKey).set(await userRecord({
-      ...existingUser,
-      name, username, role
-    }, password));
+    await fbRef('users/'+userFbKey).set({name,username,role,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
 
     // 2. حدّث lecturerUserId لكل مادة مباشرة في Firebase (بدون إعادة كتابة كامل السجل)
     if(role==='lecturer'){
@@ -4530,7 +4536,7 @@ async function saveUser() {
         await firebase.database().ref('/').update(updates);
       }
     }
-    showToast('✅ تم حفظ المقررات');
+    showToast(isNewUser?'✅ تم إنشاء حساب الدخول وحفظ المقررات':'✅ تم حفظ المقررات');
   }catch(e){
     console.error('saveUser error:',e);
     showToast('⚠️ خطأ في الحفظ: '+e.message);
@@ -7562,23 +7568,7 @@ async function updateStudentRequestStatus(requestKey, status){
 //  🔐 CHANGE STUDENT PASSWORD
 // ══════════════════════════════════════════════
 async function changeStudentPassword(stdIdx){
-  const newPass = prompt('أدخل كلمة المرور الجديدة للطالب:');
-  if(!newPass||newPass.length<4){ showToast('⚠️ كلمة المرور قصيرة جداً (4 أحرف على الأقل)'); return; }
-  const st = students[stdIdx];
-  try{
-    // Update in Firebase users
-    const snap = await fbRef('users').get();
-    if(snap.exists()){
-      const entries = Object.entries(snap.val());
-      const userEntry = entries.find(([,u])=>u.username===st.id&&u.role==='student');
-      if(userEntry){
-        await fbRef(`users/${userEntry[0]}`).update(await passwordFields(newPass));
-        showToast('✅ تم تغيير كلمة المرور');
-        return;
-      }
-    }
-    showToast('⚠️ لم يتم العثور على حساب الطالب');
-  }catch(e){ console.error(e); showToast('❌ خطأ في تغيير كلمة المرور'); }
+  showToast('🔐 حفاظًا على أمان الحساب، يغيّر الطالب كلمة المرور من داخل حسابه');
 }
 
 async function generateStudentPasswords(){
@@ -7596,14 +7586,14 @@ async function generateStudentPasswords(){
     const updates={};
     for(const st of newStudents){
       const password=randomPassword(10);
-      const userKey='user_'+st.id.replace(/[^a-zA-Z0-9]/g,'_');
-      const secure=await passwordFields(password);
+      const userKey=await provisionFirebaseAuthAccount(st.id,password);
       updates['users/'+userKey]={
         name:getStudentFullName(st),
         username:st.id,
         role:'student',
-        ...secure,
-        passwordChangedAt:new Date().toISOString()
+        studentKey:st._fbKey||('std_'+st.id.replace(/[^a-zA-Z0-9]/g,'_')),
+        authProvider:'firebase',
+        createdAt:new Date().toISOString()
       };
       rows.push([getStudentFullName(st),st.id,password]);
     }
