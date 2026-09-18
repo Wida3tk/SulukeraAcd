@@ -859,6 +859,7 @@ function showStudentView(){
   ]);
   startExamSchedulesLiveUpdates();
   switchAppTab('home', document.querySelector('#appTabs .app-tab'));
+  refreshSecureExamGrades();
 }
 
 function renderStudentHomeTab(){
@@ -1564,8 +1565,27 @@ async function loadSecureStudentExams(){
   try{
     const result=await secureExamRequest('/student/exams');
     secureExamList=result.exams||[];
+    mergeSecureExamGrades();
     renderSecureExamCards();
   }catch(error){console.error('load secure exams error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل الاختبارات الإلكترونية الآن. حدّثي الصفحة أو تواصلي مع الإدارة.</div>';}
+}
+async function refreshSecureExamGrades(){
+  try{const result=await secureExamRequest('/student/exams');secureExamList=result.exams||[];mergeSecureExamGrades();if(currentAppTab==='grades')renderStudentGradesTab();if(currentAppTab==='transcript')renderStudentTranscriptTab();}
+  catch(error){console.warn('secure exam grade refresh unavailable',error);}
+}
+function mergeSecureExamGrades(){
+  if(!dbData.grades) dbData.grades={};
+  secureExamList.filter(exam=>exam.evaluated).forEach(exam=>{
+    const submitted=exam.attempts.filter(attempt=>attempt.status==='submitted'&&attempt.score!==null);
+    if(!submitted.length||!exam.subjectKey) return;
+    const best20=Math.max(...submitted.map(attempt=>Number(attempt.score)||0));
+    let grade=getGrade_data(currentUser.fbKey,exam.subjectKey);
+    if(!grade){const key=('grade_'+currentUser.fbKey+'_'+exam.subjectKey).replace(/[.#$[\]]/g,'_');grade={studentKey:currentUser.fbKey,subjectKey:exam.subjectKey};dbData.grades[key]=grade;}
+    grade.exam=Math.round(best20*2*100)/100;
+    grade.examEntered=true;
+    grade.secureExamScore20=best20;
+    grade.secureExamSource=true;
+  });
 }
 function renderSecureExamCards(){
   const host=document.getElementById('secureExamArea');

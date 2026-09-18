@@ -651,6 +651,7 @@ tr:hover td{background:#f8faff;}
           <div style="display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end;margin-top:14px"><div class="form-group" style="margin:0"><label>الاختبار الذي تريدين تجهيز أسئلته</label><select id="examBuilderSchedule" onchange="loadExamQuestionDraft()"><option value="">-- اختاري اختبارًا من الجداول --</option></select></div><label class="btn btn-primary" style="cursor:pointer;text-align:center">استيراد ملف Excel<input type="file" id="examQuestionsFile" accept=".xlsx,.xls" onchange="importExamQuestionsFile(this)" style="display:none"></label></div>
           <div id="examQuestionBuilder" style="margin-top:14px"></div>
         </div>
+        <div class="card card-accent"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">📊 متابعة محاولات ونتائج الاختبارات</div><div style="font-size:12px;color:var(--text-muted)">تظهر أعلى نتيجة بعد إكمال تقييم المقرر. المزامنة تحول نتيجة 20 إلى خانة الاختبار من 40.</div></div><div style="display:flex;gap:8px"><button class="btn" onclick="loadExamAdminResults()">تحديث</button><button class="btn btn-success" onclick="syncEvaluatedExamResults()">مزامنة النتائج المقيمة</button></div></div><div id="examAdminResults" style="margin-top:14px"><div class="empty">اضغطي تحديث لعرض المحاولات.</div></div></div>
         <div class="card card-accent">
           <div class="card-title">📝 إدارة جداول الاختبارات</div>
           <div class="alert alert-info">اختاري الدفعة أولًا، ثم المقرر من شعبتها. أي تعديل محفوظ يظهر مباشرة للطلاب المرتبطين بالمقرر.</div>
@@ -4144,6 +4145,10 @@ async function saveStudentAdminSheetFromProfile(stdIdx){
     if(exceptionPayload){
       await fbRef('studentExamExceptions/'+st._fbKey).set(exceptionPayload);
       examExceptionsData[st._fbKey]=exceptionPayload;
+      try{
+        const synced=await syncStudentExamExceptionToService(st,exceptionPayload);
+        if(synced) showToast(`تم ربط الاستثناء مع ${synced} اختبار إلكتروني`);
+      }catch(syncError){console.error('sync exam exception error',syncError);showToast('⚠️ حُفظ الاستثناء، لكن تعذر ربطه بالاختبار الإلكتروني');}
     }
     await saveActivityLog({
       action:'تحديث بطاقة المتدرب الإدارية',
@@ -5908,6 +5913,58 @@ async function renderExamSchedulesAdmin(){
   populateExamSubjectOptions(document.getElementById('examSubject')?.value||'');
   renderExamSchedulesAdminList();
   populateExamBuilderScheduleOptions();
+  loadExamAdminResults();
+}
+
+async function secureAdminExamRequest(path,options={}){
+  const user=firebase.auth().currentUser;
+  if(!user) throw new Error('انتهت جلسة الدخول');
+  const response=await fetch(EXAM_API_BASE+path,{...options,headers:{'Content-Type':'application/json','Authorization':'Bearer '+await user.getIdToken(),...(options.headers||{})}});
+  const result=await response.json();
+  if(!response.ok) throw new Error(result.error||'تعذر الاتصال بخادم الاختبارات');
+  return result;
+}
+let examAdminResultsData=[];
+async function loadExamAdminResults(){
+  const host=document.getElementById('examAdminResults');
+  if(!host||currentUser?.role!=='admin') return;
+  host.innerHTML='<div class="empty">جاري تحميل المحاولات...</div>';
+  try{
+    examAdminResultsData=(await secureAdminExamRequest('/admin/results')).results||[];
+    if(!examAdminResultsData.length){host.innerHTML='<div class="empty">لا توجد محاولات حتى الآن.</div>';return;}
+    host.innerHTML=`<div class="table-wrap"><table><thead><tr><th>الطالب</th><th>الدفعة</th><th>المقرر</th><th>المحاولات</th><th>أعلى نتيجة</th><th>التقييم</th><th>آخر تسليم</th></tr></thead><tbody>${examAdminResultsData.map(row=>{const student=students.find(item=>item._fbKey===row.student_key);return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.student_key)}</strong><div style="font-size:10px;color:var(--text-muted)">${escapeHtml(student?.id||'')}</div></td><td>${escapeHtml(row.batch||'')}</td><td>${escapeHtml(row.subject_name||'')}</td><td>${row.attempt_count}</td><td>${row.evaluated?`${row.best_score}/20`:'مخفية'}</td><td><span class="badge ${row.evaluated?'badge-pass':'badge-warn'}">${row.evaluated?'مكتمل':'بانتظار التقييم'}</span></td><td>${row.last_submitted_at?new Date(row.last_submitted_at).toLocaleString('ar-SA'):'—'}</td></tr>`;}).join('')}</tbody></table></div>`;
+  }catch(error){console.error('load exam results error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل نتائج الاختبارات.</div>';}
+}
+async function syncEvaluatedExamResults(){
+  if(currentUser?.role!=='admin') return;
+  if(!examAdminResultsData.length) await loadExamAdminResults();
+  const rows=examAdminResultsData.filter(row=>Number(row.evaluated)===1&&row.best_score!==null);
+  if(!rows.length) return showToast('لا توجد نتائج مقيمة جاهزة للمزامنة');
+  if(!confirm(`مزامنة ${rows.length} نتيجة إلى سجل الدرجات؟`)) return;
+  showLoader(true);
+  try{
+    const snapshot=await fbRef('grades').get(),currentGrades=snapshot.exists()?snapshot.val():{};
+    for(const row of rows){
+      const existingEntry=Object.entries(currentGrades).find(([,grade])=>grade.studentKey===row.student_key&&grade.subjectKey===row.subject_key);
+      const gradeKey=existingEntry?.[0]||('grade_'+row.student_key+'_'+row.subject_key).replace(/[.#$[\]]/g,'_');
+      const converted=Math.round(Number(row.best_score)*2*100)/100;
+      await fbRef('grades/'+gradeKey).transaction(current=>({...current,studentKey:row.student_key,subjectKey:row.subject_key,exam:converted,examEntered:true,secureExamScore20:Number(row.best_score),secureExamId:row.exam_id,secureExamSyncedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:currentUser?.username||'admin',updatedRole:'admin'}));
+    }
+    await loadAllFromFirebase();
+    showToast(`✅ تمت مزامنة ${rows.length} نتيجة`);
+  }catch(error){console.error('sync exam results error',error);showToast('⚠️ تعذر مزامنة النتائج');}
+  finally{showLoader(false);}
+}
+async function syncStudentExamExceptionToService(student,exception){
+  if(!student?._fbKey||currentUser?.role!=='admin') return 0;
+  const exams=(await secureAdminExamRequest('/admin/exams')).exams||[];
+  const matching=exams.filter(exam=>sameBatchName(exam.batch,student.batch)&&(!exception.subjectKey||exam.subject_key===exception.subjectKey));
+  for(const exam of matching){
+    const opensAt=exception.untilDate?`${exception.untilDate}T18:00:00+03:00`:null;
+    const closesAt=exception.untilDate?`${exception.untilDate}T22:00:00+03:00`:null;
+    await secureAdminExamRequest('/admin/exceptions',{method:'POST',body:JSON.stringify({examId:exam.id,studentKey:student._fbKey,opensAt,closesAt,durationMinutes:120,extraAttempts:1,active:exception.active!==false,reason:exception.type||'approved_exception'})});
+  }
+  return matching.length;
 }
 
 const EXAM_QUESTION_DRAFTS_STORAGE_KEY='sulukera_exam_question_drafts_v1';
@@ -7560,10 +7617,14 @@ async function updateStudentRequestStatus(requestKey, status){
         const exceptionPayload={studentKey:request.studentKey,active:true,type:'exam_postponement',subjectKey:'',subjectName:'',fromDate:reviewedAt.slice(0,10),untilDate:request.returnDate||'',documentReceived:false,documentRef:'',lecturerMessage:'لدى الطالب تأجيل اختبارات معتمد من الإدارة.',internalNotes:`طلب الطالب: ${request.details||''}`,sourceRequestKey:requestKey,updatedAt:reviewedAt,updatedBy:currentUser?.username||currentUser?.id||'admin'};
         await fbRef('studentExamExceptions/'+request.studentKey).set(exceptionPayload);
         examExceptionsData[request.studentKey]=exceptionPayload;
+        const student=students.find(item=>item._fbKey===request.studentKey);
+        if(student) await syncStudentExamExceptionToService(student,exceptionPayload);
       }else if(['completed','rejected'].includes(nextStatus)&&currentException.sourceRequestKey===requestKey){
         const reopened={...currentException,active:false,reopenedAt:nextStatus==='completed'?reviewedAt:(currentException.reopenedAt||''),updatedAt:reviewedAt,updatedBy:currentUser?.username||currentUser?.id||'admin'};
         await fbRef('studentExamExceptions/'+request.studentKey).set(reopened);
         examExceptionsData[request.studentKey]=reopened;
+        const student=students.find(item=>item._fbKey===request.studentKey);
+        if(student) await syncStudentExamExceptionToService(student,reopened);
       }
     }
     request.status = nextStatus;
