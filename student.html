@@ -1555,10 +1555,11 @@ function formatExamDate(dateValue){
 function renderStudentExamsTab(){
   const exams=getStudentExamSchedules();
   const exception=dbData.studentExamExceptions?.[currentUser.fbKey];
+  const studentName=getStudentDisplayName(currentUser.data);
   document.getElementById('mainContent').innerHTML=`
     <div class="exam-motivation">
-      <div style="font-size:22px;font-weight:900;margin-bottom:6px">كل التوفيق لكم! 🌟</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.86)">الهدوء والثقة بما تم تعلمه يصنعان بداية موفقة؛ كل خطوة اجتهاد تقرّب من الهدف.</div>
+      <div style="font-size:22px;font-weight:900;margin-bottom:8px">أهلًا بك، ${escapeHtml(studentName)} 🌟</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.9);line-height:1.9">وصلنا إلى أسبوع الاختبارات، وحان وقت حصاد ثمرة اجتهادك. تأكد من مراجعة جدولك، والاستعداد بهدوء، والثقة بما تعلمته. نوصي بقراءة كل سؤال بتركيز وأخذ الوقت الكافي قبل التسليم. نتمنى لك التوفيق ونتائج تليق بجهدك.</div>
     </div>
     <div class="card"><div class="card-title">🔐 الدخول إلى الاختبار</div><div id="secureExamArea">${exception?.active?'<div class="alert alert-warn">الاختبارات الإلكترونية مخفية مؤقتًا بسبب الاستثناء المعتمد.</div>':'<div class="empty">جاري التحقق من الاختبارات المتاحة...</div>'}</div></div>
     <div class="card">
