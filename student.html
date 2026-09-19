@@ -1810,9 +1810,17 @@ function getSubjectStudents(subjectFbKey){
     }
   });
 
-  // شعب الدفعات الجديدة تعتمد على التسجيلات الصريحة فقط. لا نستنتج الطلاب
-  // من اسم الدفعة حتى لا تظهر دفعات أو طلاب غير مسندين للمحاضر.
+  // قد تتأخر أو تنقص سجلات الربط الصريحة بعد إضافة طالب أو تحديث الخطة.
+  // في هذه الحالة نسترجع طلاب نفس الدفعة فقط، مع احترام الخطة والاستبعادات.
+  // سياسة Q3-26 ثابتة: لا تُستنتج لها إلا المقررات الثلاثة المعتمدة.
   if(subject.courseKey&&subject.batch){
+    const isRestrictedQ3=sameBatchName(subject.batch,'Q3-26');
+    const allowedQ3Courses=new Set(['course_04','course_05','course_06']);
+    if(!isRestrictedQ3||allowedQ3Courses.has(subject.courseKey)){
+      Object.entries(dbData.students).forEach(([studentKey,student])=>{
+        if(sameBatchName(student.batch,subject.batch)&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
+      });
+    }
     return result;
   }
 
