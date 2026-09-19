@@ -7664,7 +7664,22 @@ async function updateStudentRequestStatus(requestKey, status){
 //  🔐 CHANGE STUDENT PASSWORD
 // ══════════════════════════════════════════════
 async function changeStudentPassword(stdIdx){
-  showToast('🔐 حفاظًا على أمان الحساب، يغيّر الطالب كلمة المرور من داخل حسابه');
+  if(!canManageAcademicAdmin()) return showToast('⚠️ هذه الصلاحية متاحة للإدارة فقط');
+  const student=students[stdIdx];
+  if(!student?.id) return showToast('⚠️ تعذر العثور على حساب الطالب');
+  const password=prompt(`أدخل كلمة المرور الجديدة للطالب ${getStudentFullName(student)} (8 أحرف على الأقل):`);
+  if(password===null) return;
+  if(password.length<8) return showToast('⚠️ يجب ألا تقل كلمة المرور عن 8 أحرف');
+  const confirmation=prompt('أعد إدخال كلمة المرور الجديدة للتأكيد:');
+  if(confirmation!==password) return showToast('⚠️ كلمتا المرور غير متطابقتين');
+  if(!confirm(`سيتم تغيير كلمة مرور ${getStudentFullName(student)} الآن. هل تريد المتابعة؟`)) return;
+  showLoader(true);
+  try{
+    await secureAdminExamRequest('/admin/student-password',{method:'POST',body:JSON.stringify({username:student.id,password})});
+    await saveActivityLog({action:'تغيير كلمة مرور طالب',targetType:'student',targetKey:student._fbKey||'',targetLabel:getStudentFullName(student),studentKey:student._fbKey||''});
+    showToast('✅ تم تغيير كلمة المرور بنجاح');
+  }catch(error){console.error('Admin password change error',error);showToast('⚠️ تعذر تغيير كلمة المرور: '+(error.message||'خطأ غير معروف'));}
+  finally{showLoader(false);}
 }
 
 async function generateStudentPasswords(){
