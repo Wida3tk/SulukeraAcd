@@ -317,6 +317,7 @@ tr:hover td{background:#f8faff;}
 .evaluation-section{display:flex;align-items:center;gap:9px;color:#092b77;font-weight:900;font-size:17px;margin:24px 0 10px}.evaluation-section:before{content:"";width:9px;height:9px;border-radius:50%;background:#55d7ff;box-shadow:0 0 0 5px rgba(85,215,255,.18)}
 .evaluation-item{background:#fff;border:1px solid #dfe6f5;border-radius:15px;padding:16px;margin-bottom:13px;box-shadow:0 5px 15px rgba(0,31,102,.045)}.evaluation-item-title{font-weight:750;line-height:1.8;margin-bottom:12px}.evaluation-scale{display:flex;gap:9px;flex-wrap:wrap}.evaluation-score{display:flex;align-items:center;justify-content:center;min-width:48px;gap:5px;border:1px solid #dce4f3;border-radius:11px;padding:9px 12px;cursor:pointer;background:#f9fbff;font-weight:800;transition:.18s}.evaluation-score:hover{border-color:#6845d6;background:#f2edff}.evaluation-score:has(input:checked){background:#6845d6;color:#fff;border-color:#6845d6;box-shadow:0 6px 14px rgba(104,69,214,.22)}.evaluation-score input{accent-color:#6845d6}
 .evaluation-text{background:#fff;border:1px solid #dfe6f5;border-radius:15px;padding:16px;margin-top:13px}.evaluation-text label{display:block;font-weight:800;line-height:1.7;margin-bottom:9px}.evaluation-text textarea{border:1px solid #d5deef;border-radius:11px;padding:12px;font-family:inherit;line-height:1.7;resize:vertical;background:#fcfdff}.evaluation-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.evaluation-actions .btn{padding:10px 20px;font-size:13px;border-radius:11px}
+.secure-result{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-radius:15px;padding:15px 17px;margin-top:14px;border:1px solid}.secure-result-copy{font-size:12px;line-height:1.7}.secure-result-score{font-size:25px;font-weight:950;direction:ltr}.secure-result-high{background:#ecfdf3;border-color:#86d7a3;color:#126334}.secure-result-mid{background:#fff8e6;border-color:#efcd73;color:#7a5600}.secure-result-low{background:#fff0f1;border-color:#efadb4;color:#8d2430}
 @media(max-width:600px){.secure-exam-shell,.evaluation-shell{padding:14px;border-radius:16px}.secure-question{padding:16px}.secure-question-list{gap:18px}.evaluation-score{min-width:43px;padding:8px 10px}}
 </style>
 </head>
@@ -1557,8 +1558,9 @@ function renderStudentExamsTab(){
   document.getElementById('mainContent').innerHTML=`
     <div class="exam-motivation">
       <div style="font-size:22px;font-weight:900;margin-bottom:6px">كل التوفيق لكم! 🌟</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.86)">استعد بهدوء، وثق بما تعلمته؛ كل خطوة اجتهاد تقرّبك من هدفك.</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.86)">الهدوء والثقة بما تم تعلمه يصنعان بداية موفقة؛ كل خطوة اجتهاد تقرّب من الهدف.</div>
     </div>
+    <div class="card"><div class="card-title">🔐 الدخول إلى الاختبار</div><div id="secureExamArea">${exception?.active?'<div class="alert alert-warn">الاختبارات الإلكترونية مخفية مؤقتًا بسبب الاستثناء المعتمد.</div>':'<div class="empty">جاري التحقق من الاختبارات المتاحة...</div>'}</div></div>
     <div class="card">
       <div class="card-title">📝 جدول اختباراتي</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">تظهر هنا اختبارات مقرراتك وفق دفعتك وتوقيت المملكة العربية السعودية.</div>
@@ -1568,8 +1570,7 @@ function renderStudentExamsTab(){
           <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span>${exam.termLabel?` <span class="badge badge-student">${escapeHtml(exam.termLabel)}</span>`:''}</div></div>
           <div class="exam-time">${to12h(exam.startTime)} إلى ${to12h(exam.endTime)}</div>
         </div>`;}).join('')}</div>`:'<div class="empty">لا توجد اختبارات منشورة لمقرراتك حاليًا.</div>'}
-    </div>
-    <div class="card"><div class="card-title">🔐 الاختبارات الإلكترونية</div><div id="secureExamArea">${exception?.active?'<div class="alert alert-warn">الاختبارات الإلكترونية مخفية مؤقتًا بسبب الاستثناء المعتمد.</div>':'<div class="empty">جاري التحقق من الاختبارات المتاحة...</div>'}</div></div>`;
+    </div>`;
   if(exception?.active){secureExamList=[];return;}
   loadSecureStudentExams();
 }
@@ -1589,7 +1590,7 @@ async function loadSecureStudentExams(){
     secureExamList=result.exams||[];
     mergeSecureExamGrades();
     renderSecureExamCards();
-  }catch(error){console.error('load secure exams error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل الاختبارات الإلكترونية الآن. حدّثي الصفحة أو تواصلي مع الإدارة.</div>';}
+  }catch(error){console.error('load secure exams error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل الاختبارات الإلكترونية الآن. يرجى تحديث الصفحة أو التواصل مع الإدارة.</div>';}
 }
 async function refreshSecureExamGrades(){
   try{const result=await secureExamRequest('/student/exams');secureExamList=result.exams||[];mergeSecureExamGrades();if(currentAppTab==='grades')renderStudentGradesTab();if(currentAppTab==='transcript')renderStudentTranscriptTab();}
@@ -1622,8 +1623,10 @@ function renderSecureExamCards(){
     const hasPerfectAttempt=submitted.some(attempt=>Number(attempt.wrongCount)===0);
     const canEvaluate=submitted.length&&!inProgress&&(remaining===0||hasPerfectAttempt);
     const best=exam.evaluated?Math.max(...submitted.map(attempt=>Number(attempt.score)||0)):null;
+    const resultTone=best>=16?'high':best>=12?'mid':'low';
+    const resultLabel=best>=16?'نتيجة متميزة':best>=12?'نتيجة جيدة':'تحتاج إلى مزيد من المراجعة';
     return `<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:white"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName)}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">متاح: ${new Date(exam.opensAt).toLocaleString('ar-SA')} — ${new Date(exam.closesAt).toLocaleString('ar-SA')}</div><div style="font-size:12px;color:var(--muted);margin-top:5px">مدة المحاولة ${exam.durationMinutes} دقيقة · ${exam.maxAttempts} محاولات</div></div><span class="badge ${isOpen?'badge-pass':'badge-warn'}">${isOpen?'متاح الآن':now<opens?'لم يبدأ':'انتهى'}</span></div>
-      ${submitted.length?`<div class="alert alert-info" style="margin-top:12px">${submitted.map(attempt=>`المحاولة ${attempt.attemptNo}: ${exam.evaluated?`${attempt.score}/20`:`${attempt.wrongCount} إجابات خاطئة`}`).join(' · ')}${exam.evaluated?`<br><strong>أعلى درجة: ${best}/20</strong>`:''}</div>`:''}
+      ${submitted.length?exam.evaluated?`<div class="secure-result secure-result-${resultTone}"><div><strong>${resultLabel}</strong><div class="secure-result-copy">تم اعتماد أعلى نتيجة من المحاولات المكتملة</div></div><div class="secure-result-score">${best}/20</div></div>`:`<div class="alert alert-info" style="margin-top:12px">${submitted.map(attempt=>`المحاولة ${attempt.attemptNo}: ${attempt.wrongCount} إجابات خاطئة`).join(' · ')}</div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${isOpen&&(inProgress||remaining>0)&&!exam.evaluated?`<button class="btn btn-primary" onclick="startSecureExam('${exam.id}')">${inProgress?`متابعة المحاولة ${inProgress.attemptNo}`:submitted.length?'بدء المحاولة الثانية':'بدء الاختبار'}</button>`:''}${canEvaluate&&!exam.evaluated?`<button class="btn btn-success" onclick="renderSecureEvaluation('${exam.id}')">تقييم المقرر وإظهار الدرجة</button>`:''}${remaining===0&&!inProgress&&!exam.evaluated?'<span class="badge badge-warn">استُنفدت المحاولات — يرجى إكمال التقييم لإظهار الدرجة</span>':''}</div></div>`;
   }).join('')}</div>`;
 }
