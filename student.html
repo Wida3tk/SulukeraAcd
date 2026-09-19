@@ -1650,12 +1650,39 @@ async function submitSecureAttempt(auto=false){
   finally{loader(false);}
 }
 function renderSecureEvaluation(examId){
-  document.getElementById('secureExamArea').innerHTML=`<div style="border:1px solid var(--border);border-radius:14px;padding:16px"><div style="font-size:17px;font-weight:900;margin-bottom:12px">تقييم المقرر</div><div class="form-group"><label>وضوح المحتوى</label><select id="evalContent"><option value="">-- اختاري --</option><option value="5">ممتاز</option><option value="4">جيد جدًا</option><option value="3">جيد</option><option value="2">مقبول</option><option value="1">ضعيف</option></select></div><div class="form-group"><label>الاستفادة من المقرر</label><select id="evalBenefit"><option value="">-- اختاري --</option><option value="5">ممتازة</option><option value="4">جيدة جدًا</option><option value="3">جيدة</option><option value="2">مقبولة</option><option value="1">ضعيفة</option></select></div><div class="form-group"><label>ملاحظات إضافية</label><textarea id="evalNotes" rows="3" style="width:100%"></textarea></div><div style="display:flex;gap:8px"><button class="btn btn-success" onclick="submitSecureEvaluation('${examId}')">إرسال التقييم وإظهار الدرجة</button><button class="btn" onclick="renderSecureExamCards()">رجوع</button></div></div>`;
+  const exam=secureExamList.find(item=>item.id===examId);
+  const questions=[
+    ['q5','المحتوى العلمي','كان المحتوى العلمي للبرنامج منظمًا ومتسلسلًا بصورة مناسبة'],
+    ['q6','المحتوى العلمي','ساهمت الأنشطة والواجبات في تعزيز فهمي لموضوعات المقرر'],
+    ['q7','المحاضر','قدّم المحاضر المحتوى بصورة واضحة ومنظمة'],
+    ['q8','المحاضر','كانت استجابة المحاضر للاستفسارات مناسبة من حيث الوقت'],
+    ['q9','المحاضر','كانت إجابات المحاضر على الاستفسارات واضحة ومفيدة'],
+    ['q10','المحاضر','شجّع المحاضر على المشاركة والتفاعل وطرح الأسئلة'],
+    ['q11','التنظيم','كانت مواعيد المحاضرات الخاصة بالمقرر واضحة بالنسبة لي'],
+    ['q12','التنظيم','كانت متطلبات المقرر وتعليماته واضحة وسهلة المتابعة'],
+    ['q13','التنظيم','تم رصد الدرجات خلال فترة زمنية مناسبة'],
+    ['q14','الدعم الأكاديمي والمتابعة','كانت التعليمات والإرشادات المقدمة من المرشد الأكاديمي واضحة'],
+    ['q15','الدعم الأكاديمي والمتابعة','كانت استجابة المرشد الأكاديمي للاستفسارات مناسبة من حيث الوقت']
+  ];
+  let section='';
+  const ratingRows=questions.map(([name,group,label])=>{
+    const heading=group!==section?(section=group,`<div style="font-weight:900;color:var(--primary-dark);font-size:16px;margin:20px 0 8px">${group}</div>`):'';
+    return `${heading}<div style="border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:10px"><div style="font-weight:700;margin-bottom:9px">${label} <span style="color:#dc2626">*</span></div><div style="display:flex;gap:8px;flex-wrap:wrap">${[1,2,3,4,5].map(value=>`<label style="display:flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:999px;padding:7px 11px;cursor:pointer"><input type="radio" name="${name}" value="${value}"> ${value}</label>`).join('')}</div></div>`;
+  }).join('');
+  document.getElementById('secureExamArea').innerHTML=`<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:white"><div style="font-size:19px;font-weight:900;color:var(--primary-dark)">استبيان رضا المتدرب</div><div style="font-weight:800;margin-top:5px">${escapeHtml(exam?.subjectName||'المقرر')}</div><p style="color:var(--muted);line-height:1.8;margin:8px 0 4px">نستخدم إجاباتك لتحسين جودة المقرر. تُحفظ الإجابات بسرية لأغراض المتابعة الأكاديمية، وبعد إرسالها ستظهر لك أعلى درجة حصلت عليها.</p><div class="alert alert-info" style="margin-top:10px">مفتاح التقييم: 1 = ضعيف جدًا، 2 = ضعيف، 3 = مقبول، 4 = جيد، 5 = ممتاز</div>${ratingRows}<div class="form-group"><label>ما التحسين الذي تقترحه لتطوير هذا المقرر مستقبلًا؟ <span style="color:#dc2626">*</span></label><textarea id="evalImprovement" rows="4" style="width:100%" placeholder="اكتبي مقترحك هنا"></textarea></div><div class="form-group"><label>رسالة تودين مشاركتها مع المحاضر</label><textarea id="evalLecturerMessage" rows="3" style="width:100%"></textarea></div><div class="form-group"><label>هل لديك أي ملاحظات أو مقترحات إضافية؟</label><textarea id="evalAdditionalNotes" rows="3" style="width:100%"></textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="submitSecureEvaluation('${examId}')">إرسال التقييم وإظهار الدرجة</button><button class="btn" onclick="renderSecureExamCards()">رجوع</button></div></div>`;
 }
 async function submitSecureEvaluation(examId){
-  const content=document.getElementById('evalContent')?.value,benefit=document.getElementById('evalBenefit')?.value;
-  if(!content||!benefit) return toast('⚠️ أكملي عناصر التقييم');
-  try{loader(true);const result=await secureExamRequest(`/student/exams/${examId}/evaluation`,{method:'POST',body:JSON.stringify({responses:{content:Number(content),benefit:Number(benefit),notes:document.getElementById('evalNotes')?.value.trim()||''}})});toast(`✅ تم التقييم · أعلى درجة ${result.bestScore}/20`);await loadSecureStudentExams();}
+  const responses={};
+  for(let number=5;number<=15;number++){
+    const selected=document.querySelector(`input[name="q${number}"]:checked`);
+    if(!selected) return toast('⚠️ أكملي جميع عبارات التقييم');
+    responses[`q${number}`]=Number(selected.value);
+  }
+  responses.improvement=document.getElementById('evalImprovement')?.value.trim()||'';
+  responses.lecturerMessage=document.getElementById('evalLecturerMessage')?.value.trim()||'';
+  responses.additionalNotes=document.getElementById('evalAdditionalNotes')?.value.trim()||'';
+  if(!responses.improvement) return toast('⚠️ اكتبي مقترحًا لتطوير المقرر');
+  try{loader(true);const result=await secureExamRequest(`/student/exams/${examId}/evaluation`,{method:'POST',body:JSON.stringify({responses})});toast(`✅ تم التقييم · أعلى درجة ${result.bestScore}/20`);await loadSecureStudentExams();}
   catch(error){toast('⚠️ '+secureExamErrorMessage(error.message));}
   finally{loader(false);}
 }
