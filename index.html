@@ -1080,6 +1080,8 @@ async function upgradeLegacyPassword(user,password){
 }
 async function userRecord(base,password){
   const record={name:base.name||'',username:base.username||'',role:base.role||'student'};
+  const linkedSubjects=(base.subjects||[]).map(value=>typeof value==='number'?subjects[value]?._fbKey:value).filter(value=>typeof value==='string'&&value);
+  if(base.role==='lecturer'&&linkedSubjects.length) record.subjects=[...new Set(linkedSubjects)];
   if(password) Object.assign(record,await passwordFields(password));
   else {
     if(base.passwordHash) record.passwordHash=base.passwordHash;
@@ -4519,7 +4521,8 @@ async function saveUser() {
   try{
     // 1. احفظ ملف المستخدم المرتبط بحساب Firebase Authentication
     const existingUser = users.find(u=>u.username===username)||{};
-    await fbRef('users/'+userFbKey).set({name,username,role,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+    const linkedSubjectKeys=subjs.map(si=>subjects[si]?._fbKey).filter(Boolean);
+    await fbRef('users/'+userFbKey).set({name,username,role,subjects:linkedSubjectKeys,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
     if(role==='lecturer') await fbRef('lecturerDirectory/'+username).set({name,updatedAt:new Date().toISOString()});
     else await fbRef('lecturerDirectory/'+username).remove();
 

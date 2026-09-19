@@ -1687,6 +1687,7 @@ function showLecturerView(){
 function getLecturerSubjects(){
   if(!dbData.subjects) return [];
   const u = currentUser.data;
+  const linkedSubjectKeys = new Set((Array.isArray(u.subjects)?u.subjects:[]).filter(value=>typeof value==='string'));
   // جمع كل المعرّفات الممكنة للمحاضر
   const myIds = new Set([
     currentUser.fbKey,
@@ -1699,6 +1700,7 @@ function getLecturerSubjects(){
 
   const allMySubjs = Object.entries(dbData.subjects)
     .filter(([k,s])=> {
+      if(linkedSubjectKeys.has(k)) return true;
       if(!s.lecturerUserId) return false;
       // تحقق من التطابق بكل الأشكال
       return myIds.has(s.lecturerUserId) || 
