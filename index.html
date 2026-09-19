@@ -5963,8 +5963,10 @@ async function syncStudentExamExceptionToService(student,exception){
   const exams=(await secureAdminExamRequest('/admin/exams')).exams||[];
   const matching=exams.filter(exam=>sameBatchName(exam.batch,student.batch)&&(!exception.subjectKey||exam.subject_key===exception.subjectKey));
   for(const exam of matching){
-    const opensAt=exception.untilDate?`${exception.untilDate}T18:00:00+03:00`:null;
-    const closesAt=exception.untilDate?`${exception.untilDate}T22:00:00+03:00`:null;
+    // تاريخ العودة تنبيه للإدارة وليس فتحًا تلقائيًا للاختبار.
+    // لا يُفتح الاستثناء إلا عند تحديد نافذة آمنة صراحةً من الإدارة.
+    const opensAt=exception.secureOpensAt||null;
+    const closesAt=exception.secureClosesAt||null;
     await secureAdminExamRequest('/admin/exceptions',{method:'POST',body:JSON.stringify({examId:exam.id,studentKey:student._fbKey,opensAt,closesAt,durationMinutes:120,extraAttempts:1,active:exception.active!==false,reason:exception.type||'approved_exception'})});
   }
   return matching.length;

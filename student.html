@@ -1553,7 +1553,8 @@ function renderStudentExamsTab(){
           <div class="exam-time">${to12h(exam.startTime)} إلى ${to12h(exam.endTime)}</div>
         </div>`;}).join('')}</div>`:'<div class="empty">لا توجد اختبارات منشورة لمقرراتك حاليًا.</div>'}
     </div>
-    <div class="card"><div class="card-title">🔐 الاختبارات الإلكترونية</div><div id="secureExamArea"><div class="empty">جاري التحقق من الاختبارات المتاحة...</div></div></div>`;
+    <div class="card"><div class="card-title">🔐 الاختبارات الإلكترونية</div><div id="secureExamArea">${exception?.active?'<div class="alert alert-warn">الاختبارات الإلكترونية مخفية مؤقتًا بسبب الاستثناء المعتمد.</div>':'<div class="empty">جاري التحقق من الاختبارات المتاحة...</div>'}</div></div>`;
+  if(exception?.active){secureExamList=[];return;}
   loadSecureStudentExams();
 }
 async function secureExamRequest(path,options={}){
