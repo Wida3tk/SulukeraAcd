@@ -1601,11 +1601,14 @@ function renderSecureExamCards(){
   host.innerHTML=`<div style="display:grid;gap:12px">${secureExamList.map(exam=>{
     const opens=new Date(exam.opensAt).getTime(),closes=new Date(exam.closesAt).getTime(),isOpen=now>=opens&&now<=closes;
     const submitted=exam.attempts.filter(attempt=>attempt.status==='submitted');
+    const inProgress=exam.attempts.find(attempt=>attempt.status==='in_progress');
     const remaining=Math.max(0,exam.maxAttempts-exam.attempts.length);
+    const hasPerfectAttempt=submitted.some(attempt=>Number(attempt.wrongCount)===0);
+    const canEvaluate=submitted.length&&!inProgress&&(remaining===0||hasPerfectAttempt);
     const best=exam.evaluated?Math.max(...submitted.map(attempt=>Number(attempt.score)||0)):null;
     return `<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:white"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName)}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">متاح: ${new Date(exam.opensAt).toLocaleString('ar-SA')} — ${new Date(exam.closesAt).toLocaleString('ar-SA')}</div><div style="font-size:12px;color:var(--muted);margin-top:5px">مدة المحاولة ${exam.durationMinutes} دقيقة · ${exam.maxAttempts} محاولات</div></div><span class="badge ${isOpen?'badge-pass':'badge-warn'}">${isOpen?'متاح الآن':now<opens?'لم يبدأ':'انتهى'}</span></div>
       ${submitted.length?`<div class="alert alert-info" style="margin-top:12px">${submitted.map(attempt=>`المحاولة ${attempt.attemptNo}: ${exam.evaluated?`${attempt.score}/20`:`${attempt.wrongCount} إجابات خاطئة`}`).join(' · ')}${exam.evaluated?`<br><strong>أعلى درجة: ${best}/20</strong>`:''}</div>`:''}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${isOpen&&remaining>0&&!exam.evaluated?`<button class="btn btn-primary" onclick="startSecureExam('${exam.id}')">${submitted.length?'بدء المحاولة الثانية':'بدء الاختبار'}</button>`:''}${submitted.length&&!exam.evaluated?`<button class="btn btn-success" onclick="renderSecureEvaluation('${exam.id}')">تقييم المقرر وإظهار الدرجة</button>`:''}${remaining===0&&!exam.evaluated?'<span class="badge badge-warn">استُنفدت المحاولات — أكملي التقييم لإظهار الدرجة</span>':''}</div></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${isOpen&&(inProgress||remaining>0)&&!exam.evaluated?`<button class="btn btn-primary" onclick="startSecureExam('${exam.id}')">${inProgress?`متابعة المحاولة ${inProgress.attemptNo}`:submitted.length?'بدء المحاولة الثانية':'بدء الاختبار'}</button>`:''}${canEvaluate&&!exam.evaluated?`<button class="btn btn-success" onclick="renderSecureEvaluation('${exam.id}')">تقييم المقرر وإظهار الدرجة</button>`:''}${remaining===0&&!inProgress&&!exam.evaluated?'<span class="badge badge-warn">استُنفدت المحاولات — أكملي التقييم لإظهار الدرجة</span>':''}</div></div>`;
   }).join('')}</div>`;
 }
 async function startSecureExam(examId){
@@ -1618,10 +1621,22 @@ async function startSecureExam(examId){
   finally{loader(false);}
 }
 function secureExamErrorMessage(code){return ({EXAM_NOT_AVAILABLE:'الاختبار غير متاح في هذا الوقت',NO_ATTEMPTS_REMAINING:'لا توجد محاولات متبقية',ATTEMPT_EXPIRED:'انتهى وقت المحاولة',ATTEMPT_ALREADY_SUBMITTED:'تم تسليم هذه المحاولة مسبقًا'})[code]||code;}
+function secureAttemptDraftKey(attemptId){return `sulukera_exam_attempt_${attemptId}`;}
+function getSecureAttemptDraft(){
+  try{return JSON.parse(localStorage.getItem(secureAttemptDraftKey(activeSecureAttempt?.attemptId))||'{}');}
+  catch{return {};}
+}
+function saveSecureAttemptAnswer(questionId,choiceIndex){
+  if(!activeSecureAttempt?.attemptId) return;
+  const answers=getSecureAttemptDraft();
+  answers[questionId]=Number(choiceIndex);
+  localStorage.setItem(secureAttemptDraftKey(activeSecureAttempt.attemptId),JSON.stringify(answers));
+}
 function renderSecureAttempt(){
   if(!activeSecureAttempt) return;
   clearInterval(secureExamTimer);
-  document.getElementById('mainContent').innerHTML=`<div class="card" id="secureAttemptPanel" oncopy="return false" oncut="return false" onpaste="return false" oncontextmenu="return false"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="card-title">المحاولة ${activeSecureAttempt.attemptNo}</div><div id="secureExamCountdown" class="badge badge-warn"></div></div><div class="alert alert-warn">لا تغلقي الصفحة أثناء المحاولة. تُحفظ الإجابات عند الضغط على تسليم.</div><form id="secureExamForm"><div style="display:grid;gap:14px">${activeSecureAttempt.questions.map((question,index)=>`<div style="border:1px solid var(--border);border-radius:12px;padding:15px"><div style="font-weight:900;margin-bottom:10px">${index+1}. ${escapeHtml(question.prompt)} <span class="badge badge-info">${question.points} درجة</span></div>${question.choices.map((choice,choiceIndex)=>`<label style="display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer"><input type="radio" name="question_${question.id}" value="${choiceIndex}"><span>${escapeHtml(choice)}</span></label>`).join('')}</div>`).join('')}</div><button type="button" class="btn btn-primary" style="margin-top:16px" onclick="submitSecureAttempt()">تسليم المحاولة</button></form></div>`;
+  const savedAnswers=getSecureAttemptDraft();
+  document.getElementById('mainContent').innerHTML=`<div class="card" id="secureAttemptPanel" oncopy="return false" oncut="return false" onpaste="return false" oncontextmenu="return false"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="card-title">المحاولة ${activeSecureAttempt.attemptNo}</div><div id="secureExamCountdown" class="badge badge-warn"></div></div><div class="alert alert-warn">تُحفظ اختياراتك تلقائيًا على هذا الجهاز حتى التسليم. لا تغلقي الصفحة أثناء المحاولة إن أمكن.</div><form id="secureExamForm"><div style="display:grid;gap:14px">${activeSecureAttempt.questions.map((question,index)=>`<div style="border:1px solid var(--border);border-radius:12px;padding:15px"><div style="font-weight:900;margin-bottom:10px">${index+1}. ${escapeHtml(question.prompt)} <span class="badge badge-info">${question.points} درجة</span></div>${question.choices.map((choice,choiceIndex)=>`<label style="display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer"><input type="radio" name="question_${question.id}" value="${choiceIndex}" ${Number(savedAnswers[question.id])===choiceIndex?'checked':''} onchange="saveSecureAttemptAnswer('${question.id}',${choiceIndex})"><span>${escapeHtml(choice)}</span></label>`).join('')}</div>`).join('')}</div><button type="button" class="btn btn-primary" style="margin-top:16px" onclick="submitSecureAttempt()">تسليم المحاولة</button></form></div>`;
   const update=()=>{const remaining=Math.max(0,new Date(activeSecureAttempt.expiresAt).getTime()-Date.now()),minutes=Math.floor(remaining/60000),seconds=Math.floor((remaining%60000)/1000),label=document.getElementById('secureExamCountdown');if(label)label.textContent=`الوقت المتبقي ${minutes}:${String(seconds).padStart(2,'0')}`;if(!remaining){clearInterval(secureExamTimer);submitSecureAttempt(true);}};
   update();secureExamTimer=setInterval(update,1000);
 }
@@ -1630,7 +1645,7 @@ async function submitSecureAttempt(auto=false){
   if(!auto&&!confirm('هل أنت متأكد من تسليم هذه المحاولة؟')) return;
   const answers={};
   activeSecureAttempt.questions.forEach(question=>{const selected=document.querySelector(`input[name="question_${question.id}"]:checked`);if(selected)answers[question.id]=Number(selected.value);});
-  try{loader(true);const result=await secureExamRequest(`/student/attempts/${activeSecureAttempt.attemptId}/submit`,{method:'POST',body:JSON.stringify({answers})});clearInterval(secureExamTimer);activeSecureAttempt=null;toast(`✅ تم التسليم · ${result.wrongCount} إجابات خاطئة${result.attemptsRemaining?` · متبقي ${result.attemptsRemaining} محاولة`:''}`);renderStudentExamsTab();}
+  try{loader(true);const attemptId=activeSecureAttempt.attemptId;const result=await secureExamRequest(`/student/attempts/${attemptId}/submit`,{method:'POST',body:JSON.stringify({answers})});clearInterval(secureExamTimer);localStorage.removeItem(secureAttemptDraftKey(attemptId));activeSecureAttempt=null;toast(`✅ تم التسليم · ${result.wrongCount} إجابات خاطئة${result.attemptsRemaining?` · متبقي ${result.attemptsRemaining} محاولة`:''}`);renderStudentExamsTab();}
   catch(error){toast('⚠️ '+secureExamErrorMessage(error.message));}
   finally{loader(false);}
 }
