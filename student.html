@@ -564,6 +564,11 @@ function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2800);
 }
+function escapeHtml(value){
+  return String(value??'').replace(/[&<>'"]/g,char=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'
+  })[char]);
+}
 function calcTotal(g){
   if(!g) return 0;
   let t=0;
