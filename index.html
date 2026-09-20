@@ -7692,7 +7692,7 @@ async function updateStudentRequestStatus(requestKey, status){
       assignedToLecturerBy:nextStatus==='awaiting_lecturer_review' ? (currentUser?.username || currentUser?.id || 'admin') : (request.assignedToLecturerBy||'')
     };
     await fbRef('studentRequests/'+requestKey).update(payload);
-    if(request.type==='exam_postponement'&&request.studentKey){
+    if(['exam_postponement','postpone'].includes(request.type)&&request.studentKey){
       const currentException=examExceptionsData[request.studentKey]||{};
       if(nextStatus==='approved'){
         const exceptionPayload={studentKey:request.studentKey,active:true,type:'exam_postponement',subjectKey:'',subjectName:'',fromDate:reviewedAt.slice(0,10),untilDate:request.returnDate||'',documentReceived:false,documentRef:'',lecturerMessage:'لدى الطالب تأجيل اختبارات معتمد من الإدارة.',internalNotes:`طلب الطالب: ${request.details||''}`,sourceRequestKey:requestKey,updatedAt:reviewedAt,updatedBy:currentUser?.username||currentUser?.id||'admin'};
