@@ -341,6 +341,17 @@ tr:hover td{background:#f8faff;}
         <div id="lecturerFollowUpPanel"></div>
       </div>
 
+      <!-- LECTURER EXAM RESULTS -->
+      <div class="page" id="page-lecturerexams">
+        <div class="card card-accent">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <div><div class="card-title" style="margin-bottom:5px">📊 نتائج ومحاولات الاختبارات</div><div style="font-size:12px;color:var(--text-muted)">تظهر هنا اختبارات المقررات المسندة إليك فقط، مع أعلى نتيجة وعدد المحاولات وحالة التقييم.</div></div>
+            <button class="btn btn-primary" onclick="loadLecturerExamResults()">تحديث النتائج</button>
+          </div>
+          <div id="lecturerExamResults" style="margin-top:14px"><div class="empty">جاري تحميل النتائج...</div></div>
+        </div>
+      </div>
+
       <!-- STUDENTS -->
       <div class="page" id="page-students">
         <div class="card card-accent">
@@ -2281,6 +2292,7 @@ const navConfig = {
   lecturer: [
     {id:'dashboard',icon:'🏠',label:'لوحة التحكم'},
     {id:'grades',icon:'✏️',label:'سجل الدرجات'},
+    {id:'lecturerexams',icon:'📝',label:'نتائج الاختبارات'},
     {id:'reports',icon:'📋',label:'تقارير الطلاب'},
     {id:'lecturercurrent',icon:'📚',label:'المقررات الحالية'},
     {id:'lecturerfinished',icon:'✅',label:'المقررات المكتملة'},
@@ -2353,7 +2365,7 @@ const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'المحاضرون والمستخدمون',
   grades:'إدخال الدرجات',reports:'التقارير الأكاديمية',programs:'البرامج والمسارات والدفعات', batchplans:'الخطط الدراسية', alerts:'الطلبات والتنبيهات', schedule:'الجدول الأكاديمي', exams:'الاختبارات', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
-  settings:'الإعدادات',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
+  settings:'الإعدادات',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturerexams:'نتائج الاختبارات',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
   const lecturerSections={lecturercurrent:'lecturer-current-courses',lecturerfinished:'lecturer-finished-courses'};
@@ -3385,6 +3397,7 @@ function getLegacyExamValue(rows){
     const value=legacyNumber(row[index]);
     if(Number.isFinite(value)) return value;
   }
+  if (p==='lecturerexams') loadLecturerExamResults();
   return null;
 }
 function legacySheetHasEnteredGrades(rows){
@@ -5926,6 +5939,25 @@ async function secureAdminExamRequest(path,options={}){
   const result=await response.json();
   if(!response.ok) throw new Error(result.error||'تعذر الاتصال بخادم الاختبارات');
   return result;
+}
+async function loadLecturerExamResults(){
+  const host=document.getElementById('lecturerExamResults');
+  if(!host||currentUser?.role!=='lecturer') return;
+  host.innerHTML='<div class="empty">جاري تحميل نتائج طلابك...</div>';
+  try{
+    const rows=(await secureAdminExamRequest('/lecturer/results')).results||[];
+    if(!rows.length){host.innerHTML='<div class="empty">لا توجد محاولات مسجلة لطلاب مقرراتك حتى الآن.</div>';return;}
+    const groups=Object.values(rows.reduce((result,row)=>{
+      const key=row.exam_id;
+      if(!result[key]) result[key]={subjectName:row.subject_name,batch:row.batch,rows:[]};
+      result[key].rows.push(row);
+      return result;
+    },{}));
+    host.innerHTML=groups.map(group=>`<section style="border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px;background:#fff">
+      <div style="padding:12px 15px;background:linear-gradient(135deg,#eef3ff,#f8fdff);display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><strong>${escapeHtml(group.subjectName||'اختبار')}</strong><span class="badge badge-admin">${escapeHtml(group.batch||'')}</span></div>
+      <div class="table-wrap"><table><thead><tr><th>الطالب</th><th>المحاولات</th><th>المسلّمة</th><th>قيد التنفيذ</th><th>أعلى درجة</th><th>التقييم</th><th>آخر تسليم</th></tr></thead><tbody>${group.rows.map(row=>{const student=students.find(item=>item._fbKey===row.student_key);const evaluated=Number(row.evaluated)===1;const score=row.best_score===null?'—':`${Number(row.best_score).toFixed(Number(row.best_score)%1?1:0)}/20`;return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.student_key)}</strong><div style="font-size:10px;color:var(--text-muted)">${escapeHtml(student?.id||'')}</div></td><td><span class="badge badge-admin">${Number(row.attempt_count)||0}</span></td><td>${Number(row.submitted_count)||0}</td><td>${Number(row.active_count)||0}</td><td><strong style="color:${evaluated?'var(--success)':'var(--primary)'}">${score}</strong></td><td><span class="badge ${evaluated?'badge-pass':'badge-warn'}">${evaluated?'مكتمل':'بانتظار التقييم'}</span></td><td>${row.last_submitted_at?new Date(row.last_submitted_at).toLocaleString('ar-SA'):'—'}</td></tr>`;}).join('')}</tbody></table></div>
+    </section>`).join('');
+  }catch(error){console.error('load lecturer exam results error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل النتائج الآن. أعيدي المحاولة بعد تحديث الصفحة.</div>';}
 }
 let examAdminResultsData=[];
 async function loadExamAdminResults(){
