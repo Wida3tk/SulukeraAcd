@@ -1257,6 +1257,9 @@ async function loadAllFromFirebase(){
     scheduleData = root.schedule || {weekly:{}, units:{}};
     examSchedulesData = root.examSchedules || {};
     examExceptionsData = root.studentExamExceptions || {};
+    professionalProgramsData = root.professionalPrograms || {};
+    professionalEnrollmentsData = root.professionalEnrollments || {};
+    professionalProgressData = root.professionalProgress || {};
     studentAdminSheetsData = root.studentAdminSheets
       ? Object.entries(root.studentAdminSheets).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
@@ -1560,6 +1563,9 @@ let legacyGradeImportIssues=[];
 let examSchedulesData={};
 let editingExamScheduleKey='';
 let examExceptionsData={};
+let professionalProgramsData={};
+let professionalEnrollmentsData={};
+let professionalProgressData={};
 let selectedAdvisorStudentIdx=-1;
 const ADVISOR_BRIDGE_ORIGIN='https://advisor-bridge.ro7e-entaa.workers.dev';
 let advisorAccessToken='';
@@ -5948,9 +5954,9 @@ function professionalProgramDraft(){
   }
   return {title:'برنامج إدارة السلوك التنظيمي',description:'رحلة مهنية من ثلاثة مسارات وتسع وحدات تعليمية.',status:'draft',version:1,tracks};
 }
-function getProfessionalProgram(){return dbData.professionalPrograms?.[PROFESSIONAL_PROGRAM_ID]||professionalProgramDraft();}
+function getProfessionalProgram(){return professionalProgramsData?.[PROFESSIONAL_PROGRAM_ID]||professionalProgramDraft();}
 function professionalEnrollmentRows(){
-  return Object.entries(dbData.professionalEnrollments||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]?.status==='active').map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
+  return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]?.status==='active').map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
 }
 function renderProfessionalProgramAdmin(){
   const host=document.getElementById('professionalProgramAdminContent'); if(!host) return;
@@ -5975,7 +5981,7 @@ function renderProfessionalProgramAdmin(){
       </section>`).join('')}</div>
     </div>`).join('')}
     <div class="card card-accent"><div class="card-title">👥 طلاب البرنامج</div><div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap"><div class="form-group" style="flex:1;min-width:240px;margin:0"><label>إضافة طالب</label><select id="pp_student"><option value="">-- اختر طالبًا --</option>${studentOptions.map(student=>`<option value="${escapeHtml(student._fbKey)}">${escapeHtml(getStudentFullName(student))} — ${escapeHtml(student.id||'')}</option>`).join('')}</select></div><button class="btn btn-success" onclick="enrollProfessionalStudent()">إضافة للبرنامج</button></div>
-      <div style="margin-top:14px">${enrolled.length?`<div class="table-wrap"><table><thead><tr><th>الطالب</th><th>الرقم</th><th>التقدم</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${enrolled.map(row=>{const student=students.find(item=>item._fbKey===row.studentKey);const completed=Object.values(dbData.professionalProgress?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units||{}).filter(unit=>unit.completed).length;return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.studentKey)}</strong></td><td>${escapeHtml(student?.id||'—')}</td><td>${completed}/9</td><td><span class="badge badge-pass">نشط</span></td><td><button class="btn btn-danger btn-sm" onclick="removeProfessionalStudent('${escapeHtml(row.studentKey)}')">إزالة</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لم تتم إضافة طلاب إلى البرنامج بعد.</div>'}</div>
+      <div style="margin-top:14px">${enrolled.length?`<div class="table-wrap"><table><thead><tr><th>الطالب</th><th>الرقم</th><th>التقدم</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${enrolled.map(row=>{const student=students.find(item=>item._fbKey===row.studentKey);const completed=Object.values(professionalProgressData?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units||{}).filter(unit=>unit.completed).length;return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.studentKey)}</strong></td><td>${escapeHtml(student?.id||'—')}</td><td>${completed}/9</td><td><span class="badge badge-pass">نشط</span></td><td><button class="btn btn-danger btn-sm" onclick="removeProfessionalStudent('${escapeHtml(row.studentKey)}')">إزالة</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لم تتم إضافة طلاب إلى البرنامج بعد.</div>'}</div>
     </div>`;
   }catch(error){
     console.error('professional program render error',error);
@@ -5993,14 +5999,14 @@ async function saveProfessionalProgram(){
     tracks[trackKey]={order:trackNo,title:document.getElementById(`pp_${trackKey}_title`).value.trim(),description:document.getElementById(`pp_${trackKey}_description`).value.trim(),units};
   }
   const next={...current,title:document.getElementById('pp_title').value.trim(),description:document.getElementById('pp_description').value.trim(),status:document.getElementById('pp_status').value,tracks,updatedAt:new Date().toISOString(),updatedBy:currentUser.username||'admin'};
-  await fbRef(`professionalPrograms/${PROFESSIONAL_PROGRAM_ID}`).set(next); dbData.professionalPrograms=dbData.professionalPrograms||{};dbData.professionalPrograms[PROFESSIONAL_PROGRAM_ID]=next;showToast('✅ تم حفظ البرنامج المهني');renderProfessionalProgramAdmin();
+  await fbRef(`professionalPrograms/${PROFESSIONAL_PROGRAM_ID}`).set(next);professionalProgramsData[PROFESSIONAL_PROGRAM_ID]=next;showToast('✅ تم حفظ البرنامج المهني');renderProfessionalProgramAdmin();
 }
 async function enrollProfessionalStudent(){
   const studentKey=document.getElementById('pp_student')?.value;if(!studentKey)return showToast('اختاري طالبًا أولًا');
-  const record={status:'active',enrolledAt:new Date().toISOString(),enrolledBy:currentUser.username||'admin'};await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).set(record);dbData.professionalEnrollments=dbData.professionalEnrollments||{};dbData.professionalEnrollments[studentKey]=dbData.professionalEnrollments[studentKey]||{};dbData.professionalEnrollments[studentKey][PROFESSIONAL_PROGRAM_ID]=record;showToast('✅ تمت إضافة الطالب للبرنامج');renderProfessionalProgramAdmin();
+  const record={status:'active',enrolledAt:new Date().toISOString(),enrolledBy:currentUser.username||'admin'};await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).set(record);professionalEnrollmentsData[studentKey]=professionalEnrollmentsData[studentKey]||{};professionalEnrollmentsData[studentKey][PROFESSIONAL_PROGRAM_ID]=record;showToast('✅ تمت إضافة الطالب للبرنامج');renderProfessionalProgramAdmin();
 }
 async function removeProfessionalStudent(studentKey){
-  if(!confirm('إزالة الطالب من البرنامج المهني؟ سيبقى تقدمه محفوظًا للأرشفة.'))return;await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).remove();delete dbData.professionalEnrollments?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID];showToast('تمت إزالة التسجيل مع حفظ التقدم');renderProfessionalProgramAdmin();
+  if(!confirm('إزالة الطالب من البرنامج المهني؟ سيبقى تقدمه محفوظًا للأرشفة.'))return;await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).remove();delete professionalEnrollmentsData?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID];showToast('تمت إزالة التسجيل مع حفظ التقدم');renderProfessionalProgramAdmin();
 }
 
 // ══════════════════════════════════════════════
