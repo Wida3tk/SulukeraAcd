@@ -2106,6 +2106,22 @@ function renderLecturerCourseCards(items, emptyMessage){
       <button class="btn btn-primary btn-sm" onclick="openLecturerSubjectFromDashboard(${item.idx})">فتح رصد المقرر</button>
     </div>`).join('')}</div>`;
 }
+function renderLecturerCourseGroups(items,emptyMessage){
+  if(!items.length) return `<div class="alert alert-info">${emptyMessage}</div>`;
+  const groups=items.reduce((result,item)=>{
+    const batch=item.batch||'دفعة غير محددة';
+    (result[batch]||(result[batch]=[])).push(item);
+    return result;
+  },{});
+  return Object.entries(groups).sort(([a],[b])=>b.localeCompare(a,'ar')).map(([batch,courses])=>`
+    <section style="border:1px solid var(--border);border-radius:16px;padding:13px;margin-top:12px;background:#fbfcff">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px">
+        <div style="font-size:13px;font-weight:900;color:var(--primary-dark)">الدفعة ${escapeHtml(batch)}</div>
+        <span class="badge badge-admin">${courses.length} ${courses.length===1?'مقرر':'مقررات'}</span>
+      </div>
+      ${renderLecturerCourseCards(courses,'')}
+    </section>`).join('');
+}
 function renderLecturerQuickActions(){
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;">
     <button class="btn btn-primary" onclick="navTo('grades',null)">سجل الدرجات</button>
@@ -2432,7 +2448,8 @@ function renderDashboard() {
   if(currentUser.role==='lecturer'){
     const page=document.getElementById('page-dashboard');
     const lecturerSubjects=getLecturerSubjectDashboardRows();
-    const currentCourses=lecturerSubjects.filter(item=>item.semester.state!=='finished');
+    const currentCourses=lecturerSubjects.filter(item=>item.semester.state==='ongoing');
+    const upcomingCourses=lecturerSubjects.filter(item=>item.semester.state==='upcoming');
     const finishedCourses=lecturerSubjects.filter(item=>item.semester.state==='finished');
     const totalStudents=[...new Set(lecturerSubjects.flatMap(item=>item.studentIdxs))].length;
     const atRiskCount=lecturerSubjects.reduce((sum,item)=>sum+item.atRiskCount,0);
@@ -2466,14 +2483,19 @@ function renderDashboard() {
       <div style="display:grid;grid-template-columns:1fr;gap:1rem;">
         <div class="card card-accent" id="lecturer-current-courses">
           <div class="card-title">📚 المقررات الحالية</div>
-          <div class="alert alert-info">تشمل المقررات الجارية أو غير المكتملة، مع تاريخ البداية والنهاية لكل مقرر.</div>
-          ${renderLecturerCourseCards(currentCourses,'لا توجد مقررات حالية مسندة إلى الحساب.')}
+          <div class="alert alert-info">المقررات الجارية الآن فقط، مرتبة بوضوح حسب الدفعة.</div>
+          ${renderLecturerCourseGroups(currentCourses,'لا توجد مقررات حالية مسندة إلى الحساب.')}
         </div>
-        <div class="card card-accent" id="lecturer-finished-courses">
+        ${upcomingCourses.length?`<div class="card card-accent" id="lecturer-upcoming-courses">
+          <div class="card-title">🗓️ المقررات القادمة</div>
+          <div class="alert alert-info">مقررات لم يبدأ موعدها بعد، ولا تُحتسب ضمن المقررات الحالية.</div>
+          ${renderLecturerCourseGroups(upcomingCourses,'')}
+        </div>`:''}
+        ${finishedCourses.length?`<div class="card card-accent" id="lecturer-finished-courses">
           <div class="card-title">✅ المقررات المكتملة</div>
-          <div class="alert alert-info">مقررات اكتملت وفق تاريخ نهاية الفصل الدراسي المرتبط بها.</div>
-          ${renderLecturerCourseCards(finishedCourses,'لا توجد مقررات مكتملة مسندة إلى الحساب.')}
-        </div>
+          <div class="alert alert-info">مقررات انتهت وفق التاريخ المعتمد، ومفصولة حسب الدفعة.</div>
+          ${renderLecturerCourseGroups(finishedCourses,'')}
+        </div>`:''}
       </div>`;
     return;
   }
