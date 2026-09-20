@@ -304,7 +304,7 @@ tr:hover td{background:#f8faff;}
 .unit-topic-dot{width:6px;height:6px;border-radius:50%;background:var(--primary);flex-shrink:0;}
 
 /* Secure exams and evaluations */
-.secure-exam-shell{background:linear-gradient(145deg,#f7f9ff 0%,#eef8ff 48%,#fffaf0 100%);border:1px solid #dbe5ff;border-radius:22px;padding:22px;box-shadow:0 16px 38px rgba(0,31,102,.10);}
+.secure-exam-shell{background:linear-gradient(145deg,#f7f9ff 0%,#eef8ff 48%,#fffaf0 100%);border:1px solid #dbe5ff;border-radius:22px;padding:22px;box-shadow:0 16px 38px rgba(0,31,102,.10);user-select:none;-webkit-user-select:none;}
 .secure-exam-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(135deg,#062461,#0d40fc);color:#fff;border-radius:17px;padding:18px 20px;margin-bottom:16px;}
 .secure-exam-head .card-title{color:#fff;margin:0;font-size:20px;}.secure-exam-head .badge{font-size:13px;padding:8px 13px;background:#fff3cd;color:#725500;}
 .secure-exam-note{background:#fff;border:1px solid #dbe5ff;border-right:4px solid #55d7ff;border-radius:12px;padding:12px 14px;margin:0 0 22px;line-height:1.8;color:#34415f;}
@@ -1652,11 +1652,26 @@ function saveSecureAttemptAnswer(questionId,choiceIndex){
   answers[questionId]=Number(choiceIndex);
   localStorage.setItem(secureAttemptDraftKey(activeSecureAttempt.attemptId),JSON.stringify(answers));
 }
+function secureExamKeyboardGuard(event){
+  if(!activeSecureAttempt) return;
+  const key=String(event.key||'').toLowerCase();
+  const blockedShortcut=(event.ctrlKey||event.metaKey)&&['a','c','v','x','p','s','u'].includes(key);
+  if(blockedShortcut||event.key==='F12'){
+    event.preventDefault();event.stopPropagation();
+    toast('⚠️ النسخ والطباعة وحفظ محتوى الاختبار غير متاحة أثناء المحاولة');
+  }
+}
+function installSecureExamProtection(){
+  document.removeEventListener('keydown',secureExamKeyboardGuard,true);
+  document.addEventListener('keydown',secureExamKeyboardGuard,true);
+}
+function removeSecureExamProtection(){document.removeEventListener('keydown',secureExamKeyboardGuard,true);}
 function renderSecureAttempt(){
   if(!activeSecureAttempt) return;
   clearInterval(secureExamTimer);
   const savedAnswers=getSecureAttemptDraft();
   document.getElementById('mainContent').innerHTML=`<div class="secure-exam-shell" id="secureAttemptPanel" oncopy="return false" oncut="return false" onpaste="return false" oncontextmenu="return false"><div class="secure-exam-head"><div><div class="card-title">المحاولة ${activeSecureAttempt.attemptNo}</div><div style="font-size:12px;opacity:.85;margin-top:4px">يرجى قراءة كل سؤال بهدوء وتحديد الإجابة الأنسب</div></div><div id="secureExamCountdown" class="badge badge-warn"></div></div><div class="secure-exam-note">تُحفظ الاختيارات تلقائيًا على هذا الجهاز حتى التسليم. يُفضّل إبقاء الصفحة مفتوحة أثناء المحاولة.</div><form id="secureExamForm"><div class="secure-question-list">${activeSecureAttempt.questions.map((question,index)=>`<div class="secure-question"><div class="secure-question-title"><span style="color:var(--primary)">${index+1}.</span> ${escapeHtml(question.prompt)} <span class="badge badge-info">${question.points} درجة</span></div>${question.choices.map((choice,choiceIndex)=>`<label class="secure-choice"><input type="radio" name="question_${question.id}" value="${choiceIndex}" ${Number(savedAnswers[question.id])===choiceIndex?'checked':''} onchange="saveSecureAttemptAnswer('${question.id}',${choiceIndex})"><span>${escapeHtml(choice)}</span></label>`).join('')}</div>`).join('')}</div><div class="secure-submit-row"><button type="button" class="btn btn-primary" onclick="submitSecureAttempt()">تسليم المحاولة</button></div></form></div>`;
+  installSecureExamProtection();
   const update=()=>{const remaining=Math.max(0,new Date(activeSecureAttempt.expiresAt).getTime()-Date.now()),minutes=Math.floor(remaining/60000),seconds=Math.floor((remaining%60000)/1000),label=document.getElementById('secureExamCountdown');if(label)label.textContent=`الوقت المتبقي ${minutes}:${String(seconds).padStart(2,'0')}`;if(!remaining){clearInterval(secureExamTimer);submitSecureAttempt(true);}};
   update();secureExamTimer=setInterval(update,1000);
 }
@@ -1665,7 +1680,7 @@ async function submitSecureAttempt(auto=false){
   if(!auto&&!confirm('هل تريد تسليم هذه المحاولة الآن؟')) return;
   const answers={};
   activeSecureAttempt.questions.forEach(question=>{const selected=document.querySelector(`input[name="question_${question.id}"]:checked`);if(selected)answers[question.id]=Number(selected.value);});
-  try{loader(true);const attemptId=activeSecureAttempt.attemptId;const result=await secureExamRequest(`/student/attempts/${attemptId}/submit`,{method:'POST',body:JSON.stringify({answers})});clearInterval(secureExamTimer);localStorage.removeItem(secureAttemptDraftKey(attemptId));activeSecureAttempt=null;toast(`✅ تم التسليم · ${result.wrongCount} إجابات خاطئة${result.attemptsRemaining?` · متبقي ${result.attemptsRemaining} محاولة`:''}`);renderStudentExamsTab();}
+  try{loader(true);const attemptId=activeSecureAttempt.attemptId;const result=await secureExamRequest(`/student/attempts/${attemptId}/submit`,{method:'POST',body:JSON.stringify({answers})});clearInterval(secureExamTimer);localStorage.removeItem(secureAttemptDraftKey(attemptId));activeSecureAttempt=null;removeSecureExamProtection();toast(`✅ تم التسليم · ${result.wrongCount} إجابات خاطئة${result.attemptsRemaining?` · متبقي ${result.attemptsRemaining} محاولة`:''}`);renderStudentExamsTab();}
   catch(error){toast('⚠️ '+secureExamErrorMessage(error.message));}
   finally{loader(false);}
 }
