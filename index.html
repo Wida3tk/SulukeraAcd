@@ -352,6 +352,9 @@ tr:hover td{background:#f8faff;}
         </div>
       </div>
 
+      <div class="page" id="page-lecturercurrent"><div id="lecturerCurrentCoursesPage"></div></div>
+      <div class="page" id="page-lecturerfinished"><div id="lecturerFinishedCoursesPage"></div></div>
+
       <!-- STUDENTS -->
       <div class="page" id="page-students">
         <div class="card card-accent">
@@ -2122,6 +2125,20 @@ function renderLecturerCourseGroups(items,emptyMessage){
       ${renderLecturerCourseCards(courses,'')}
     </section>`).join('');
 }
+function renderLecturerCoursesPage(state){
+  if(currentUser?.role!=='lecturer') return;
+  const isFinished=state==='finished';
+  const host=document.getElementById(isFinished?'lecturerFinishedCoursesPage':'lecturerCurrentCoursesPage');
+  if(!host) return;
+  const courses=getLecturerSubjectDashboardRows().filter(item=>item.semester.state===state);
+  host.innerHTML=`<div class="card card-accent">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <div><div class="card-title" style="margin-bottom:5px">${isFinished?'✅ المقررات المكتملة':'📚 المقررات الحالية'}</div><div style="font-size:12px;color:var(--text-muted)">${isFinished?'تعرض هذه الصفحة المقررات المنتهية فقط وفق تاريخ النهاية المعتمد.':'تعرض هذه الصفحة المقررات الجارية الآن فقط، دون المقررات المكتملة أو القادمة.'}</div></div>
+      <span class="badge ${isFinished?'badge-warn':'badge-pass'}">${courses.length} ${courses.length===1?'مقرر':'مقررات'}</span>
+    </div>
+    ${renderLecturerCourseGroups(courses,isFinished?'لا توجد مقررات مكتملة مسندة إلى الحساب.':'لا توجد مقررات حالية مسندة إلى الحساب.')}
+  </div>`;
+}
 function renderLecturerQuickActions(){
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;">
     <button class="btn btn-primary" onclick="navTo('grades',null)">سجل الدرجات</button>
@@ -2384,8 +2401,7 @@ const pageTitles={
   settings:'الإعدادات',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturerexams:'نتائج الاختبارات',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
-  const lecturerSections={lecturercurrent:'lecturer-current-courses',lecturerfinished:'lecturer-finished-courses'};
-  const resolvedPageId=lecturerSections[pageId]?'dashboard':pageId;
+  const resolvedPageId=pageId;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const activeItem=el||document.querySelector(`.nav-item[data-page-id="${pageId}"]`);
   if (activeItem) {
@@ -2400,7 +2416,6 @@ function navTo(pageId, el) {
   document.getElementById('pageSubtitle').textContent=currentUser?`أهلًا بك، ${currentUser.name}`:'';
   document.getElementById('btnBack').style.display=(resolvedPageId==='student-profile')?'flex':'none';
   renderTopbarActions(resolvedPageId);
-  if(lecturerSections[pageId]) setTimeout(()=>document.getElementById(lecturerSections[pageId])?.scrollIntoView({behavior:'smooth',block:'start'}),0);
 }
 function goBack() {
   navTo(previousPage||'students', null);
@@ -3420,6 +3435,8 @@ function getLegacyExamValue(rows){
     if(Number.isFinite(value)) return value;
   }
   if (p==='lecturerexams') loadLecturerExamResults();
+  if (p==='lecturercurrent') renderLecturerCoursesPage('ongoing');
+  if (p==='lecturerfinished') renderLecturerCoursesPage('finished');
   return null;
 }
 function legacySheetHasEnteredGrades(rows){
