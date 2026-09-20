@@ -473,7 +473,7 @@ tr:hover td{background:#f8faff;}
       </div>
 
       <!-- ISOLATED PROFESSIONAL PROGRAM -->
-      <div class="page" id="page-professionalprogram"><div id="professionalProgramAdminContent"></div></div>
+      <div class="page" id="page-professionalprogram"><div id="professionalProgramAdminContent"><div class="card card-accent"><div class="card-title">🚀 البرنامج المهني</div><div class="alert alert-info">جاري تحميل إعدادات البرنامج...</div></div></div></div>
 
       <!-- BATCH-CENTRIC ACADEMIC PLANS -->
       <div class="page" id="page-batchplans">
@@ -2364,7 +2364,6 @@ const adminNavGroups=[
   ]},
   {id:'system',icon:'🏛️',label:'الهيكل والنظام',items:[
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
-    {id:'professionalprogram',icon:'🚀',label:'إدارة السلوك التنظيمي'},
     {id:'users',icon:'👥',label:'المحاضرون والمستخدمون'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'}
   ]}
@@ -5954,7 +5953,8 @@ function professionalEnrollmentRows(){
   return Object.entries(dbData.professionalEnrollments||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]?.status==='active').map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
 }
 function renderProfessionalProgramAdmin(){
-  const host=document.getElementById('professionalProgramAdminContent'); if(!host||currentUser?.role!=='admin') return;
+  const host=document.getElementById('professionalProgramAdminContent'); if(!host) return;
+  try{
   const program=getProfessionalProgram(),enrolled=professionalEnrollmentRows(),enrolledKeys=new Set(enrolled.map(row=>row.studentKey));
   const studentOptions=students.filter(student=>!enrolledKeys.has(student._fbKey)&&student.accountStatus!=='withdrawn').sort((a,b)=>getStudentFullName(a).localeCompare(getStudentFullName(b),'ar'));
   host.innerHTML=`
@@ -5977,6 +5977,10 @@ function renderProfessionalProgramAdmin(){
     <div class="card card-accent"><div class="card-title">👥 طلاب البرنامج</div><div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap"><div class="form-group" style="flex:1;min-width:240px;margin:0"><label>إضافة طالب</label><select id="pp_student"><option value="">-- اختر طالبًا --</option>${studentOptions.map(student=>`<option value="${escapeHtml(student._fbKey)}">${escapeHtml(getStudentFullName(student))} — ${escapeHtml(student.id||'')}</option>`).join('')}</select></div><button class="btn btn-success" onclick="enrollProfessionalStudent()">إضافة للبرنامج</button></div>
       <div style="margin-top:14px">${enrolled.length?`<div class="table-wrap"><table><thead><tr><th>الطالب</th><th>الرقم</th><th>التقدم</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${enrolled.map(row=>{const student=students.find(item=>item._fbKey===row.studentKey);const completed=Object.values(dbData.professionalProgress?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units||{}).filter(unit=>unit.completed).length;return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.studentKey)}</strong></td><td>${escapeHtml(student?.id||'—')}</td><td>${completed}/9</td><td><span class="badge badge-pass">نشط</span></td><td><button class="btn btn-danger btn-sm" onclick="removeProfessionalStudent('${escapeHtml(row.studentKey)}')">إزالة</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لم تتم إضافة طلاب إلى البرنامج بعد.</div>'}</div>
     </div>`;
+  }catch(error){
+    console.error('professional program render error',error);
+    host.innerHTML='<div class="card card-accent"><div class="card-title">🚀 البرنامج المهني</div><div class="alert alert-warn">تعذر عرض إعدادات البرنامج. حدّثي الصفحة، وإذا استمرت المشكلة تواصلي مع الدعم.</div></div>';
+  }
 }
 async function saveProfessionalProgram(){
   const current=getProfessionalProgram(),tracks={};
