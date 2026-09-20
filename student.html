@@ -803,15 +803,17 @@ async function loadAllData(){
   if(currentUser?.role==='student'){
     const studentKey=currentUser.fbKey;
     const queryForStudent=path=>fbRef(path).orderByChild('studentKey').equalTo(studentKey).get();
-    const [settingsSnap,packagesSnap,subjectsSnap,semestersSnap,scheduleSnap,examsSnap,directorySnap,studentSnap,enrollmentsSnap,gradesSnap,requestsSnap,exceptionSnap]=await Promise.all([
-      fbRef('settings').get(),fbRef('packages').get(),fbRef('subjects').get(),fbRef('semesters').get(),fbRef('schedule').get(),fbRef('examSchedules').get(),fbRef('lecturerDirectory').get(),fbRef('students/'+studentKey).get(),queryForStudent('enrollments'),queryForStudent('grades'),queryForStudent('studentRequests'),fbRef('studentExamExceptions/'+studentKey).get()
+    const optionalGet=path=>fbRef(path).get().catch(error=>{console.warn('optional professional data unavailable',path,error);return null;});
+    const [settingsSnap,packagesSnap,subjectsSnap,semestersSnap,scheduleSnap,examsSnap,directorySnap,studentSnap,enrollmentsSnap,gradesSnap,requestsSnap,exceptionSnap,professionalProgramsSnap,professionalEnrollmentSnap,professionalProgressSnap,professionalDiscussionsSnap]=await Promise.all([
+      fbRef('settings').get(),fbRef('packages').get(),fbRef('subjects').get(),fbRef('semesters').get(),fbRef('schedule').get(),fbRef('examSchedules').get(),fbRef('lecturerDirectory').get(),fbRef('students/'+studentKey).get(),queryForStudent('enrollments'),queryForStudent('grades'),queryForStudent('studentRequests'),fbRef('studentExamExceptions/'+studentKey).get(),optionalGet('professionalPrograms'),optionalGet('professionalEnrollments/'+studentKey),optionalGet('professionalProgress/'+studentKey),optionalGet('professionalDiscussions/'+studentKey)
     ]);
-    const value=snapshot=>snapshot.exists()?snapshot.val():{};
+    const value=snapshot=>snapshot?.exists()?snapshot.val():{};
     const directory=value(directorySnap);
     dbData={
       settings:value(settingsSnap),packages:value(packagesSnap),subjects:value(subjectsSnap),semesters:value(semestersSnap),schedule:value(scheduleSnap),examSchedules:value(examsSnap),
       students:studentSnap.exists()?{[studentKey]:studentSnap.val()}: {},enrollments:value(enrollmentsSnap),grades:value(gradesSnap),studentRequests:value(requestsSnap),
       studentExamExceptions:exceptionSnap.exists()?{[studentKey]:exceptionSnap.val()}: {},
+      professionalPrograms:value(professionalProgramsSnap),professionalEnrollments:professionalEnrollmentSnap?.exists()?{[studentKey]:professionalEnrollmentSnap.val()}: {},professionalProgress:professionalProgressSnap?.exists()?{[studentKey]:professionalProgressSnap.val()}: {},professionalDiscussions:professionalDiscussionsSnap?.exists()?{[studentKey]:professionalDiscussionsSnap.val()}: {},
       users:Object.fromEntries(Object.entries(directory).map(([username,profile])=>[username,{...profile,username,role:'lecturer'}]))
     };
   }else{
@@ -868,8 +870,10 @@ function showStudentView(){
   document.getElementById('topbarName').textContent = fullName;
   document.getElementById('topbarRole').textContent = '👩‍🎓 طالب';
   document.getElementById('topbarRole').className = 'user-role role-student';
+  const hasProfessionalProgram=Object.entries(dbData.professionalEnrollments?.[currentUser.fbKey]||{}).some(([programId,enrollment])=>enrollment?.status==='active'&&dbData.professionalPrograms?.[programId]?.status==='published');
   configureAppTabs([
     { id:'home', label:'🏠 الرئيسية' },
+    ...(hasProfessionalProgram?[{id:'professional',label:'🚀 رحلتي المهنية'}]:[]),
     { id:'courses', label:'📚 مقرراتي' },
     { id:'grades', label:'📊 درجاتي' },
     { id:'transcript', label:'📄 كشف الدرجات' },
@@ -1721,10 +1725,40 @@ async function submitSecureEvaluation(examId){
   catch(error){toast('⚠️ '+secureExamErrorMessage(error.message));}
   finally{loader(false);}
 }
+const PROFESSIONAL_PROGRAM_ID='organizational_behavior';
+function professionalSafeUrl(value){try{const url=new URL(String(value||''));return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return '';}}
+function professionalDrivePreview(value){const safe=professionalSafeUrl(value);if(!safe)return '';const match=safe.match(/drive\.google\.com\/file\/d\/([^/]+)/);return match?`https://drive.google.com/file/d/${match[1]}/preview`:'';}
+function getStudentProfessionalContext(){
+  const studentKey=currentUser?.fbKey,program=dbData.professionalPrograms?.[PROFESSIONAL_PROGRAM_ID],enrollment=dbData.professionalEnrollments?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID];
+  if(!program||program.status!=='published'||enrollment?.status!=='active')return null;
+  const progress=dbData.professionalProgress?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]||{units:{}},discussions=dbData.professionalDiscussions?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]||{};
+  return {studentKey,program,enrollment,progress,discussions};
+}
+function professionalOrderedUnits(program){return Object.entries(program.tracks||{}).sort(([,a],[,b])=>a.order-b.order).flatMap(([trackKey,track])=>Object.entries(track.units||{}).filter(([,unit])=>unit.status==='published').sort(([,a],[,b])=>a.order-b.order).map(([unitKey,unit])=>({trackKey,track,unitKey,unit,id:`${trackKey}_${unitKey}`})));}
+function renderStudentProfessionalProgram(){
+  const context=getStudentProfessionalContext();if(!context){document.getElementById('mainContent').innerHTML='<div class="empty">البرنامج المهني غير متاح لهذا الحساب.</div>';return;}
+  const {program,progress,discussions}=context,units=professionalOrderedUnits(program),completed=units.filter(item=>progress.units?.[item.id]?.completed).length,percent=units.length?Math.round(completed/units.length*100):0;
+  document.getElementById('mainContent').innerHTML=`<div class="student-header" style="background:linear-gradient(135deg,#102a43,#0D40FC,#55D7FF)"><div class="student-avatar">🚀</div><div style="flex:1"><div style="font-size:22px;font-weight:900">${escapeHtml(program.title)}</div><div style="font-size:13px;color:rgba(255,255,255,.82);margin-top:6px">${escapeHtml(program.description||'')}</div></div><div class="avg-circle"><div class="avg-num">${percent}%</div><div class="avg-label">التقدم</div></div></div>
+    <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><strong>تقدم الرحلة</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${completed} من ${units.length} وحدات مكتملة</div></div><strong style="color:var(--primary)">${percent}%</strong></div><div style="height:12px;background:#e7ecf7;border-radius:99px;overflow:hidden;margin-top:12px"><div style="height:100%;width:${percent}%;background:linear-gradient(90deg,#0D40FC,#55D7FF);border-radius:99px"></div></div></div>
+    ${Object.entries(program.tracks||{}).sort(([,a],[,b])=>a.order-b.order).map(([trackKey,track])=>{const trackUnits=units.filter(item=>item.trackKey===trackKey);if(!trackUnits.length)return '';const trackDone=trackUnits.filter(item=>progress.units?.[item.id]?.completed).length;return `<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:14px"><div><div class="card-title" style="margin-bottom:4px">${escapeHtml(track.title)}</div><div style="font-size:12px;color:var(--muted)">${escapeHtml(track.description||'')}</div></div><span style="padding:5px 10px;border-radius:99px;background:#eef3ff;color:var(--primary);font-size:11px;font-weight:800">${trackDone}/${trackUnits.length}</span></div><div style="display:grid;gap:14px">${trackUnits.map(item=>renderProfessionalUnitCard(item,units,progress,discussions)).join('')}</div></div>`;}).join('')}`;
+}
+function renderProfessionalUnitCard(item,allUnits,progress,discussions){
+  const unitProgress=progress.units?.[item.id]||{},answers=discussions?.[item.id]||{},index=allUnits.findIndex(unit=>unit.id===item.id),locked=index>0&&!progress.units?.[allUnits[index-1].id]?.completed,pdf=professionalSafeUrl(item.unit.pdfUrl),zoom=professionalSafeUrl(item.unit.zoomUrl),recording=professionalSafeUrl(item.unit.recordingUrl),preview=professionalDrivePreview(recording),questions=item.unit.discussionQuestions||{},complete=!!unitProgress.completed;
+  if(locked)return `<section style="padding:16px;border:1px dashed #cbd5e1;border-radius:15px;background:#f8fafc;opacity:.75"><div style="display:flex;justify-content:space-between"><strong>🔒 ${escapeHtml(item.unit.title)}</strong><span style="font-size:11px;color:var(--muted)">تفتح بعد إكمال الوحدة السابقة</span></div></section>`;
+  return `<section style="padding:16px;border:1px solid ${complete?'#a8dfb8':'var(--border)'};border-right:5px solid ${complete?'#239b56':'#0D40FC'};border-radius:15px;background:${complete?'#f5fff8':'#fff'}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong style="font-size:15px">${escapeHtml(item.unit.title)}</strong><div style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:5px">${escapeHtml(item.unit.description||'')}</div></div><span style="padding:5px 9px;border-radius:99px;background:${complete?'#daf5e3':'#eef3ff'};color:${complete?'#176b35':'#0D40FC'};font-size:11px;font-weight:800">${complete?'مكتملة':'متاحة'}</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:13px 0">${pdf?`<a class="btn-out" href="${escapeHtml(pdf)}" target="_blank" rel="noopener">📄 فتح ملف الوحدة</a>`:''}${zoom?`<a class="btn-out" href="${escapeHtml(zoom)}" target="_blank" rel="noopener">🎥 دخول Zoom</a>`:''}${item.unit.zoomAt?`<span style="padding:9px 12px;background:var(--bg);border-radius:8px;font-size:12px">🗓️ ${escapeHtml(new Date(item.unit.zoomAt).toLocaleString('ar-SA'))}</span>`:''}${recording?`<a class="btn-out" href="${escapeHtml(recording)}" target="_blank" rel="noopener">▶️ فتح التسجيل</a>`:''}</div>
+    ${preview?`<details style="margin:10px 0"><summary style="cursor:pointer;font-weight:800;color:var(--primary)">عرض التسجيل داخل الصفحة</summary><iframe src="${escapeHtml(preview)}" style="width:100%;height:360px;border:0;border-radius:12px;margin-top:10px" allow="autoplay" loading="lazy"></iframe></details>`:''}
+    <button class="btn-out" onclick="markProfessionalMaterialReviewed('${item.id}')" ${unitProgress.materialReviewed?'disabled':''}>${unitProgress.materialReviewed?'✅ تم الاطلاع على المحتوى':'تأكيد الاطلاع على المحتوى'}</button>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:900;margin-bottom:10px">💬 نقاش الوحدة</div>${['q1','q2'].map((key,questionIndex)=>questions[key]?`<div class="field"><label>${questionIndex+1}. ${escapeHtml(questions[key])}</label><textarea id="professional_${item.id}_${key}" ${complete?'disabled':''} placeholder="اكتب إجابتك هنا...">${escapeHtml(answers[key]||'')}</textarea></div>`:'').join('')}<button class="btn-out" onclick="saveProfessionalDiscussion('${item.id}')" ${complete||!questions.q1||!questions.q2?'disabled':''}>💾 حفظ إجابتي النقاش</button>${complete?'<div class="alert alert-success" style="margin-top:10px">اكتملت الوحدة وتم فتح الوحدة التالية.</div>':''}</div></section>`;
+}
+async function markProfessionalMaterialReviewed(unitId){const now=new Date().toISOString(),discussionSubmitted=!!dbData.professionalDiscussions?.[currentUser.fbKey]?.[PROFESSIONAL_PROGRAM_ID]?.[unitId]?.q1&&!!dbData.professionalDiscussions?.[currentUser.fbKey]?.[PROFESSIONAL_PROGRAM_ID]?.[unitId]?.q2,path=`professionalProgress/${currentUser.fbKey}/${PROFESSIONAL_PROGRAM_ID}/units/${unitId}`;await fbRef(path).update({materialReviewed:true,completed:discussionSubmitted,completedAt:discussionSubmitted?now:null,updatedAt:now});dbData.professionalProgress=dbData.professionalProgress||{};const programProgress=dbData.professionalProgress[currentUser.fbKey]||(dbData.professionalProgress[currentUser.fbKey]={});const record=programProgress[PROFESSIONAL_PROGRAM_ID]||(programProgress[PROFESSIONAL_PROGRAM_ID]={units:{}});record.units=record.units||{};record.units[unitId]={...(record.units[unitId]||{}),materialReviewed:true,completed:discussionSubmitted,completedAt:discussionSubmitted?now:null};toast(discussionSubmitted?'✅ اكتملت الوحدة':'✅ تم تسجيل الاطلاع على المحتوى');renderStudentProfessionalProgram();}
+async function saveProfessionalDiscussion(unitId){const q1=document.getElementById(`professional_${unitId}_q1`)?.value.trim()||'',q2=document.getElementById(`professional_${unitId}_q2`)?.value.trim()||'';if(!q1||!q2)return toast('أكمل إجابتي النقاش أولًا');const now=new Date().toISOString(),studentKey=currentUser.fbKey,base=`${studentKey}/${PROFESSIONAL_PROGRAM_ID}`;await fbRef(`professionalDiscussions/${base}/${unitId}`).set({q1,q2,status:'submitted',submittedAt:now});const materialReviewed=!!dbData.professionalProgress?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units?.[unitId]?.materialReviewed;await fbRef(`professionalProgress/${base}/units/${unitId}`).update({discussionSubmitted:true,completed:materialReviewed,completedAt:materialReviewed?now:null,updatedAt:now});dbData.professionalDiscussions=dbData.professionalDiscussions||{};const studentDiscussions=dbData.professionalDiscussions[studentKey]||(dbData.professionalDiscussions[studentKey]={});const programDiscussions=studentDiscussions[PROFESSIONAL_PROGRAM_ID]||(studentDiscussions[PROFESSIONAL_PROGRAM_ID]={});programDiscussions[unitId]={q1,q2,status:'submitted',submittedAt:now};const studentProgress=dbData.professionalProgress[studentKey]||(dbData.professionalProgress[studentKey]={});const programProgress=studentProgress[PROFESSIONAL_PROGRAM_ID]||(studentProgress[PROFESSIONAL_PROGRAM_ID]={units:{}});programProgress.units=programProgress.units||{};programProgress.units[unitId]={...(programProgress.units[unitId]||{}),discussionSubmitted:true,completed:materialReviewed,completedAt:materialReviewed?now:null};toast(materialReviewed?'✅ اكتملت الوحدة':'تم حفظ الإجابتين؛ أكّد الاطلاع على المحتوى لإكمال الوحدة');renderStudentProfessionalProgram();}
+
 function renderStudentPortalTab(tab){
   currentAppTab = tab;
   if(tab==='home') return renderStudentHomeTab();
   if(tab==='courses') return renderStudentCoursesTab();
+  if(tab==='professional') return renderStudentProfessionalProgram();
   if(tab==='grades') return renderStudentGradesTab();
   if(tab==='transcript') return renderStudentTranscriptTab();
   if(tab==='requests') return renderStudentRequestsTab();

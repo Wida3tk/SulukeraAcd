@@ -42,6 +42,23 @@
     "schedule": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "examSchedules": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "programs": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "professionalPrograms": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
+    "professionalEnrollments": {
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$studentKey": { ".read": "auth != null && root.child('users').child(auth.uid).child('studentKey').val() === $studentKey" }
+    },
+    "professionalProgress": {
+      "$studentKey": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)"
+      }
+    },
+    "professionalDiscussions": {
+      "$studentKey": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)"
+      }
+    },
     "curriculumTemplate": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "courseCatalog": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "lecturerFollowUps": { ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')" },
