@@ -65,3 +65,13 @@ CREATE TABLE IF NOT EXISTS evaluations (
   submitted_at TEXT NOT NULL,
   PRIMARY KEY (exam_id, student_key)
 );
+
+CREATE TABLE IF NOT EXISTS evaluation_publications (
+  exam_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'draft',
+  show_comments INTEGER NOT NULL DEFAULT 0,
+  approved_by TEXT,
+  approved_at TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
+);
