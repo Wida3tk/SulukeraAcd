@@ -1215,6 +1215,7 @@ async function loadAllFromFirebase(){
         sourceSubjectKey:s.sourceSubjectKey||'',
         courseKey:s.courseKey||'',
         semesterNo:Number(s.semesterNo)||0,
+        gradeFollowUpVisible:s.gradeFollowUpVisible===true,
         eligiblePlans:Array.isArray(s.eligiblePlans)?s.eligiblePlans:[],
         students:[] // will fill from enrollments
       }));
@@ -2123,6 +2124,29 @@ function renderLecturerCourseCards(items, emptyMessage){
       <button class="btn btn-primary btn-sm" onclick="openLecturerSubjectFromDashboard(${item.idx})">فتح رصد المقرر</button>
     </div>`).join('')}</div>`;
 }
+function openPendingGradeSubject(si){
+  currentWeek=0;
+  document.querySelectorAll('.week-tab').forEach((tab,index)=>tab.classList.toggle('active',index===4));
+  openLecturerSubjectFromDashboard(si);
+}
+function getPendingGradeFollowUps(){
+  return subjects.map((subject,si)=>{
+    if(!subject.lecturerUserId) return null;
+    const studentIdxs=getSubjectStudentIdxs(subject),pendingStudentIdxs=studentIdxs.filter(stdIdx=>!isExamEntered(grades[si]?.[stdIdx]));
+    if(!pendingStudentIdxs.length) return null;
+    const lecturer=users.find(user=>[user.id,user._fbKey,user.username].filter(Boolean).some(id=>String(id)===String(subject.lecturerUserId)));
+    return {subject,si,lecturer,pendingStudentIdxs,total:studentIdxs.length};
+  }).filter(Boolean);
+}
+function renderPendingGradeStudents(items,adminMode=false){
+  if(!items.length) return '<div class="alert alert-success">جميع الدرجات المطلوبة مكتملة حاليًا.</div>';
+  return `<div style="display:grid;gap:12px">${items.map(item=>`<section style="border:1px solid var(--border);border-radius:14px;padding:13px;background:#fff"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><strong style="color:var(--primary-dark)">${escapeHtml(item.subject.name)}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:4px">${escapeHtml(item.subject.batch||'—')} · المحاضر: ${escapeHtml(item.lecturer?.name||'غير معروف')} · متبقي ${item.pendingStudentIdxs.length} من ${item.total}</div></div><div style="display:flex;gap:7px;flex-wrap:wrap">${adminMode?`<button class="btn btn-sm ${item.subject.gradeFollowUpVisible?'btn-danger':'btn-success'}" onclick="toggleGradeFollowUpVisibility(${item.si})">${item.subject.gradeFollowUpVisible?'إخفاء عن المحاضر':'إظهار للمحاضر'}</button>`:''}<button class="btn btn-primary btn-sm" onclick="openPendingGradeSubject(${item.si})">فتح الرصد</button></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px">${item.pendingStudentIdxs.map(stdIdx=>`<span class="badge badge-warn">${escapeHtml(getStudentFullName(students[stdIdx]))}</span>`).join('')}</div></section>`).join('')}</div>`;
+}
+async function toggleGradeFollowUpVisibility(si){
+  if(currentUser?.role!=='admin'||!subjects[si]?._fbKey)return;
+  const next=!subjects[si].gradeFollowUpVisible;
+  try{await fbRef(`subjects/${subjects[si]._fbKey}/gradeFollowUpVisible`).set(next);subjects[si].gradeFollowUpVisible=next;renderAdminDashboard();showToast(next?'✅ ظهرت قائمة النواقص للمحاضر':'تم إخفاء قائمة النواقص عن المحاضر');}catch(error){console.error(error);showToast('⚠️ تعذر تحديث إعداد العرض');}
+}
 function renderLecturerCourseGroups(items,emptyMessage){
   if(!items.length) return `<div class="alert alert-info">${emptyMessage}</div>`;
   const groups=items.reduce((result,item)=>{
@@ -2486,6 +2510,7 @@ function renderDashboard() {
     const atRiskCount=lecturerSubjects.reduce((sum,item)=>sum+item.atRiskCount,0);
     const avg=lecturerSubjects.length?Math.round(lecturerSubjects.reduce((sum,item)=>sum+item.avg,0)/lecturerSubjects.length):0;
     const gradeReviewRequests=studentRequestsData.filter(request=>request.type==='grade_review'&&request.status==='awaiting_lecturer_review'&&lecturerSubjects.some(subject=>subject._fbKey===request.subjectKey)).map(request=>({request,subject:lecturerSubjects.find(subject=>subject._fbKey===request.subjectKey),student:students.find(student=>student._fbKey===request.studentKey)}));
+    const pendingGradeItems=getPendingGradeFollowUps().filter(item=>item.subject.gradeFollowUpVisible&&lecturerSubjects.some(subject=>subject._fbKey===item.subject._fbKey));
     page.innerHTML=`
       <div class="student-profile-header" style="background:linear-gradient(135deg,#0b254e,#0D40FC,#55D7FF);margin-bottom:1rem;">
         <div class="student-avatar" style="background:rgba(255,255,255,0.16);font-size:28px;">${(currentUser.name||'م')[0]}</div>
@@ -2511,6 +2536,7 @@ function renderDashboard() {
         <div class="stat"><div class="stat-icon">📝</div><div class="stat-label">طلبات مراجعة درجات</div><div class="stat-value" style="color:var(--warning)">${gradeReviewRequests.length}</div><div class="stat-sub">طلبات محالة إلى الحساب</div></div>
       </div>
       ${gradeReviewRequests.length?`<div class="card card-accent" style="margin-bottom:1rem;border-color:#f0d48b;background:linear-gradient(135deg,#fffdf7,#fff6df);"><div class="card-title">📝 طلبات مراجعة درجات بانتظار الإجراء</div><div class="alert alert-warn">افتح المقرر لتحديث الدرجة ثم اعتماد الطلب أو إعادته إلى الإدارة مع ملاحظة.</div><div style="display:grid;gap:8px;">${gradeReviewRequests.map(item=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:white;border:1px solid #f1ddb2;border-radius:10px;"><div><strong>${escapeHtml(item.student?getStudentFullName(item.student):'طالب غير مرتبط')}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:3px">${escapeHtml(item.subject?.name||'مقرر غير مرتبط')} · ${escapeHtml(item.student?.batch||'—')}</div></div><button class="btn btn-primary btn-sm" onclick="openLecturerSubjectFromDashboard(${item.subject.idx})">فتح المقرر</button></div>`).join('')}</div></div>`:''}
+      ${pendingGradeItems.length?`<div class="card card-accent" style="margin-bottom:1rem;border-color:#f0d48b;background:linear-gradient(135deg,#fffdf7,#fff9e9)"><div class="card-title">⏳ درجات تحتاج إلى استكمال</div><div class="alert alert-warn">تختفي الأسماء تلقائيًا فور حفظ درجة الاختبار النهائي، ويُعد الصفر درجة مرصودة إذا تم حفظه.</div>${renderPendingGradeStudents(pendingGradeItems,false)}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr;gap:1rem;">
         <div class="card card-accent" id="lecturer-current-courses">
           <div class="card-title">📚 المقررات الحالية</div>
@@ -2628,6 +2654,7 @@ function renderAdminDashboard(){
   const unscheduledBatches=batches.filter(item=>item.studentCount>0 && !item.scheduledCount);
   const todayIso=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
   const dueExamReturns=Object.values(examExceptionsData||{}).filter(item=>item.active&&item.untilDate&&item.untilDate<=todayIso);
+  const pendingGradeItems=getPendingGradeFollowUps();
   const actions=[];
   if(dueExamReturns.length) actions.push({tone:'danger',title:'حان فتح اختبارات مؤجلة',count:dueExamReturns.length,action:"navTo('alerts',null)",detail:'راجعي طلبات تأجيل الاختبارات وافتحيها للطلاب المستحقين.'});
   if(pendingRequests.length) actions.push({tone:'warn',title:'طلبات طلاب بانتظار المراجعة',count:pendingRequests.length,action:"navTo('alerts',null)",detail:'افتح الطلبات واعتمد الإجراء المناسب.'});
@@ -2636,6 +2663,7 @@ function renderAdminDashboard(){
   if(unregisteredStudents.length) actions.push({tone:'info',title:'طلاب بلا مقررات مسندة',count:unregisteredStudents.length,action:"navTo('students',null)",detail:'أضف المقررات من سجل الطالب أو خطط الدفعات.'});
   if(financeReview.length) actions.push({tone:'warn',title:'ملفات مالية تحتاج مراجعة',count:financeReview.length,action:"navTo('students',null)",detail:'تحتاج إدخالاً أو اعتماداً من موظف المالية.'});
   if(unscheduledBatches.length) actions.push({tone:'warn',title:'دفعات بلا جدول أسبوعي',count:unscheduledBatches.length,action:"navTo('schedule',null)",detail:unscheduledBatches.map(item=>item.batch).join('، ')});
+  if(pendingGradeItems.length) actions.push({tone:'warn',title:'درجات مقررات تحتاج إلى استكمال',count:pendingGradeItems.reduce((sum,item)=>sum+item.pendingStudentIdxs.length,0),action:"document.getElementById('admin-pending-grades')?.scrollIntoView({behavior:'smooth'})",detail:'طلاب لهم محاضر مسند ولم تُحفظ درجة اختبارهم النهائي بعد.'});
   const slots=[...Object.values(scheduleData?.weekly||{})].sort((a,b)=>{
     const dayDiff=DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day);
     return dayDiff || String(a.timeStart||'').localeCompare(String(b.timeStart||''));
@@ -2663,7 +2691,8 @@ function renderAdminDashboard(){
       <div class="card card-accent"><div class="card-title">الدفعات</div><div style="display:grid;gap:8px">${batches.map(item=>`<button onclick="navTo('students',null);setTimeout(()=>{const select=document.getElementById('studentBatchFilter');if(select){select.value='${item.batch}';filterStudents();}},0)" style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);background:var(--bg);border-radius:10px;padding:10px;cursor:pointer;font-family:inherit;text-align:right"><span><strong>${item.batch}</strong><span style="display:block;font-size:10px;color:var(--text-muted);margin-top:3px">${item.sectionCount} شعب · ${item.scheduledCount} محاضرات أسبوعية</span></span><span style="font-size:21px;font-weight:900;color:var(--primary)">${item.studentCount}</span></button>`).join('')}</div></div>
       <div class="card card-accent"><div class="card-title">محاضرات الأسبوع</div>${slots.length?`<div style="display:grid;gap:8px">${slots.map(slot=>`<div style="padding:10px;border:1px solid var(--border);border-right:4px solid ${slot.color||'var(--primary)'};border-radius:9px"><strong style="font-size:12px">${escapeHtml(slot.subject||'—')}</strong><div style="font-size:10px;color:var(--text-muted);margin-top:4px">${escapeHtml(slot.batch||'—')} · ${escapeHtml(slot.day||'—')} · ${escapeHtml(slot.timeStart||'—')} - ${escapeHtml(slot.timeEnd||'—')}</div><div style="font-size:10px;color:var(--text-muted);margin-top:3px">المحاضر: ${escapeHtml(slot.lecturer||'غير محدد')}</div></div>`).join('')}</div>`:'<div class="alert alert-warn">لا توجد محاضرات أسبوعية معتمدة بعد.</div>'}</div>
       <div class="card card-accent"><div class="card-title">آخر النشاطات</div>${activity.length?`<div style="display:grid;gap:8px">${activity.map(item=>`<div style="padding-bottom:8px;border-bottom:1px solid var(--bg)"><strong style="font-size:11px">${escapeHtml(item.action||'تحديث')}</strong><div style="font-size:10px;color:var(--text-muted);margin-top:3px">${escapeHtml(item.targetLabel||'سجل عام')} · ${escapeHtml(item.actorName||'النظام')}</div></div>`).join('')}</div>`:'<div class="alert alert-info">لا توجد أنشطة مسجلة حتى الآن.</div>'}</div>
-    </div>`;
+    </div>
+    <div class="card card-accent" id="admin-pending-grades" style="margin-bottom:1rem"><div class="card-title">⏳ متابعة الدرجات غير المرصودة</div><div class="alert alert-info">تظهر جميع المقررات المسندة التي ما زال فيها طلاب دون درجة نهائية. اختاري «إظهار للمحاضر» عند بدء فترة الرصد؛ وبعد الحفظ تختفي الأسماء تلقائيًا.</div>${renderPendingGradeStudents(pendingGradeItems,true)}</div>`;
 }
 
 function getTimeRangeHours(start,end){
