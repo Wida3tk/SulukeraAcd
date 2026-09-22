@@ -784,7 +784,7 @@ tr:hover td{background:#f8faff;}
       <div class="form-group" id="stdTrackGroup"><label>المسار</label>
         <select id="stdTrack" onchange="updateBatchOptions()"><option value="">-- اختر --</option></select></div>
     </div>
-    <div class="form-row">
+    <div class="form-row" id="studentAcademicBatchRow">
       <div class="form-group"><label>الدفعة</label>
         <select id="stdBatchSelect" onchange="refreshStudentSubjectOptions(editingStudentIdx); refreshStudentCrossBatchOptions(editingStudentIdx)"><option value="">-- اختر --</option></select></div>
       <div class="form-group"><label>الرخصة الأكاديمية *</label>
@@ -794,7 +794,7 @@ tr:hover td{background:#f8faff;}
         </select>
       </div>
     </div>
-    <div class="form-row">
+    <div class="form-row" id="studentAcademicPackageRow">
       <div class="form-group"><label>الباقة المالية</label>
         <select id="studentPackage" onchange="updateSubjectsForPackage()">
           <option value="">-- اختر الباقة --</option>
@@ -803,9 +803,9 @@ tr:hover td{background:#f8faff;}
       <div class="form-group"></div>
     </div>
     <div id="packageBadgeInfo" style="display:none;"></div>
-    <div class="form-group"><label>مقررات الخطة الأساسية (Ctrl+Click لتعدد)</label>
+    <div class="form-group" id="studentAcademicSubjectsGroup"><label>مقررات الخطة الأساسية (Ctrl+Click لتعدد)</label>
       <select id="studentSubjectsList" multiple style="height:100px;"></select></div>
-    <div class="form-group"><label>مقررات إضافية من دفعات أخرى</label>
+    <div class="form-group" id="studentAcademicCrossSubjectsGroup"><label>مقررات إضافية من دفعات أخرى</label>
       <select id="studentCrossBatchSubjects" multiple style="height:100px;"></select>
       <div style="font-size:10px;color:var(--text-muted);margin-top:4px">تُستخدم للتسجيلات الاستثنائية فقط، وتبقى دفعة الطالب الأصلية كما هي.</div>
     </div>
@@ -3049,6 +3049,8 @@ function populateProgramSelect(selectedProgram) {
 function isProfessionalProgramName(value){const name=String(value||'').replace(/[ـ\s]+/g,' ').trim();return name.includes('إدارة السلوك التنظيمي')||name.includes('ادارة السلوك التنظيمي');}
 function applyProfessionalStudentMode(){
   const professional=isProfessionalProgramName(document.getElementById('stdProgram')?.value),track=document.getElementById('stdTrack'),batch=document.getElementById('stdBatchSelect'),plan=document.getElementById('studentPlanType'),pkg=document.getElementById('studentPackage'),subjectsList=document.getElementById('studentSubjectsList'),crossList=document.getElementById('studentCrossBatchSubjects');
+  ['studentAcademicBatchRow','studentAcademicPackageRow','studentAcademicSubjectsGroup','studentAcademicCrossSubjectsGroup'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=professional?'none':'';});
+  const packageInfo=document.getElementById('packageBadgeInfo');if(packageInfo&&professional)packageInfo.style.display='none';
   if(professional){
     if(track){track.innerHTML='<option value="مسار الممارس OBM-P" selected>مسار الممارس OBM-P</option>';track.value='مسار الممارس OBM-P';track.disabled=true;}
     if(batch){batch.innerHTML='<option value="PRO-OBM-P" selected>البرنامج المهني</option>';batch.value='PRO-OBM-P';batch.disabled=true;}
