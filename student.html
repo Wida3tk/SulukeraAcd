@@ -874,9 +874,11 @@ function showStudentView(){
   document.getElementById('topbarName').textContent = fullName;
   document.getElementById('topbarRole').textContent = '👩‍🎓 طالب';
   document.getElementById('topbarRole').className = 'user-role role-student';
-  const hasProfessionalProgram=Object.entries(dbData.professionalEnrollments?.[currentUser.fbKey]||{}).some(([programId,enrollment])=>enrollment?.status==='active'&&dbData.professionalPrograms?.[programId]?.status==='published');
+  const professionalEnrollmentActive=Object.values(dbData.professionalEnrollments?.[currentUser.fbKey]||{}).some(enrollment=>enrollment?.status==='active');
+  const professionalProfile=currentUser.data?.planType==='PROFESSIONAL'||String(currentUser.data?.batch||'').startsWith('PRO-')||String(currentUser.data?.program||'').includes('السلوك التنظيمي');
+  const hasProfessionalProgram=professionalEnrollmentActive||professionalProfile;
   const hasAcademicEnrollment=Object.values(dbData.enrollments||{}).some(enrollment=>enrollment?.studentKey===currentUser.fbKey);
-  const professionalOnly=hasProfessionalProgram&&!hasAcademicEnrollment;
+  const professionalOnly=professionalProfile||(hasProfessionalProgram&&!hasAcademicEnrollment);
   document.getElementById('topbarRole').textContent=professionalOnly?'🎓 متدرب':'👩‍🎓 طالب';
   document.title=professionalOnly?'بوابة المتدرب | سلوكيرا':'Student Information System (SIS) | نظام معلومات الطالب';
   configureAppTabs(professionalOnly?[
@@ -1744,7 +1746,7 @@ function professionalSafeUrl(value){try{const url=new URL(String(value||''));ret
 function professionalDrivePreview(value){const safe=professionalSafeUrl(value);if(!safe)return '';const match=safe.match(/drive\.google\.com\/file\/d\/([^/]+)/);return match?`https://drive.google.com/file/d/${match[1]}/preview`:'';}
 function getStudentProfessionalContext(){
   const studentKey=currentUser?.fbKey,program=dbData.professionalPrograms?.[PROFESSIONAL_PROGRAM_ID],enrollment=dbData.professionalEnrollments?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID];
-  if(!program||program.status!=='published'||enrollment?.status!=='active')return null;
+  if(!program||enrollment?.status!=='active')return null;
   const progress=dbData.professionalProgress?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]||{units:{}},discussions=dbData.professionalDiscussions?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]||{};
   return {studentKey,program,enrollment,progress,discussions};
 }
