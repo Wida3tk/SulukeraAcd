@@ -59,6 +59,12 @@
         ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)"
       }
     },
+    "professionalDiscussionReviews": {
+      "$studentKey": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')"
+      }
+    },
     "curriculumTemplate": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "courseCatalog": { ".read": "auth != null && root.child('users').child(auth.uid).exists()", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'" },
     "lecturerFollowUps": { ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')" },

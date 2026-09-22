@@ -358,6 +358,7 @@ tr:hover td{background:#f8faff;}
 
       <div class="page" id="page-lecturercurrent"><div id="lecturerCurrentCoursesPage"></div></div>
       <div class="page" id="page-lecturerfinished"><div id="lecturerFinishedCoursesPage"></div></div>
+      <div class="page" id="page-professionalteaching"><div id="professionalTeachingContent"></div></div>
 
       <!-- STUDENTS -->
       <div class="page" id="page-students">
@@ -1267,6 +1268,8 @@ async function loadAllFromFirebase(){
     professionalProgramsData = root.professionalPrograms || {};
     professionalEnrollmentsData = root.professionalEnrollments || {};
     professionalProgressData = root.professionalProgress || {};
+    professionalDiscussionsData = root.professionalDiscussions || {};
+    professionalDiscussionReviewsData = root.professionalDiscussionReviews || {};
     studentAdminSheetsData = root.studentAdminSheets
       ? Object.entries(root.studentAdminSheets).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
@@ -1573,6 +1576,8 @@ let examExceptionsData={};
 let professionalProgramsData={};
 let professionalEnrollmentsData={};
 let professionalProgressData={};
+let professionalDiscussionsData={};
+let professionalDiscussionReviewsData={};
 let selectedAdvisorStudentIdx=-1;
 const ADVISOR_BRIDGE_ORIGIN='https://advisor-bridge.ro7e-entaa.workers.dev';
 let advisorAccessToken='';
@@ -2368,6 +2373,7 @@ const navConfig = {
     {id:'reports',icon:'📋',label:'تقارير الطلاب'},
     {id:'lecturercurrent',icon:'📚',label:'المقررات الحالية'},
     {id:'lecturerfinished',icon:'✅',label:'المقررات المكتملة'},
+    {id:'professionalteaching',icon:'🚀',label:'وحداتي المهنية'},
   ],
   finance: [
     {id:'students',icon:'💰',label:'الملفات المالية للطلاب'},
@@ -2493,6 +2499,7 @@ function refreshPage(p) {
   if (p==='programs') { renderProgramsPanel(); loadPackagesFromFirebase().then(renderPackagesList); }
   if (p==='professionalprogram') renderProfessionalProgramAdmin();
   if (p==='professionalstudents') renderProfessionalStudentsAdmin();
+  if (p==='professionalteaching') renderProfessionalTeachingDashboard();
   if (p==='batchplans') renderBatchPlansPage();
   if (p==='schedule') renderScheduleAdmin();
   if (p==='exams') renderExamSchedulesAdmin();
@@ -6012,7 +6019,7 @@ function professionalProgramDraft(){
   const tracks={};
   for(let trackNo=1;trackNo<=3;trackNo++){
     const units={};
-    for(let unitNo=1;unitNo<=3;unitNo++) units[`unit_${unitNo}`]={order:unitNo,title:`الوحدة ${unitNo}`,description:'',status:'draft',pdfUrl:'',sessions:Object.fromEntries([1,2,3,4,5].map(number=>[`session_${number}`,{order:number,title:`المحاضرة ${number}`,scheduledAt:'',zoomUrl:'',recordingUrl:''}])),discussionQuestions:{q1:'',q2:''}};
+    for(let unitNo=1;unitNo<=3;unitNo++) units[`unit_${unitNo}`]={order:unitNo,title:`الوحدة ${unitNo}`,description:'',status:'draft',lecturerUserId:'',sessions:Object.fromEntries([1,2,3,4,5].map(number=>[`session_${number}`,{order:number,title:`المحاضرة ${number}`,scheduledAt:'',zoomUrl:'',recordingUrl:'',pdfUrl:'',durationMinutes:120}])),discussionQuestions:{q1:'',q2:''}};
     tracks[`track_${trackNo}`]={order:trackNo,title:trackNo===1?'مسار الممارس OBM-P':`المسار ${trackNo}`,description:'',required:trackNo===1,units};
   }
   return {title:'برنامج إدارة السلوك التنظيمي',description:'رحلة مهنية من ثلاثة مسارات وتسع وحدات تعليمية.',status:'draft',version:1,tracks};
@@ -6020,7 +6027,7 @@ function professionalProgramDraft(){
 function getProfessionalProgram(){return professionalProgramsData?.[PROFESSIONAL_PROGRAM_ID]||professionalProgramDraft();}
 function professionalAdminSessions(unit){
   if(unit?.sessions&&Object.keys(unit.sessions).length)return Object.entries(unit.sessions).sort(([,a],[,b])=>a.order-b.order);
-  return [1,2,3,4,5].map(number=>[`session_${number}`,{order:number,title:`المحاضرة ${number}`,scheduledAt:number===1?(unit?.zoomAt||''):'',zoomUrl:number===1?(unit?.zoomUrl||''):'',recordingUrl:number===1?(unit?.recordingUrl||''):''}]);
+  return [1,2,3,4,5].map(number=>[`session_${number}`,{order:number,title:`المحاضرة ${number}`,scheduledAt:number===1?(unit?.zoomAt||''):'',zoomUrl:number===1?(unit?.zoomUrl||''):'',recordingUrl:number===1?(unit?.recordingUrl||''):'',pdfUrl:'',durationMinutes:120}]);
 }
 function professionalEnrollmentRows(){
   return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]).map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
@@ -6038,6 +6045,14 @@ async function toggleProfessionalStudentStatus(studentKey){
   const nextStatus=current.status==='paused'?'active':'paused',message=nextStatus==='paused'?'إيقاف وصول الطالب إلى البرنامج المهني؟ يمكن إعادة تفعيله لاحقًا.':'إعادة تفعيل وصول الطالب؟';if(!confirm(message))return;
   const update={status:nextStatus,updatedAt:new Date().toISOString(),updatedBy:currentUser.username||'admin'};await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).update(update);Object.assign(current,update);showToast(nextStatus==='active'?'✅ تم تفعيل الحساب':'تم إيقاف الحساب المهني');renderProfessionalStudentsAdmin();
 }
+function professionalLecturerUnits(){const program=getProfessionalProgram(),items=[];Object.entries(program.tracks||{}).forEach(([trackKey,track])=>Object.entries(track.units||{}).forEach(([unitKey,unit])=>{if(unit.lecturerUserId===currentUser.id)items.push({trackKey,track,unitKey,unit,id:`${trackKey}_${unitKey}`});}));return items;}
+function renderProfessionalTeachingDashboard(){
+  const host=document.getElementById('professionalTeachingContent');if(!host)return;const units=professionalLecturerUnits();
+  if(!units.length){host.innerHTML='<div class="card card-accent"><div class="card-title">🚀 وحداتي المهنية</div><div class="empty">لا توجد وحدة مهنية مسندة إلى حسابك حاليًا.</div></div>';return;}
+  const enrolled=professionalEnrollmentRows().filter(row=>row.status==='active');
+  host.innerHTML=`<div class="card card-accent" style="background:linear-gradient(135deg,#fff,#f4f8ff)"><div class="card-title">🚀 متابعة البرنامج المهني</div><div style="font-size:12px;color:var(--text-muted)">المتابعة بنظام الاجتياز دون درجات رقمية: مشاهدة المحاضرات، المشاركة في النقاش، واجتياز اختبار الوحدة والتقييم.</div></div>${units.map(item=>`<div class="card card-accent"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><div class="card-title">${escapeHtml(item.unit.title)}</div><div style="font-size:11px;color:var(--text-muted)">${escapeHtml(item.track.title)}</div></div><span class="badge badge-info">${enrolled.length} طالب</span></div><div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>الطالب</th><th>المشاهدة</th><th>النقاش</th><th>الاختبار</th><th>التقييم/التعليق</th></tr></thead><tbody>${enrolled.map(row=>{const student=students.find(s=>s._fbKey===row.studentKey),progress=professionalProgressData?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units?.[item.id]||{},sessions=Object.values(progress.sessions||{}),viewPercent=sessions.length?Math.round(sessions.reduce((sum,s)=>sum+(Number(s.percent)||0),0)/5):0,discussion=professionalDiscussionsData?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.[item.id]||{},review=professionalDiscussionReviewsData?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.[item.id]||{};return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.studentKey)}</strong></td><td><strong>${viewPercent}%</strong><div style="font-size:10px;color:var(--text-muted)">${sessions.filter(s=>Number(s.percent)>=80).length}/5 محاضرات مكتملة</div></td><td>${discussion.q1&&discussion.q2?`<details><summary style="cursor:pointer;color:var(--primary);font-weight:800">عرض الإجابات</summary><div style="max-width:330px;white-space:normal;margin-top:8px"><strong>1.</strong> ${escapeHtml(discussion.q1)}<hr><strong>2.</strong> ${escapeHtml(discussion.q2)}</div></details>`:'لم يرسل'}</td><td><span class="badge ${progress.examPassed?'badge-pass':'badge-warn'}">${progress.examPassed?'مجتاز':'بانتظار الاجتياز'}</span></td><td><textarea id="pro_review_${row.studentKey}_${item.id}" style="min-width:220px;min-height:65px" placeholder="تعليق المحاضر للطالب">${escapeHtml(review.comment||'')}</textarea><div style="display:flex;gap:6px;margin-top:6px"><select id="pro_review_status_${row.studentKey}_${item.id}"><option value="passed" ${review.status==='passed'?'selected':''}>مجتاز</option><option value="needs_followup" ${review.status==='needs_followup'?'selected':''}>بحاجة متابعة</option></select><button class="btn btn-sm btn-primary" onclick="saveProfessionalDiscussionReview('${row.studentKey}','${item.id}')">حفظ</button></div></td></tr>`;}).join('')}</tbody></table></div></div>`).join('')}`;
+}
+async function saveProfessionalDiscussionReview(studentKey,unitId){const comment=document.getElementById(`pro_review_${studentKey}_${unitId}`)?.value.trim()||'',status=document.getElementById(`pro_review_status_${studentKey}_${unitId}`)?.value||'needs_followup',payload={comment,status,reviewedAt:new Date().toISOString(),reviewedBy:currentUser.id,reviewedByName:currentUser.name||''};await fbRef(`professionalDiscussionReviews/${studentKey}/${PROFESSIONAL_PROGRAM_ID}/${unitId}`).set(payload);professionalDiscussionReviewsData[studentKey]=professionalDiscussionReviewsData[studentKey]||{};professionalDiscussionReviewsData[studentKey][PROFESSIONAL_PROGRAM_ID]=professionalDiscussionReviewsData[studentKey][PROFESSIONAL_PROGRAM_ID]||{};professionalDiscussionReviewsData[studentKey][PROFESSIONAL_PROGRAM_ID][unitId]=payload;showToast('✅ تم حفظ التقييم والتعليق');}
 function renderProfessionalProgramAdmin(){
   const host=document.getElementById('professionalProgramAdminContent'); if(!host) return;
   try{
@@ -6054,9 +6069,9 @@ function renderProfessionalProgramAdmin(){
       <div class="form-row"><div class="form-group"><label>اسم المسار ${track.order} ${track.order===1?'(إلزامي)':'(اختياري)'}</label><input id="pp_${trackKey}_title" value="${escapeHtml(track.title||'')}"></div><div class="form-group"><label>وصف المسار</label><input id="pp_${trackKey}_description" value="${escapeHtml(track.description||'')}"></div></div>
       <div style="display:grid;gap:12px">${Object.entries(track.units||{}).sort(([,a],[,b])=>a.order-b.order).map(([unitKey,unit])=>`<section style="border:1px solid var(--border);border-radius:14px;padding:14px;background:#fbfcff">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px"><strong>${escapeHtml(unit.title||unitKey)}</strong><select id="pp_${trackKey}_${unitKey}_status" style="max-width:150px"><option value="draft" ${unit.status!=='published'?'selected':''}>مخفية</option><option value="published" ${unit.status==='published'?'selected':''}>متاحة</option></select></div>
-        <div class="form-row"><div class="form-group"><label>عنوان الوحدة</label><input id="pp_${trackKey}_${unitKey}_title" value="${escapeHtml(unit.title||'')}"></div><div class="form-group"><label>وصف مختصر</label><input id="pp_${trackKey}_${unitKey}_description" value="${escapeHtml(unit.description||'')}"></div></div>
-        <div class="form-group"><label>رابط ملف PDF</label><input type="url" id="pp_${trackKey}_${unitKey}_pdfUrl" value="${escapeHtml(unit.pdfUrl||'')}" placeholder="https://..."></div>
-        <details style="margin:12px 0;border:1px solid var(--border);border-radius:12px;background:#fff"><summary style="cursor:pointer;padding:12px 14px;font-weight:900;color:var(--primary)">🎥 إعداد المحاضرات الخمس وروابط التسجيل</summary><div style="padding:0 12px 12px;display:grid;gap:10px">${professionalAdminSessions(unit).map(([sessionKey,session])=>`<div style="padding:11px;border:1px solid var(--border);border-radius:10px;background:#f8faff"><div style="font-weight:800;margin-bottom:8px">المحاضرة ${session.order}</div><div class="form-row"><div class="form-group"><label>العنوان</label><input id="pp_${trackKey}_${unitKey}_${sessionKey}_title" value="${escapeHtml(session.title||`المحاضرة ${session.order}`)}"></div><div class="form-group"><label>الموعد</label><input type="datetime-local" id="pp_${trackKey}_${unitKey}_${sessionKey}_scheduledAt" value="${escapeHtml(session.scheduledAt||'')}"></div></div><div class="form-row"><div class="form-group"><label>رابط Zoom المباشر</label><input type="url" id="pp_${trackKey}_${unitKey}_${sessionKey}_zoomUrl" value="${escapeHtml(session.zoomUrl||'')}" placeholder="https://zoom.us/..."></div><div class="form-group"><label>رابط التسجيل على Drive</label><input type="url" id="pp_${trackKey}_${unitKey}_${sessionKey}_recordingUrl" value="${escapeHtml(session.recordingUrl||'')}" placeholder="اتركيه فارغًا حتى يتم رفع التسجيل"></div></div></div>`).join('')}</div></details>
+        <div class="form-row"><div class="form-group"><label>عنوان الوحدة</label><input id="pp_${trackKey}_${unitKey}_title" value="${escapeHtml(unit.title||'')}"></div><div class="form-group"><label>محاضر الوحدة</label><select id="pp_${trackKey}_${unitKey}_lecturer"><option value="">-- اختر المحاضر --</option>${users.filter(user=>user.role==='lecturer').map(user=>`<option value="${escapeHtml(user.id)}" ${unit.lecturerUserId===user.id?'selected':''}>${escapeHtml(user.name)}</option>`).join('')}</select></div></div>
+        <div class="form-group"><label>وصف مختصر</label><input id="pp_${trackKey}_${unitKey}_description" value="${escapeHtml(unit.description||'')}"></div>
+        <details style="margin:12px 0;border:1px solid var(--border);border-radius:12px;background:#fff"><summary style="cursor:pointer;padding:12px 14px;font-weight:900;color:var(--primary)">🎥 إعداد المحاضرات الخمس وموادها</summary><div style="padding:0 12px 12px;display:grid;gap:10px">${professionalAdminSessions(unit).map(([sessionKey,session])=>`<details style="padding:11px;border:1px solid var(--border);border-radius:10px;background:#f8faff"><summary style="font-weight:800;cursor:pointer">المحاضرة ${session.order} · ${escapeHtml(session.title||'')}</summary><div style="margin-top:10px"><div class="form-row"><div class="form-group"><label>العنوان</label><input id="pp_${trackKey}_${unitKey}_${sessionKey}_title" value="${escapeHtml(session.title||`المحاضرة ${session.order}`)}"></div><div class="form-group"><label>الموعد</label><input type="datetime-local" id="pp_${trackKey}_${unitKey}_${sessionKey}_scheduledAt" value="${escapeHtml(session.scheduledAt||'')}"></div></div><div class="form-row"><div class="form-group"><label>رابط Zoom المباشر</label><input type="url" id="pp_${trackKey}_${unitKey}_${sessionKey}_zoomUrl" value="${escapeHtml(session.zoomUrl||'')}" placeholder="https://zoom.us/..."></div><div class="form-group"><label>رابط التسجيل (Drive أو رابط عام)</label><input type="url" id="pp_${trackKey}_${unitKey}_${sessionKey}_recordingUrl" value="${escapeHtml(session.recordingUrl||'')}" placeholder="اتركيه فارغًا حتى يتم رفع التسجيل"></div></div><div class="form-row"><div class="form-group"><label>ملف PDF للمحاضرة</label><input type="url" id="pp_${trackKey}_${unitKey}_${sessionKey}_pdfUrl" value="${escapeHtml(session.pdfUrl||'')}" placeholder="رابط Google Drive"></div><div class="form-group"><label>مدة التسجيل بالدقائق</label><input type="number" min="1" id="pp_${trackKey}_${unitKey}_${sessionKey}_duration" value="${Number(session.durationMinutes)||120}"></div></div></div></details>`).join('')}</div></details>
         <div class="form-row"><div class="form-group"><label>سؤال النقاش الأول</label><textarea id="pp_${trackKey}_${unitKey}_q1">${escapeHtml(unit.discussionQuestions?.q1||'')}</textarea></div><div class="form-group"><label>سؤال النقاش الثاني</label><textarea id="pp_${trackKey}_${unitKey}_q2">${escapeHtml(unit.discussionQuestions?.q2||'')}</textarea></div></div>
       </section>`).join('')}</div>
     </div>`).join('')}
@@ -6074,8 +6089,8 @@ async function saveProfessionalProgram(){
     const trackKey=`track_${trackNo}`,units={};
     for(let unitNo=1;unitNo<=3;unitNo++){
       const unitKey=`unit_${unitNo}`,prefix=`pp_${trackKey}_${unitKey}_`;
-      const sessions={};for(let sessionNo=1;sessionNo<=5;sessionNo++){const sessionKey=`session_${sessionNo}`,sessionPrefix=`${prefix}${sessionKey}_`;sessions[sessionKey]={order:sessionNo,title:document.getElementById(sessionPrefix+'title').value.trim()||`المحاضرة ${sessionNo}`,scheduledAt:document.getElementById(sessionPrefix+'scheduledAt').value,zoomUrl:document.getElementById(sessionPrefix+'zoomUrl').value.trim(),recordingUrl:document.getElementById(sessionPrefix+'recordingUrl').value.trim()};}
-      units[unitKey]={order:unitNo,title:document.getElementById(prefix+'title').value.trim(),description:document.getElementById(prefix+'description').value.trim(),status:document.getElementById(prefix+'status').value,pdfUrl:document.getElementById(prefix+'pdfUrl').value.trim(),sessions,discussionQuestions:{q1:document.getElementById(prefix+'q1').value.trim(),q2:document.getElementById(prefix+'q2').value.trim()}};
+      const sessions={};for(let sessionNo=1;sessionNo<=5;sessionNo++){const sessionKey=`session_${sessionNo}`,sessionPrefix=`${prefix}${sessionKey}_`;sessions[sessionKey]={order:sessionNo,title:document.getElementById(sessionPrefix+'title').value.trim()||`المحاضرة ${sessionNo}`,scheduledAt:document.getElementById(sessionPrefix+'scheduledAt').value,zoomUrl:document.getElementById(sessionPrefix+'zoomUrl').value.trim(),recordingUrl:document.getElementById(sessionPrefix+'recordingUrl').value.trim(),pdfUrl:document.getElementById(sessionPrefix+'pdfUrl').value.trim(),durationMinutes:Number(document.getElementById(sessionPrefix+'duration').value)||120};}
+      units[unitKey]={order:unitNo,title:document.getElementById(prefix+'title').value.trim(),description:document.getElementById(prefix+'description').value.trim(),status:document.getElementById(prefix+'status').value,lecturerUserId:document.getElementById(prefix+'lecturer').value,sessions,discussionQuestions:{q1:document.getElementById(prefix+'q1').value.trim(),q2:document.getElementById(prefix+'q2').value.trim()}};
     }
     tracks[trackKey]={order:trackNo,title:document.getElementById(`pp_${trackKey}_title`).value.trim(),description:document.getElementById(`pp_${trackKey}_description`).value.trim(),required:trackNo===1,units};
   }
