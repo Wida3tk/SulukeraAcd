@@ -477,7 +477,8 @@ tr:hover td{background:#f8faff;}
       </div>
 
       <!-- ISOLATED PROFESSIONAL PROGRAM -->
-      <div class="page" id="page-professionalprogram"><div id="professionalProgramAdminContent"><div class="card card-accent"><div class="card-title">🚀 البرنامج المهني</div><div class="alert alert-info">جاري تحميل إعدادات البرنامج...</div></div></div></div>
+      <div class="page" id="page-professionalprogram"><div id="professionalProgramAdminContent"><div class="card card-accent"><div class="card-title">🚀 محتوى البرنامج المهني</div><div class="alert alert-info">جاري تحميل إعدادات البرنامج...</div></div></div></div>
+      <div class="page" id="page-professionalstudents"><div id="professionalStudentsAdminContent"><div class="card card-accent"><div class="card-title">👥 طلاب البرنامج المهني</div><div class="alert alert-info">جاري تحميل القائمة...</div></div></div></div>
 
       <!-- BATCH-CENTRIC ACADEMIC PLANS -->
       <div class="page" id="page-batchplans">
@@ -2394,8 +2395,11 @@ const adminNavGroups=[
     {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'exams',icon:'📝',label:'الاختبارات'},
-    {id:'batchplans',icon:'🧩',label:'الخطط الدراسية'},
-    {id:'professionalprogram',icon:'🚀',label:'البرنامج المهني'}
+    {id:'batchplans',icon:'🧩',label:'الخطط الدراسية'}
+  ]},
+  {id:'professional',icon:'🚀',label:'البرنامج المهني',items:[
+    {id:'professionalstudents',icon:'👥',label:'طلاب البرنامج المهني'},
+    {id:'professionalprogram',icon:'🧱',label:'المحتوى والمسارات'}
   ]},
   {id:'system',icon:'🏛️',label:'الهيكل والنظام',items:[
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
@@ -2488,6 +2492,7 @@ function refreshPage(p) {
   if (p==='cards') { buildCardsTabs(); renderCards('all'); }
   if (p==='programs') { renderProgramsPanel(); loadPackagesFromFirebase().then(renderPackagesList); }
   if (p==='professionalprogram') renderProfessionalProgramAdmin();
+  if (p==='professionalstudents') renderProfessionalStudentsAdmin();
   if (p==='batchplans') renderBatchPlansPage();
   if (p==='schedule') renderScheduleAdmin();
   if (p==='exams') renderExamSchedulesAdmin();
@@ -3037,8 +3042,21 @@ function generateStudentId() {
 // ══════════════════════════════════════════════
 function populateProgramSelect(selectedProgram) {
   const sel=document.getElementById('stdProgram');
-  sel.innerHTML='<option value="">-- اختر برنامجاً --</option>'+
-    programsData.map(p=>`<option value="${p.name}" ${p.name===selectedProgram?'selected':''}>${p.name}</option>`).join('');
+  const options=[...programsData];
+  if(!options.some(program=>isProfessionalProgramName(program.name)))options.push({name:'شهادة إدارة السلوك التنظيمي',tracks:[]});
+  sel.innerHTML='<option value="">-- اختر برنامجاً --</option>'+options.map(p=>`<option value="${p.name}" ${p.name===selectedProgram?'selected':''}>${p.name}</option>`).join('');
+}
+function isProfessionalProgramName(value){const name=String(value||'').replace(/[ـ\s]+/g,' ').trim();return name.includes('إدارة السلوك التنظيمي')||name.includes('ادارة السلوك التنظيمي');}
+function applyProfessionalStudentMode(){
+  const professional=isProfessionalProgramName(document.getElementById('stdProgram')?.value),track=document.getElementById('stdTrack'),batch=document.getElementById('stdBatchSelect'),plan=document.getElementById('studentPlanType'),pkg=document.getElementById('studentPackage'),subjectsList=document.getElementById('studentSubjectsList'),crossList=document.getElementById('studentCrossBatchSubjects');
+  if(professional){
+    if(track){track.innerHTML='<option value="مسار الممارس OBM-P" selected>مسار الممارس OBM-P</option>';track.value='مسار الممارس OBM-P';track.disabled=true;}
+    if(batch){batch.innerHTML='<option value="PRO-OBM-P" selected>البرنامج المهني</option>';batch.value='PRO-OBM-P';batch.disabled=true;}
+    if(plan){plan.disabled=true;} if(pkg)pkg.disabled=false; if(subjectsList){subjectsList.innerHTML='';subjectsList.disabled=true;} if(crossList){crossList.innerHTML='';crossList.disabled=true;}
+  }else{
+    [track,batch,plan,subjectsList,crossList].forEach(el=>{if(el)el.disabled=false;});
+  }
+  return professional;
 }
 function updateTrackOptions(selectedTrack) {
   const progName=document.getElementById('stdProgram').value;
@@ -3050,6 +3068,7 @@ function updateTrackOptions(selectedTrack) {
     trackGroup.style.display='block';
     prog.tracks.forEach(t=>{ trackSel.innerHTML+=`<option value="${t.name}" ${t.name===selectedTrack?'selected':''}>${t.name}</option>`; });
   } else { trackGroup.style.display='none'; }
+  if(isProfessionalProgramName(progName)){applyProfessionalStudentMode();return;}
   updateBatchOptions();
   updateSubjectsForPackage();
 }
@@ -3721,8 +3740,10 @@ function openStudentModal(si=-1) {
   // Program → Track → Batch (cascading)
   populateProgramSelect(st?.program||'');
   updateTrackOptions(st?.track||'');
-  if (st?.track) { document.getElementById('stdTrack').value=st.track; updateBatchOptions(st?.batch||''); }
-  if (st?.batch) { const bs=document.getElementById('stdBatchSelect'); if(bs) bs.value=st.batch; }
+  const professionalStudentMode=isProfessionalProgramName(st?.program||'');
+  if (st?.track&&!professionalStudentMode) { document.getElementById('stdTrack').value=st.track; updateBatchOptions(st?.batch||''); }
+  if (st?.batch&&!professionalStudentMode) { const bs=document.getElementById('stdBatchSelect'); if(bs) bs.value=st.batch; }
+  applyProfessionalStudentMode();
   // Subjects list
   refreshStudentSubjectOptions(si);
   refreshStudentCrossBatchOptions(si);
@@ -3763,9 +3784,10 @@ async function saveStudent() {
   const id=document.getElementById('studentIdField').value.trim();
   if ((!financialOnly && !firstName)||!id) return showToast('⚠️ أدخل الاسم الأول والرقم الطلابي');
   const selectedProgram=document.getElementById('stdProgram').value;
-  const selectedTrack=document.getElementById('stdTrack').value;
-  const selectedBatch=document.getElementById('stdBatchSelect').value.trim();
-  if(!financialOnly && (!selectedProgram||!selectedTrack||!selectedBatch))
+  const professionalStudent=isProfessionalProgramName(selectedProgram);
+  const selectedTrack=professionalStudent?'مسار الممارس OBM-P':document.getElementById('stdTrack').value;
+  const selectedBatch=professionalStudent?'PRO-OBM-P':document.getElementById('stdBatchSelect').value.trim();
+  if(!financialOnly && (!selectedProgram||(!professionalStudent&&(!selectedTrack||!selectedBatch))))
     return showToast('⚠️ اختاري البرنامج والمسار والدفعة');
   const duplicateIdx=students.findIndex((st,i)=>i!==editingStudentIdx&&(st.id||'').toUpperCase()===id.toUpperCase());
   if(duplicateIdx>=0) return showToast('⚠️ الرقم الطلابي مستخدم مسبقاً');
@@ -3795,7 +3817,7 @@ async function saveStudent() {
     track:selectedTrack,
     batch:selectedBatch,
     id, pkg:document.getElementById('studentPackage').value,
-    planType:document.getElementById('studentPlanType').value,
+    planType:professionalStudent?'PROFESSIONAL':document.getElementById('studentPlanType').value,
     financeMode:document.getElementById('stdFinanceMode').value||'local_manual',
     operCustomerId:document.getElementById('stdOperCustomerId').value.trim(),
     operOrderId:document.getElementById('stdOperOrderId').value.trim(),
@@ -3815,7 +3837,7 @@ async function saveStudent() {
     sameBatchName(subject.batch,stdData.batch) &&
     studentEligibleForOffering(stdData,subject)
   );
-  if(!financialOnly && !eligibleBatchOfferings.length && !chosenCrossBatchSubjs.length){
+  if(!financialOnly && !professionalStudent && !eligibleBatchOfferings.length && !chosenCrossBatchSubjs.length){
     return showToast('⚠️ هذه الدفعة لا تملك مقررات جاهزة حالياً. اربطي الطالب أو الطالبة بمقررات من دفعة أخرى قبل الحفظ.');
   }
   if(financialOnly){
@@ -3871,7 +3893,7 @@ async function saveStudent() {
     });
 
     // ── Step 3: التسجيل من خطة الدفعة حسب الرخصة ──
-    const batchOfferings=subjects.map((s,i)=>({...s,idx:i})).filter(s=>
+    const batchOfferings=professionalStudent?[]:subjects.map((s,i)=>({...s,idx:i})).filter(s=>
       s.courseKey&&sameBatchName(s.batch,stdData.batch)
     );
     const defaultOfferingIdxs = [];
@@ -3939,7 +3961,12 @@ async function saveStudent() {
       if(Object.keys(enrollUpdates).length>0)
         await firebase.database().ref('/').update(enrollUpdates);
     }
-    await syncMissingSemesterEnrollments(idx2);
+    if(professionalStudent){
+      const studentKey=students[idx2]._fbKey,currentProfessional=professionalEnrollmentsData?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]||{},record={...currentProfessional,status:'active',selectedTracks:currentProfessional.selectedTracks||{track_1:true,track_2:false,track_3:false},enrolledAt:currentProfessional.enrolledAt||new Date().toISOString(),enrolledBy:currentProfessional.enrolledBy||currentUser.username||'admin',updatedAt:new Date().toISOString(),updatedBy:currentUser.username||'admin'};
+      await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).set(record);
+      professionalEnrollmentsData[studentKey]=professionalEnrollmentsData[studentKey]||{};
+      professionalEnrollmentsData[studentKey][PROFESSIONAL_PROGRAM_ID]=record;
+    }else await syncMissingSemesterEnrollments(idx2);
 
     if(generatedStudentPassword){
       addPendingStudentPassword({name:fullName,id,password:pass});
@@ -5994,7 +6021,20 @@ function professionalAdminSessions(unit){
   return [1,2,3,4,5].map(number=>[`session_${number}`,{order:number,title:`المحاضرة ${number}`,scheduledAt:number===1?(unit?.zoomAt||''):'',zoomUrl:number===1?(unit?.zoomUrl||''):'',recordingUrl:number===1?(unit?.recordingUrl||''):''}]);
 }
 function professionalEnrollmentRows(){
-  return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]?.status==='active').map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
+  return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]).map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
+}
+function professionalStudentRequestCount(studentKey){return studentRequestsData.filter(request=>request.studentKey===studentKey&&!['approved','rejected','completed'].includes(request.status)).length;}
+function renderProfessionalStudentsAdmin(){
+  const host=document.getElementById('professionalStudentsAdminContent');if(!host)return;
+  const rows=professionalEnrollmentRows().map(row=>({...row,student:students.find(item=>item._fbKey===row.studentKey)})).sort((a,b)=>getStudentFullName(a.student||{}).localeCompare(getStudentFullName(b.student||{}),'ar'));
+  const active=rows.filter(row=>row.status==='active').length,paused=rows.filter(row=>row.status==='paused').length,pending=rows.reduce((sum,row)=>sum+professionalStudentRequestCount(row.studentKey),0);
+  host.innerHTML=`<div class="card card-accent" style="background:linear-gradient(135deg,#fff,#f3f7ff)"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title">👥 طلاب البرنامج المهني</div><div style="font-size:12px;color:var(--text-muted)">إدارة التسجيل والمسارات والطلبات وحالة الوصول من قائمة مستقلة.</div></div><button class="btn btn-primary" onclick="openStudentModal()">➕ إضافة طالب مهني</button></div><div class="stats-grid" style="margin-top:14px"><div class="stat-card"><div class="stat-num">${rows.length}</div><div class="stat-label">إجمالي الطلاب</div></div><div class="stat-card"><div class="stat-num" style="color:var(--success)">${active}</div><div class="stat-label">حساب نشط</div></div><div class="stat-card"><div class="stat-num" style="color:var(--warning)">${paused}</div><div class="stat-label">حساب موقوف</div></div><div class="stat-card"><div class="stat-num">${pending}</div><div class="stat-label">طلبات مفتوحة</div></div></div></div>
+  <div class="card card-accent"><div class="table-wrap"><table><thead><tr><th>الطالب</th><th>الرقم</th><th>المسارات</th><th>التقدم</th><th>الطلبات</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${rows.length?rows.map(row=>{const student=row.student,index=students.findIndex(item=>item._fbKey===row.studentKey),selected=row.selectedTracks||{track_1:true},unitRecords=professionalProgressData?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units||{},completed=Object.values(unitRecords).filter(unit=>unit.completed).length,total=Math.max(3,Object.values(selected).filter(Boolean).length*3),requests=professionalStudentRequestCount(row.studentKey),isPaused=row.status==='paused';return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.studentKey)}</strong><div style="font-size:10px;color:var(--text-muted)">${escapeHtml(student?.email||student?.phone||'')}</div></td><td class="mono">${escapeHtml(student?.id||'—')}</td><td><span class="badge badge-info">OBM-P</span>${selected.track_2?' <span class="badge badge-info">المسار 2</span>':''}${selected.track_3?' <span class="badge badge-info">المسار 3</span>':''}</td><td><strong>${completed}/${total}</strong></td><td>${requests?`<span class="nav-count-badge" style="position:static;display:inline-flex">${requests}</span>`:'—'}</td><td><span class="badge ${isPaused?'badge-fail':'badge-pass'}">${isPaused?'موقوف':'نشط'}</span></td><td><div style="display:flex;gap:6px;flex-wrap:wrap">${index>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${index})">ملف الطالب</button>`:''}<button class="btn btn-sm" onclick="navTo('alerts',null)">الطلبات</button><button class="btn btn-sm ${isPaused?'btn-success':'btn-warning'}" onclick="toggleProfessionalStudentStatus('${escapeHtml(row.studentKey)}')">${isPaused?'إعادة التفعيل':'إيقاف'}</button></div></td></tr>`;}).join(''):'<tr><td colspan="7"><div class="empty">لا يوجد طلاب مسجلون بعد.</div></td></tr>'}</tbody></table></div></div>`;
+}
+async function toggleProfessionalStudentStatus(studentKey){
+  const current=professionalEnrollmentsData?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID];if(!current)return showToast('تعذر العثور على التسجيل');
+  const nextStatus=current.status==='paused'?'active':'paused',message=nextStatus==='paused'?'إيقاف وصول الطالب إلى البرنامج المهني؟ يمكن إعادة تفعيله لاحقًا.':'إعادة تفعيل وصول الطالب؟';if(!confirm(message))return;
+  const update={status:nextStatus,updatedAt:new Date().toISOString(),updatedBy:currentUser.username||'admin'};await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).update(update);Object.assign(current,update);showToast(nextStatus==='active'?'✅ تم تفعيل الحساب':'تم إيقاف الحساب المهني');renderProfessionalStudentsAdmin();
 }
 function renderProfessionalProgramAdmin(){
   const host=document.getElementById('professionalProgramAdminContent'); if(!host) return;
