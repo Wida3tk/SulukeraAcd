@@ -1615,7 +1615,17 @@ async function loadSecureStudentExams(){
   }catch(error){console.error('load secure exams error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل الاختبارات الإلكترونية الآن. يرجى تحديث الصفحة أو التواصل مع الإدارة.</div>';}
 }
 async function refreshSecureExamGrades(){
-  try{const result=await secureExamRequest('/student/exams');secureExamList=result.exams||[];mergeSecureExamGrades();if(currentAppTab==='grades')renderStudentGradesTab();if(currentAppTab==='transcript')renderStudentTranscriptTab();}
+  try{
+    const result=await secureExamRequest('/student/exams');
+    secureExamList=result.exams||[];
+    mergeSecureExamGrades();
+    // نتيجة الاختبار تصل بعد رسم الصفحة الأولى؛ أعد رسم الصفحة المفتوحة حتى لا
+    // يبقى المجموع القديم أو تظهر حالة "راسب" قبل دمج النتيجة الآمنة.
+    if(currentAppTab==='home') renderStudentHomeTab();
+    if(currentAppTab==='courses') renderStudentCoursesTab();
+    if(currentAppTab==='grades') renderStudentGradesTab();
+    if(currentAppTab==='transcript') renderStudentTranscriptTab();
+  }
   catch(error){console.warn('secure exam grade refresh unavailable',error);}
 }
 function mergeSecureExamGrades(){
