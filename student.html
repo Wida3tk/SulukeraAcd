@@ -22,6 +22,10 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl;min-height:100vh;}
 textarea,input,select,button{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;letter-spacing:0;}
+textarea[id^="professional_review_"]{width:100%!important;min-height:70px!important;max-height:130px;font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif!important;font-size:13px!important;line-height:1.7!important;letter-spacing:0!important;}
+textarea[id^="professional_review_"]+div{display:flex!important;direction:rtl;justify-content:flex-start;align-items:stretch;gap:8px!important;}
+textarea[id^="professional_review_"]+div select{width:170px!important;flex:0 0 170px;}
+textarea[id^="professional_review_"]+div button{width:90px;flex:0 0 90px;}
 
 /* ── LOGIN SCREEN ── */
 #loginScreen{
