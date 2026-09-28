@@ -6111,8 +6111,24 @@ function professionalEnrollmentRows(){
   return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]).map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
 }
 function professionalStudentRequestCount(studentKey){return studentRequestsData.filter(request=>request.studentKey===studentKey&&!['approved','rejected','completed'].includes(request.status)).length;}
+let professionalEnrollmentRepairRunning=false;
+function isProfessionalStudentRecord(student){return student?.planType==='PROFESSIONAL'||String(student?.batch||'').startsWith('PRO-')||isProfessionalProgramName(student?.program);}
+async function repairProfessionalStudentEnrollments(){
+  if(professionalEnrollmentRepairRunning)return false;
+  const missing=students.filter(student=>student._fbKey&&student.accountStatus!=='withdrawn'&&isProfessionalStudentRecord(student)&&!professionalEnrollmentsData?.[student._fbKey]?.[PROFESSIONAL_PROGRAM_ID]);
+  if(!missing.length)return false;
+  professionalEnrollmentRepairRunning=true;
+  try{
+    const now=new Date().toISOString(),updates={};
+    missing.forEach(student=>{const record={status:'active',selectedTracks:{track_1:true,track_2:false,track_3:false},enrolledAt:now,enrolledBy:currentUser.username||'admin',updatedAt:now,updatedBy:currentUser.username||'admin',repairSource:'professional_profile_sync'};updates[`professionalEnrollments/${student._fbKey}/${PROFESSIONAL_PROGRAM_ID}`]=record;professionalEnrollmentsData[student._fbKey]=professionalEnrollmentsData[student._fbKey]||{};professionalEnrollmentsData[student._fbKey][PROFESSIONAL_PROGRAM_ID]=record;});
+    await fbRef().update(updates);showToast(`✅ تمت مزامنة ${missing.length} من حسابات المتدربين مع قائمة البرنامج`);return true;
+  }catch(error){console.error('professional enrollment repair',error);showToast('⚠️ تعذرت مزامنة قائمة المتدربين');return false;}
+  finally{professionalEnrollmentRepairRunning=false;}
+}
 function renderProfessionalStudentsAdmin(){
   const host=document.getElementById('professionalStudentsAdminContent');if(!host)return;
+  const missing=students.filter(student=>student._fbKey&&student.accountStatus!=='withdrawn'&&isProfessionalStudentRecord(student)&&!professionalEnrollmentsData?.[student._fbKey]?.[PROFESSIONAL_PROGRAM_ID]);
+  if(missing.length&&!professionalEnrollmentRepairRunning){host.innerHTML=`<div class="card card-accent"><div class="alert alert-info">جاري توحيد قائمة المتدربين وربط ${missing.length} حساب مهني غير ظاهر...</div></div>`;repairProfessionalStudentEnrollments().then(changed=>{if(changed)renderProfessionalStudentsAdmin();});return;}
   const rows=professionalEnrollmentRows().map(row=>({...row,student:students.find(item=>item._fbKey===row.studentKey)})).sort((a,b)=>getStudentFullName(a.student||{}).localeCompare(getStudentFullName(b.student||{}),'ar'));
   const active=rows.filter(row=>row.status==='active').length,paused=rows.filter(row=>row.status==='paused').length,pending=rows.reduce((sum,row)=>sum+professionalStudentRequestCount(row.studentKey),0);
   host.innerHTML=`<div class="card card-accent" style="background:linear-gradient(135deg,#fff,#f3f7ff)"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title">👥 طلاب البرنامج المهني</div><div style="font-size:12px;color:var(--text-muted)">إدارة التسجيل والمسارات والطلبات وحالة الوصول من قائمة مستقلة.</div></div><button class="btn btn-primary" onclick="openStudentModal()">➕ إضافة طالب مهني</button></div><div class="stats-grid" style="margin-top:14px"><div class="stat-card"><div class="stat-num">${rows.length}</div><div class="stat-label">إجمالي الطلاب</div></div><div class="stat-card"><div class="stat-num" style="color:var(--success)">${active}</div><div class="stat-label">حساب نشط</div></div><div class="stat-card"><div class="stat-num" style="color:var(--warning)">${paused}</div><div class="stat-label">حساب موقوف</div></div><div class="stat-card"><div class="stat-num">${pending}</div><div class="stat-label">طلبات مفتوحة</div></div></div></div>
