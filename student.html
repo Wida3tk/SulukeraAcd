@@ -1763,7 +1763,8 @@ const PROFESSIONAL_PROGRAM_ID='organizational_behavior';
 function professionalSafeUrl(value){try{const url=new URL(String(value||''));return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return '';}}
 function professionalDrivePreview(value){const safe=professionalSafeUrl(value);if(!safe)return '';const match=safe.match(/drive\.google\.com\/file\/d\/([^/]+)/);return match?`https://drive.google.com/file/d/${match[1]}/preview`:'';}
 function getStudentProfessionalContext(){
-  const studentKey=currentUser?.fbKey,program=dbData.professionalPrograms?.[PROFESSIONAL_PROGRAM_ID],enrollment=dbData.professionalEnrollments?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID];
+  const studentKey=currentUser?.fbKey,program=dbData.professionalPrograms?.[PROFESSIONAL_PROGRAM_ID],savedEnrollment=dbData.professionalEnrollments?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID],profile=currentUser?.data||{},professionalProfile=profile.planType==='PROFESSIONAL'||String(profile.batch||'').startsWith('PRO-')||String(profile.program||'').includes('السلوك التنظيمي');
+  const enrollment=savedEnrollment||(professionalProfile?{status:'active',selectedTracks:{track_1:true,track_2:false,track_3:false},profileFallback:true}:null);
   if(!program||enrollment?.status!=='active')return null;
   const progress=dbData.professionalProgress?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]||{units:{}},discussions=dbData.professionalDiscussions?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID]||{};
   return {studentKey,program,enrollment,progress,discussions};
