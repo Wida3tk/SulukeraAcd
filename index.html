@@ -2424,7 +2424,7 @@ const navConfig = {
     {id:'mygrades',icon:'📊',label:'بياناتي ودرجاتي'},
   ],
 };
-const EXAM_API_BASE='https://sulukera-exams.maryam-93c.workers.dev';
+const EXAM_API_BASE='https://sulukera-exams.ro7e-entaa.workers.dev';
 const adminNavGroups=[
   {id:'followup',icon:'🔎',label:'الرئيسية والمتابعة',items:[
     {id:'alerts',icon:'🔔',label:'الطلبات والتنبيهات'},
@@ -6221,10 +6221,28 @@ async function selectExamDashboard(examId){
   if(!examId){if(summary)summary.innerHTML='<div class="empty" style="margin-top:16px">اختاري اختبارًا لعرض مؤشرات المشاركة والنجاح.</div>';if(charts)charts.innerHTML='<div class="empty">اختاري اختبارًا لعرض التحليل.</div>';if(status){status.textContent='لم يتم الاختيار';status.className='badge badge-warn';}return;}
   if(summary)summary.innerHTML='<div class="empty" style="margin-top:16px">جاري إعداد مؤشرات الاختبار...</div>';
   try{
-    const data=await secureAdminExamRequest(`/admin/exams/${encodeURIComponent(examId)}/dashboard`);selectedExamDashboardData=data;
+    let data;
+    try{data=await secureAdminExamRequest(`/admin/exams/${encodeURIComponent(examId)}/dashboard`);}
+    catch(dashboardError){console.info('Using compatible exam dashboard data',dashboardError);data=await buildCompatibleExamDashboard(examId);}
+    selectedExamDashboardData=data;
     renderExamDashboard(data);renderSelectedExamResults(data);
     const builder=document.getElementById('examBuilderSchedule');if(builder&&data.exam?.schedule_key){builder.value=data.exam.schedule_key;loadExamQuestionDraft();}
   }catch(error){console.error('load exam dashboard',error);if(summary)summary.innerHTML='<div class="alert alert-warn">تعذر تحميل تفاصيل الاختبار.</div>';}
+}
+async function buildCompatibleExamDashboard(examId){
+  const exam=examDashboardExams.find(item=>item.id===examId);if(!exam)throw new Error('EXAM_NOT_FOUND');
+  const resultRows=(await secureAdminExamRequest('/admin/results')).results||[];
+  examAdminResultsData=resultRows;
+  const subject=subjects.find(item=>item._fbKey===exam.subject_key);
+  let eligibleStudents=subject?getSubjectStudentIdxs(subject).map(index=>students[index]).filter(Boolean):students.filter(student=>sameBatchName(student.batch,exam.batch));
+  eligibleStudents=eligibleStudents.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,exam.batch));
+  const resultMap=new Map(resultRows.filter(row=>row.exam_id===examId).map(row=>[row.student_key,row]));
+  const studentRows=eligibleStudents.map(student=>{const row=resultMap.get(student._fbKey),best=row?.best_score===null||row?.best_score===undefined?null:Number(row.best_score),submitted=best!==null||Boolean(row?.last_submitted_at);const exception=examExceptionsData?.[student._fbKey];return {studentKey:student._fbKey,attemptCount:Number(row?.attempt_count)||0,submittedCount:submitted?1:0,activeCount:0,bestScore:Number.isFinite(best)?best:null,lastSubmittedAt:row?.last_submitted_at||null,hasException:Boolean(exception?.active&&(!exception.subjectKey||exception.subjectKey===exam.subject_key))};});
+  const submitted=studentRows.filter(row=>row.submittedCount),passed=submitted.filter(row=>row.bestScore>=16),bands=[{label:'18–20',min:18,max:20,count:0},{label:'16–<18',min:16,max:18,count:0},{label:'12–<16',min:12,max:16,count:0},{label:'أقل من 12',min:0,max:12,count:0}];
+  submitted.forEach(row=>{const band=bands.find(item=>row.bestScore>=item.min&&(item.max===20?row.bestScore<=item.max:row.bestScore<item.max));if(band)band.count++;});
+  const averageScore=submitted.length?Math.round(submitted.reduce((sum,row)=>sum+row.bestScore,0)/submitted.length*10)/10:null;
+  const evaluation=examEvaluationGroups.find(group=>group.examId===examId);
+  return {exam,metrics:{eligible:studentRows.length,submitted:submitted.length,absent:Math.max(0,studentRows.length-submitted.length),passed:passed.length,successRate:submitted.length?Math.round(passed.length/submitted.length*1000)/10:0,averageScore,responseCount:Number(evaluation?.responseCount)||0},bands,attemptAverages:{first:null,second:null},students:studentRows};
 }
 function refreshSelectedExamDashboard(){return selectedExamDashboardId?selectExamDashboard(selectedExamDashboardId):populateExamDashboardOptions();}
 function renderExamDashboard(data){
@@ -6291,7 +6309,7 @@ async function loadExamEvaluationAnalytics(){
   const host=document.getElementById('examEvaluationAnalytics');if(!host||currentUser?.role!=='admin')return;
   host.innerHTML='<div class="empty">جاري تحليل التقييمات...</div>';
   try{
-    examEvaluationGroups=(await secureAdminExamRequest('/admin/evaluations')).evaluations||[];
+    examEvaluationGroups=((await secureAdminExamRequest('/admin/evaluations')).evaluations||[]).map(group=>{const subject=subjects.find(item=>item._fbKey===group.subjectKey),eligible=subject?getSubjectStudentIdxs(subject).map(index=>students[index]).filter(student=>student&&student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,group.batch)).length:students.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,group.batch)).length;return {...group,eligibleCount:group.eligibleCount??eligible,responseRate:group.responseRate??(eligible?Math.round(Number(group.responseCount||0)/eligible*1000)/10:0)};});
     if(!examEvaluationGroups.length){host.innerHTML='<div class="empty">لم تصل تقييمات للمقررات بعد.</div>';return;}
     populateEvaluationCourseOptions();
   }catch(error){console.error('load evaluation analytics error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل تحليل التقييمات الآن.</div>';}
