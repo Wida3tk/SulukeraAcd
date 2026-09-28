@@ -6124,7 +6124,16 @@ async function toggleProfessionalStudentStatus(studentKey){
   const nextStatus=current.status==='paused'?'active':'paused',message=nextStatus==='paused'?'إيقاف وصول الطالب إلى البرنامج المهني؟ يمكن إعادة تفعيله لاحقًا.':'إعادة تفعيل وصول الطالب؟';if(!confirm(message))return;
   const update={status:nextStatus,updatedAt:new Date().toISOString(),updatedBy:currentUser.username||'admin'};await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).update(update);Object.assign(current,update);showToast(nextStatus==='active'?'✅ تم تفعيل الحساب':'تم إيقاف الحساب المهني');renderProfessionalStudentsAdmin();
 }
-function professionalLecturerUnits(){const program=getProfessionalProgram(),identities=getLecturerIdentityValues(currentUser),items=[];Object.entries(program.tracks||{}).forEach(([trackKey,track])=>Object.entries(track.units||{}).forEach(([unitKey,unit])=>{if(unit.lecturerUserId&&identities.has(unit.lecturerUserId))items.push({trackKey,track,unitKey,unit,id:`${trackKey}_${unitKey}`});}));return items;}
+function professionalLecturerUnits(){
+  const program=getProfessionalProgram(),normalize=value=>String(value||'').trim().toLowerCase(),identities=new Set([...getLecturerIdentityValues(currentUser),currentUser?.authUid].map(normalize).filter(Boolean)),items=[];
+  const linkedUser=users.find(user=>[user.username,user.id,user._fbKey,user.fbKey].map(normalize).some(value=>identities.has(value)));
+  if(linkedUser)[linkedUser.username,linkedUser.id,linkedUser._fbKey,linkedUser.fbKey].map(normalize).filter(Boolean).forEach(value=>identities.add(value));
+  Object.entries(program.tracks||{}).forEach(([trackKey,track])=>Object.entries(track.units||{}).forEach(([unitKey,unit])=>{
+    const lecturerKey=normalize(unit.lecturerUserId);
+    if(lecturerKey&&identities.has(lecturerKey))items.push({trackKey,track,unitKey,unit,id:`${trackKey}_${unitKey}`});
+  }));
+  return items;
+}
 function renderProfessionalTeachingDashboard(){
   const host=document.getElementById('professionalTeachingContent');if(!host)return;const units=professionalLecturerUnits();
   if(!units.length){host.innerHTML='<div class="card card-accent"><div class="card-title">🚀 مساري المهني</div><div class="empty">لا توجد وحدة مهنية مسندة إلى حسابك حاليًا.</div></div>';return;}
