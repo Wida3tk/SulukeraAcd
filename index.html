@@ -1113,6 +1113,15 @@ async function provisionFirebaseAuthAccount(username,password){
   if(!response.ok) throw new Error(result?.error?.message||'AUTH_ACCOUNT_CREATE_FAILED');
   return result.localId;
 }
+async function provisionOrReuseFirebaseAuthAccount(username,password){
+  try{return {uid:await provisionFirebaseAuthAccount(username,password),reused:false};}
+  catch(error){
+    if(error.message!=='EMAIL_EXISTS') throw error;
+    const existing=await secureAdminExamRequest('/admin/auth-account-lookup',{method:'POST',body:JSON.stringify({username})});
+    if(!existing?.uid) throw error;
+    return {uid:existing.uid,reused:true};
+  }
+}
 
 function randomPassword(len=10){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -1394,13 +1403,16 @@ async function saveStudentToFirebase(stdIdx, passw){
     });
   }
 
-  let authUid='';
+  let authUid='',reusedAuth=false;
   if(passw){
-    authUid=await provisionFirebaseAuthAccount(st.id,passw);
+    const authResult=await provisionOrReuseFirebaseAuthAccount(st.id,passw);
+    authUid=authResult.uid;
+    reusedAuth=authResult.reused;
   }
   const updates={['students/'+fbKey]:stdData};
   if(authUid) updates['users/'+authUid]={name:getStudentFullName(st),username:st.id,role:'student',studentKey:fbKey,authProvider:'firebase',createdAt:new Date().toISOString()};
   await firebase.database().ref('/').update(updates);
+  return {authUid,reusedAuth};
 }
 
 async function saveAdvisorCaseToFirebase(record){
@@ -3937,7 +3949,11 @@ async function saveStudent() {
   const studentActionLabel = editingStudentIdx >= 0 ? 'تعديل سجل طالب' : 'إضافة طالب';
   try {
     // ── Step 1: Save student record to Firebase (once) ──
-    await saveStudentToFirebase(idx2, pass);
+    const authResult=await saveStudentToFirebase(idx2, pass);
+    if(authResult?.reusedAuth){
+      generatedStudentPassword=false;
+      showToast('✅ تم ربط حساب الدخول الموجود بسجل المتدرب دون تغيير كلمة المرور');
+    }
 
     // ── Step 2: إعادة بناء تسجيلات الطالب محليًا بشكل نظيف ──
     subjects.forEach((subject, si)=>{
@@ -4689,8 +4705,12 @@ async function saveUser() {
     }
   } else {
     if (!password) return showToast('⚠️ أدخل كلمة المرور');
-    try{ userFbKey=await provisionFirebaseAuthAccount(username,password); }
-    catch(error){ console.error('Create auth account error',error); return showToast(error.message==='EMAIL_EXISTS'?'⚠️ يوجد حساب دخول بهذا الاسم':'⚠️ تعذر إنشاء حساب الدخول الآمن'); }
+    try{
+      const authResult=await provisionOrReuseFirebaseAuthAccount(username,password);
+      userFbKey=authResult.uid;
+      if(authResult.reused) showToast('✅ تم ربط حساب الدخول الموجود دون تغيير كلمة مروره');
+    }
+    catch(error){ console.error('Create auth account error',error); return showToast('⚠️ تعذر إنشاء أو ربط حساب الدخول الآمن'); }
     const nu={id:username,_fbKey:userFbKey,name,username,role,subjects:subjs,authProvider:'firebase'};
     users.push(nu);
     if (role==='lecturer'){
