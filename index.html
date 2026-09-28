@@ -6105,8 +6105,7 @@ function professionalProgramDraft(){
 }
 function getProfessionalProgram(){return professionalProgramsData?.[PROFESSIONAL_PROGRAM_ID]||professionalProgramDraft();}
 function professionalAdminSessions(unit){
-  if(unit?.sessions&&Object.keys(unit.sessions).length)return Object.entries(unit.sessions).sort(([,a],[,b])=>a.order-b.order);
-  return [1,2,3,4,5].map(number=>[`session_${number}`,{order:number,title:`اللقاء ${number}`,scheduledAt:number===1?(unit?.zoomAt||''):'',zoomUrl:number===1?(unit?.zoomUrl||''):'',recordingUrl:number===1?(unit?.recordingUrl||''):'',pdfUrl:'',durationMinutes:120}]);
+  return [1,2,3,4,5].map(number=>{const key=`session_${number}`,existing=unit?.sessions?.[key]||{};return [key,{order:number,title:existing.title||`اللقاء ${number}`,scheduledAt:existing.scheduledAt||(number===1?unit?.zoomAt||'':''),zoomUrl:existing.zoomUrl||(number===1?unit?.zoomUrl||'':''),recordingUrl:existing.recordingUrl||(number===1?unit?.recordingUrl||'':''),pdfUrl:existing.pdfUrl||'',durationMinutes:Number(existing.durationMinutes)||120}];});
 }
 function professionalEnrollmentRows(){
   return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]).map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
