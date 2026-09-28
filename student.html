@@ -1830,6 +1830,7 @@ function renderStudentPortalTab(tab){
 }
 function renderLecturerPortalTab(tab){
   currentAppTab = tab;
+  if(tab==='professional-teaching') return renderProfessionalLecturerPortal();
   if(tab==='home') return renderLecturerHomeTab();
   if(tab==='courses') return renderLecturerCoursesTab();
   if(tab==='grades') return renderLecDashboard();
@@ -1854,13 +1855,42 @@ function showLecturerView(){
   document.getElementById('topbarName').textContent = lec.name;
   document.getElementById('topbarRole').textContent = '👨‍🏫 عضو هيئة التدريس';
   document.getElementById('topbarRole').className = 'user-role role-lecturer';
-  configureAppTabs([
-    { id:'home', label:'🏠 الرئيسية' },
-    { id:'courses', label:'📚 المقررات المسندة' },
-    { id:'grades', label:'📊 سجل الدرجات' },
-    { id:'schedule', label:'📅 الجدول الأسبوعي' }
-  ]);
-  switchAppTab('home', document.querySelector('#appTabs .app-tab'));
+  const professionalUnits=getProfessionalLecturerUnits(),academicSubjects=getLecturerSubjects(),professionalOnly=professionalUnits.length>0&&!academicSubjects.length;
+  const tabs=professionalOnly
+    ? [{id:'professional-teaching',label:'🚀 مساري المهني'}]
+    : [
+      { id:'home', label:'🏠 الرئيسية' },
+      { id:'courses', label:'📚 المقررات المسندة' },
+      { id:'grades', label:'📊 سجل الدرجات' },
+      { id:'schedule', label:'📅 الجدول الأسبوعي' },
+      ...(professionalUnits.length?[{id:'professional-teaching',label:'🚀 مساري المهني'}]:[])
+    ];
+  configureAppTabs(tabs);
+  switchAppTab(professionalOnly?'professional-teaching':'home', document.querySelector('#appTabs .app-tab'));
+}
+
+function getProfessionalLecturerUnits(){
+  const program=dbData.professionalPrograms?.[PROFESSIONAL_PROGRAM_ID],normalize=value=>String(value||'').trim().toLowerCase(),u=currentUser?.data||{},identities=new Set([u.username,u.id,u._fbKey,currentUser?.fbKey,currentUser?.authUid].map(normalize).filter(Boolean)),items=[];
+  if(!program)return items;
+  Object.entries(program.tracks||{}).forEach(([trackKey,track])=>Object.entries(track.units||{}).forEach(([unitKey,unit])=>{
+    if(unit.lecturerUserId&&identities.has(normalize(unit.lecturerUserId)))items.push({trackKey,track,unitKey,unit,id:`${trackKey}_${unitKey}`});
+  }));
+  return items;
+}
+function getProfessionalEnrollmentRows(trackKey){
+  return Object.entries(dbData.professionalEnrollments||{}).map(([studentKey,programs])=>({studentKey,...(programs?.[PROFESSIONAL_PROGRAM_ID]||{})})).filter(row=>row.status==='active'&&(row.selectedTracks?.[trackKey]??trackKey==='track_1'));
+}
+function renderProfessionalLecturerPortal(){
+  const units=getProfessionalLecturerUnits();
+  if(!units.length){document.getElementById('mainContent').innerHTML='<div class="card"><div class="empty">لا توجد وحدة مهنية مسندة إلى حسابك حاليًا.</div></div>';return;}
+  document.getElementById('mainContent').innerHTML=`<div class="card" style="background:linear-gradient(135deg,#092b77,#0D40FC);color:white;border:0"><div style="font-size:22px;font-weight:900">مساري في البرنامج المهني</div><div style="font-size:12px;color:rgba(255,255,255,.82);margin-top:6px">جدول الوحدة، المناقشات، وقائمة المتدربين المسجلين في مسارك.</div></div>${units.map(item=>{const enrolled=getProfessionalEnrollmentRows(item.trackKey),sessions=professionalUnitSessions(item.unit),questions=item.unit.discussionQuestions||{};return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title">${escapeHtml(item.unit.title)}</div><div style="font-size:11px;color:var(--muted)">${escapeHtml(item.track.title||'مسار الممارس OBM-P')}</div></div><span class="badge badge-student">${enrolled.length} متدرب</span></div>
+    <div style="margin-top:14px;padding:14px;background:#f6f9ff;border:1px solid var(--border);border-radius:12px"><strong>📅 جدول لقاءات الوحدة</strong><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin-top:10px">${sessions.map(session=>`<div style="background:white;border:1px solid var(--border);border-radius:10px;padding:10px"><strong>${escapeHtml(session.title||`اللقاء ${session.order}`)}</strong><div style="font-size:10px;color:var(--muted);margin-top:5px">${escapeHtml(professionalDateLabel(professionalSessionValue(session),true))}</div>${session.zoomUrl?`<a class="btn-out" href="${escapeHtml(session.zoomUrl)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px">دخول Zoom</a>`:'<div style="font-size:10px;color:var(--muted);margin-top:7px">الرابط سيضاف قريبًا</div>'}</div>`).join('')}</div></div>
+    <div style="margin-top:12px;padding:14px;background:#f7fcf9;border:1px solid #d5eadc;border-radius:12px"><strong>💬 مناقشات الوحدة</strong><div style="display:grid;gap:7px;margin-top:9px">${questions.q1?`<div><b>السؤال الأول:</b> ${escapeHtml(questions.q1)}</div>`:'<div style="color:var(--muted)">السؤال الأول لم يعتمد بعد.</div>'}${questions.q2?`<div><b>السؤال الثاني:</b> ${escapeHtml(questions.q2)}</div>`:'<div style="color:var(--muted)">السؤال الثاني لم يعتمد بعد.</div>'}</div></div>
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>المتدرب</th><th>المشاهدة</th><th>إجابات المناقشة</th><th>الاختبار</th><th>التقييم والتعليق</th></tr></thead><tbody>${enrolled.length?enrolled.map(row=>{const student=dbData.students?.[row.studentKey]||{},progress=dbData.professionalProgress?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units?.[item.id]||{},watched=Object.values(progress.sessions||{}),percent=watched.length?Math.min(100,Math.round(watched.reduce((sum,s)=>sum+(Number(s.percent)||0),0)/5)):0,discussion=dbData.professionalDiscussions?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.[item.id]||{},review=dbData.professionalDiscussionReviews?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.[item.id]||{};return `<tr><td><strong>${escapeHtml(getStudentDisplayName(student))}</strong><div style="font-size:10px;color:var(--muted)">${escapeHtml(student.id||'')}</div></td><td><strong>${percent}%</strong><div style="font-size:10px;color:var(--muted)">${watched.filter(s=>Number(s.percent)>=80).length}/5 لقاءات</div></td><td>${discussion.q1&&discussion.q2?`<details><summary style="cursor:pointer;color:var(--primary);font-weight:800">عرض الإجابتين</summary><div style="max-width:330px;white-space:normal;line-height:1.8;margin-top:7px"><b>1.</b> ${escapeHtml(discussion.q1)}<hr><b>2.</b> ${escapeHtml(discussion.q2)}</div></details>`:'<span class="badge badge-warn">لم يرسل</span>'}</td><td><span class="badge ${progress.examPassed?'badge-pass':'badge-warn'}">${progress.examPassed?'مجتاز':'بانتظار الاجتياز'}</span></td><td><textarea id="professional_review_${row.studentKey}_${item.id}" style="min-width:210px;min-height:62px" placeholder="تعليق المحاضر للمتدرب">${escapeHtml(review.comment||'')}</textarea><div style="display:flex;gap:6px;margin-top:6px"><select id="professional_review_status_${row.studentKey}_${item.id}"><option value="passed" ${review.status==='passed'?'selected':''}>مجتاز</option><option value="needs_followup" ${review.status==='needs_followup'?'selected':''}>بحاجة متابعة</option></select><button class="btn-out" onclick="saveProfessionalLecturerReview('${row.studentKey}','${item.id}')">حفظ</button></div></td></tr>`;}).join(''):'<tr><td colspan="5"><div class="empty">لا يوجد متدربون نشطون في هذا المسار.</div></td></tr>'}</tbody></table></div></div>`;}).join('')}`;
+}
+async function saveProfessionalLecturerReview(studentKey,unitId){
+  const comment=document.getElementById(`professional_review_${studentKey}_${unitId}`)?.value.trim()||'',status=document.getElementById(`professional_review_status_${studentKey}_${unitId}`)?.value||'needs_followup',payload={comment,status,reviewedAt:new Date().toISOString(),reviewedBy:currentUser.data?.username||currentUser.fbKey,reviewedByName:currentUser.data?.name||''};
+  try{await fbRef(`professionalDiscussionReviews/${studentKey}/${PROFESSIONAL_PROGRAM_ID}/${unitId}`).set(payload);dbData.professionalDiscussionReviews=dbData.professionalDiscussionReviews||{};dbData.professionalDiscussionReviews[studentKey]=dbData.professionalDiscussionReviews[studentKey]||{};dbData.professionalDiscussionReviews[studentKey][PROFESSIONAL_PROGRAM_ID]=dbData.professionalDiscussionReviews[studentKey][PROFESSIONAL_PROGRAM_ID]||{};dbData.professionalDiscussionReviews[studentKey][PROFESSIONAL_PROGRAM_ID][unitId]=payload;toast('تم حفظ التقييم والتعليق');}catch(error){console.error(error);toast('تعذر حفظ التقييم');}
 }
 
 function getLecturerSubjects(){
