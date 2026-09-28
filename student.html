@@ -1557,7 +1557,9 @@ function getNextUpcomingSlot(slots){
 }
 function getStudentExamSchedules(){
   if(!currentUser?.fbKey) return [];
-  if(dbData.studentExamExceptions?.[currentUser.fbKey]?.active) return [];
+  const exception=dbData.studentExamExceptions?.[currentUser.fbKey];
+  const blocksExams=exception?.active&&(!exception.secureOpensAt||!exception.secureClosesAt);
+  if(blocksExams) return [];
   const student=currentUser.data||{};
   const subjectKeys=new Set(getStudentSubjects(currentUser.fbKey).map(subject=>subject.key));
   return Object.entries(dbData.examSchedules||{})
@@ -1576,24 +1578,25 @@ function formatExamDate(dateValue){
 function renderStudentExamsTab(){
   const exams=getStudentExamSchedules();
   const exception=dbData.studentExamExceptions?.[currentUser.fbKey];
+  const blocksExams=exception?.active&&(!exception.secureOpensAt||!exception.secureClosesAt);
   const studentName=getStudentDisplayName(currentUser.data);
   document.getElementById('mainContent').innerHTML=`
     <div class="exam-motivation">
       <div style="font-size:22px;font-weight:900;margin-bottom:8px">أهلًا بك، ${escapeHtml(studentName)} 🌟</div>
       <div style="font-size:13px;color:rgba(255,255,255,.9);line-height:1.9">وصلنا إلى أسبوع الاختبارات، وحان وقت حصاد ثمرة اجتهادك. تأكد من مراجعة جدولك، والاستعداد بهدوء، والثقة بما تعلمته. نوصي بقراءة كل سؤال بتركيز وأخذ الوقت الكافي قبل التسليم. نتمنى لك التوفيق ونتائج تليق بجهدك.</div>
     </div>
-    <div class="card"><div class="card-title">🔐 الدخول إلى الاختبار</div><div id="secureExamArea">${exception?.active?'<div class="alert alert-warn">الاختبارات الإلكترونية مخفية مؤقتًا بسبب الاستثناء المعتمد.</div>':'<div class="empty">جاري التحقق من الاختبارات المتاحة...</div>'}</div></div>
+    <div class="card"><div class="card-title">🔐 الدخول إلى الاختبار</div><div id="secureExamArea">${blocksExams?'<div class="alert alert-warn">الاختبارات الإلكترونية مخفية مؤقتًا بسبب الاستثناء المعتمد.</div>':'<div class="empty">جاري التحقق من الاختبارات المتاحة...</div>'}</div></div>
     <div class="card">
       <div class="card-title">📝 جدول اختباراتي</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">تظهر هنا اختبارات مقرراتك وفق دفعتك وتوقيت المملكة العربية السعودية.</div>
-      ${exception?.active?`<div class="alert alert-warn"><strong>يوجد تأجيل اختبارات معتمد.</strong><br>اختباراتك مخفية مؤقتًا حتى تعتمد الإدارة إعادة فتحها${exception.untilDate?` في تاريخ العودة ${escapeHtml(exception.untilDate)}`:''}.</div>`:exams.length?`<div class="exam-schedule-list">${exams.map(exam=>{const formatted=formatExamDate(exam.date);return `
+      ${blocksExams?`<div class="alert alert-warn"><strong>يوجد تأجيل اختبارات معتمد.</strong><br>اختباراتك مخفية مؤقتًا حتى تعتمد الإدارة إعادة فتحها${exception.untilDate?` في تاريخ العودة ${escapeHtml(exception.untilDate)}`:''}.</div>`:exams.length?`<div class="exam-schedule-list">${exams.map(exam=>{const formatted=formatExamDate(exam.date);return `
         <div class="exam-schedule-card">
           <div class="exam-date"><strong style="font-size:17px">${formatted.day}</strong><span style="font-size:12px;margin-top:5px">${formatted.date}</span></div>
           <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span>${exam.termLabel?` <span class="badge badge-student">${escapeHtml(exam.termLabel)}</span>`:''}</div></div>
           <div class="exam-time">${to12h(exam.startTime)} إلى ${to12h(exam.endTime)}</div>
         </div>`;}).join('')}</div>`:'<div class="empty">لا توجد اختبارات منشورة لمقرراتك حاليًا.</div>'}
     </div>`;
-  if(exception?.active){secureExamList=[];return;}
+  if(blocksExams){secureExamList=[];return;}
   loadSecureStudentExams();
 }
 async function secureExamRequest(path,options={}){
