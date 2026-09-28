@@ -78,6 +78,27 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;background:var(-
 .page{display:none;}
 .page.active{display:block;}
 .card{background:white;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.1rem 1.3rem;margin-bottom:1rem;box-shadow:var(--shadow);}
+.insight-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin:16px 0;}
+.insight-card{position:relative;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:16px;padding:17px 18px;box-shadow:0 6px 18px rgba(0,20,66,.06);}
+.insight-card::after{content:'';position:absolute;inset:0 auto 0 0;width:4px;background:var(--insight,#0D40FC);}
+.insight-value{font-size:28px;font-weight:900;color:var(--primary-dark);line-height:1;direction:ltr;text-align:right;}
+.insight-label{font-size:11px;color:var(--text-muted);font-weight:750;margin-top:8px;}
+.workspace-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:15px 0;border-bottom:1px solid var(--border);padding-bottom:10px;}
+.workspace-tab{border:1px solid var(--border);background:#fff;color:var(--text-muted);border-radius:10px;padding:9px 14px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;}
+.workspace-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 5px 12px rgba(13,64,252,.18);}
+.workspace-panel{display:none}.workspace-panel.active{display:block}
+.analytics-grid{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr);gap:14px;margin-top:14px;}
+.analytics-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:17px;box-shadow:0 5px 16px rgba(0,20,66,.05);}
+.donut-wrap{display:flex;align-items:center;justify-content:center;gap:20px;min-height:210px;flex-wrap:wrap;}
+.donut-chart{width:150px;height:150px;border-radius:50%;display:grid;place-items:center;position:relative;background:conic-gradient(var(--donut-a,#0D40FC) 0 var(--donut-value,0%),var(--donut-b,#e8edf7) var(--donut-value,0%) 100%);}
+.donut-chart::after{content:'';position:absolute;width:105px;height:105px;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 1px var(--border);}
+.donut-center{position:relative;z-index:1;text-align:center}.donut-center strong{font-size:25px;color:var(--primary-dark);display:block}.donut-center span{font-size:10px;color:var(--text-muted);font-weight:700;}
+.chart-legend{display:grid;gap:9px;font-size:12px}.chart-legend-row{display:flex;align-items:center;gap:8px}.chart-dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto;}
+.bar-chart{display:grid;gap:11px;margin-top:14px}.bar-row{display:grid;grid-template-columns:minmax(105px,1fr) 3fr 44px;gap:9px;align-items:center;font-size:11px}.bar-track{height:13px;background:#edf1f8;border-radius:99px;overflow:hidden}.bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#0D40FC,#55D7FF);}
+.likert-row{display:grid;grid-template-columns:minmax(190px,1.4fr) 2fr 58px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #edf1f8;font-size:11px}.likert-stack{height:16px;display:flex;border-radius:99px;overflow:hidden;background:#edf1f8;direction:ltr}.likert-stack span{height:100%;min-width:0}.likert-1{background:#d9485f}.likert-2{background:#f08b68}.likert-3{background:#e7ba45}.likert-4{background:#79c88c}.likert-5{background:#18864b}
+.filter-toolbar{display:grid;grid-template-columns:minmax(250px,1fr) minmax(180px,.45fr) auto;gap:10px;align-items:end;}
+@media(max-width:980px){.insight-grid{grid-template-columns:repeat(2,1fr)}.analytics-grid{grid-template-columns:1fr}.filter-toolbar{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.insight-grid{grid-template-columns:1fr}.filter-toolbar{grid-template-columns:1fr}.likert-row{grid-template-columns:1fr}.bar-row{grid-template-columns:90px 1fr 36px}}
 .card-title{font-size:13px;font-weight:700;margin-bottom:0.9rem;color:var(--text);display:flex;align-items:center;gap:7px;border-bottom:2px solid var(--bg);padding-bottom:9px;}
 .card-accent{border-top:3px solid var(--primary);}
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:1rem;}
@@ -669,14 +690,23 @@ tr:hover td{background:#f8faff;}
       <!-- EXAM SCHEDULES -->
       <div class="page" id="page-exams">
         <div class="card card-accent">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">بنك أسئلة الاختبارات</div><div style="font-size:12px;color:var(--text-muted)">جهزي الأسئلة والاختيارات والإجابة الصحيحة ودرجاتها في النموذج الموحد. يجب أن يكون مجموع درجات كل اختبار 20.</div></div><a class="btn btn-primary" href="templates/%D9%86%D9%85%D9%88%D8%B0%D8%AC%20%D8%A7%D8%B3%D8%AA%D9%8A%D8%B1%D8%A7%D8%AF%20%D8%A3%D8%B3%D8%A6%D9%84%D8%A9%20%D8%A7%D9%84%D8%A7%D8%AE%D8%AA%D8%A8%D8%A7%D8%B1%D8%A7%D8%AA.xlsx" download>تحميل نموذج Excel للأسئلة</a></div>
-          <div class="alert alert-warn" style="margin-top:12px">مفاتيح الإجابات والتصحيح ستبقى في الخادم المحمي، ولن تُحفظ في صفحة الطالب أو تُرسل إلى متصفحه.</div>
-          <div style="display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end;margin-top:14px"><div class="form-group" style="margin:0"><label>الاختبار الذي تريدين تجهيز أسئلته</label><select id="examBuilderSchedule" onchange="loadExamQuestionDraft()"><option value="">-- اختاري اختبارًا من الجداول --</option></select></div><label class="btn btn-primary" style="cursor:pointer;text-align:center">استيراد ملف Excel<input type="file" id="examQuestionsFile" accept=".xlsx,.xls" onchange="importExamQuestionsFile(this)" style="display:none"></label></div>
-          <div id="examQuestionBuilder" style="margin-top:14px"></div>
+          <div class="filter-toolbar"><div class="form-group" style="margin:0"><label>اختيار الاختبار</label><select id="examDashboardSelect" onchange="selectExamDashboard(this.value)"><option value="">-- اختاري اختبارًا لعرض تفاصيله --</option></select></div><div class="form-group" style="margin:0"><label>حالة الاختبار</label><div id="examDashboardStatus" class="badge badge-warn" style="padding:10px 13px;display:block;text-align:center">لم يتم الاختيار</div></div><button class="btn" onclick="refreshSelectedExamDashboard()">تحديث البيانات</button></div>
+          <div id="examDashboardSummary"><div class="empty" style="margin-top:16px">اختاري اختبارًا لعرض مؤشرات المشاركة والنجاح.</div></div>
         </div>
-        <div class="card card-accent"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">📊 متابعة محاولات ونتائج الاختبارات</div><div style="font-size:12px;color:var(--text-muted)">تظهر أعلى نتيجة من 20 بعد إكمال تقييم المقرر، وتتم مزامنتها آليًا مع سجل الدرجات.</div></div><div style="display:flex;gap:8px"><button class="btn" onclick="loadExamAdminResults()">تحديث</button><button class="btn btn-success" onclick="syncEvaluatedExamResults()">مزامنة النتائج المقيمة</button></div></div><div id="examAdminResults" style="margin-top:14px"><div class="empty">اضغطي تحديث لعرض المحاولات.</div></div></div>
-        <div class="card card-accent"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">📈 تحليل تقييمات المقررات</div><div style="font-size:12px;color:var(--text-muted)">نسبة الرضا لكل عبارة محسوبة من إجابات الطلاب على مقياس 1–5.</div></div><button class="btn" onclick="loadExamEvaluationAnalytics()">تحديث التحليل</button></div><div id="examEvaluationAnalytics" style="margin-top:14px"><div class="empty">جاري تحميل تحليل التقييمات...</div></div></div>
-        <div class="card card-accent">
+        <div class="workspace-tabs">
+          <button class="workspace-tab active" data-exam-tab="overview" onclick="showExamWorkspaceTab('overview',this)">نظرة عامة</button>
+          <button class="workspace-tab" data-exam-tab="results" onclick="showExamWorkspaceTab('results',this)">الطلاب والنتائج</button>
+          <button class="workspace-tab" data-exam-tab="questions" onclick="showExamWorkspaceTab('questions',this)">الأسئلة والاستثناءات</button>
+          <button class="workspace-tab" data-exam-tab="schedule" onclick="showExamWorkspaceTab('schedule',this)">الموعد والإعدادات</button>
+        </div>
+        <div class="workspace-panel active" data-exam-panel="overview"><div id="examDashboardCharts"><div class="empty">اختاري اختبارًا لعرض التحليل.</div></div></div>
+        <div class="workspace-panel" data-exam-panel="results"><div class="card card-accent"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">نتائج الاختبار المختار</div><div style="font-size:12px;color:var(--text-muted)">بحث وتصفية حسب المشاركة والنجاح والاستثناء.</div></div><div style="display:flex;gap:8px"><button class="btn" onclick="loadExamAdminResults()">تحديث</button><button class="btn btn-success" onclick="syncEvaluatedExamResults()">مزامنة النتائج المقيمة</button></div></div><div id="examAdminResults" style="margin-top:14px"><div class="empty">اختاري اختبارًا أولًا.</div></div></div></div>
+        <div class="workspace-panel" data-exam-panel="questions"><div class="card card-accent">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">بنك أسئلة الاختبار</div><div style="font-size:12px;color:var(--text-muted)">الأسئلة والإجابات محفوظة في الخادم المحمي، ومجموع الدرجات 20.</div></div><a class="btn btn-primary" href="templates/%D9%86%D9%85%D9%88%D8%B0%D8%AC%20%D8%A7%D8%B3%D8%AA%D9%8A%D8%B1%D8%A7%D8%AF%20%D8%A3%D8%B3%D8%A6%D9%84%D8%A9%20%D8%A7%D9%84%D8%A7%D8%AE%D8%AA%D8%A8%D8%A7%D8%B1%D8%A7%D8%AA.xlsx" download>تحميل نموذج Excel</a></div>
+          <div style="display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end;margin-top:14px"><div class="form-group" style="margin:0"><label>الاختبار</label><select id="examBuilderSchedule" onchange="loadExamQuestionDraft()"><option value="">-- اختاري اختبارًا --</option></select></div><label class="btn btn-primary" style="cursor:pointer;text-align:center">استيراد Excel<input type="file" id="examQuestionsFile" accept=".xlsx,.xls" onchange="importExamQuestionsFile(this)" style="display:none"></label></div>
+          <div id="examQuestionBuilder" style="margin-top:14px"></div>
+        </div></div>
+        <div class="workspace-panel" data-exam-panel="schedule"><div class="card card-accent">
           <div class="card-title">📝 إدارة جداول الاختبارات</div>
           <div class="alert alert-info">اختاري الدفعة أولًا، ثم المقرر من شعبتها. أي تعديل محفوظ يظهر مباشرة للطلاب المرتبطين بالمقرر.</div>
           <div class="form-row">
@@ -696,6 +726,15 @@ tr:hover td{background:#f8faff;}
           <div style="display:flex;gap:8px"><button class="btn btn-success" onclick="saveExamSchedule()">💾 حفظ الموعد</button><button class="btn" id="examCancelEdit" onclick="resetExamScheduleForm()" style="display:none">إلغاء التعديل</button></div>
         </div>
         <div class="card card-accent"><div class="card-title">👁️ معاينة جداول الطلاب</div><div id="examSchedulesAdminList"></div></div>
+        </div>
+      </div>
+
+      <!-- COURSE EVALUATIONS -->
+      <div class="page" id="page-evaluations">
+        <div class="card card-accent">
+          <div class="filter-toolbar"><div class="form-group" style="margin:0"><label>المقرر والتقييم</label><select id="evaluationCourseSelect" onchange="renderSelectedEvaluation(this.value)"><option value="">-- اختاري مقررًا لعرض تقييمه --</option></select></div><div class="form-group" style="margin:0"><label>حالة التقرير</label><select id="evaluationStatusFilter" onchange="populateEvaluationCourseOptions()"><option value="all">جميع الحالات</option><option value="draft">بانتظار الاعتماد</option><option value="published">منشور للمحاضر</option></select></div><button class="btn" onclick="loadExamEvaluationAnalytics()">تحديث التحليل</button></div>
+        </div>
+        <div id="examEvaluationAnalytics"><div class="empty">اختاري مقررًا لعرض رضا الطلاب وتحليل التقييم.</div></div>
       </div>
 
       <!-- SETTINGS -->
@@ -2366,6 +2405,7 @@ const navConfig = {
     {id:'certificates',icon:'📄',label:'الإفادات التجريبية'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'exams',icon:'📝',label:'الاختبارات'},
+    {id:'evaluations',icon:'📈',label:'التقييم'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'},
   ],
   lecturer: [
@@ -2384,7 +2424,7 @@ const navConfig = {
     {id:'mygrades',icon:'📊',label:'بياناتي ودرجاتي'},
   ],
 };
-const EXAM_API_BASE='https://sulukera-exams.ro7e-entaa.workers.dev';
+const EXAM_API_BASE='https://sulukera-exams.maryam-93c.workers.dev';
 const adminNavGroups=[
   {id:'followup',icon:'🔎',label:'الرئيسية والمتابعة',items:[
     {id:'alerts',icon:'🔔',label:'الطلبات والتنبيهات'},
@@ -2403,6 +2443,7 @@ const adminNavGroups=[
     {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'exams',icon:'📝',label:'الاختبارات'},
+    {id:'evaluations',icon:'📈',label:'التقييم'},
     {id:'batchplans',icon:'🧩',label:'الخطط الدراسية'}
   ]},
   {id:'professional',icon:'🚀',label:'البرنامج المهني',items:[
@@ -2448,7 +2489,7 @@ function updateStudentRequestsNavBadge(){
 const pageTitles={
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'المحاضرون والمستخدمون',
-  grades:'إدخال الدرجات',reports:'التقارير الأكاديمية',programs:'البرامج والمسارات والدفعات',professionalprogram:'إدارة السلوك التنظيمي', batchplans:'الخطط الدراسية', alerts:'الطلبات والتنبيهات', schedule:'الجدول الأكاديمي', exams:'الاختبارات', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
+  grades:'إدخال الدرجات',reports:'التقارير الأكاديمية',programs:'البرامج والمسارات والدفعات',professionalprogram:'إدارة السلوك التنظيمي', batchplans:'الخطط الدراسية', alerts:'الطلبات والتنبيهات', schedule:'الجدول الأكاديمي', exams:'الاختبارات', evaluations:'التقييم ورضا الطلاب', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
   settings:'الإعدادات',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturerexams:'نتائج الاختبارات',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
@@ -2505,6 +2546,7 @@ function refreshPage(p) {
   if (p==='batchplans') renderBatchPlansPage();
   if (p==='schedule') renderScheduleAdmin();
   if (p==='exams') renderExamSchedulesAdmin();
+  if (p==='evaluations') loadExamEvaluationAnalytics();
   if (p==='semesters') renderSemestersPage();
   if (p==='alerts') renderAlertsPage();
   if (p==='certificates') renderCertificateLab();
@@ -6152,9 +6194,53 @@ async function renderExamSchedulesAdmin(){
   populateExamSubjectOptions(document.getElementById('examSubject')?.value||'');
   renderExamSchedulesAdminList();
   populateExamBuilderScheduleOptions();
-  loadExamAdminResults();
-  loadExamEvaluationAnalytics();
+  await populateExamDashboardOptions();
 }
+
+let examDashboardExams=[];
+let selectedExamDashboardId='';
+let selectedExamDashboardData=null;
+function showExamWorkspaceTab(tab,button){
+  document.querySelectorAll('[data-exam-tab]').forEach(item=>item.classList.toggle('active',item.dataset.examTab===tab));
+  document.querySelectorAll('[data-exam-panel]').forEach(item=>item.classList.toggle('active',item.dataset.examPanel===tab));
+  if(button)button.classList.add('active');
+  if(tab==='results'&&selectedExamDashboardData)renderSelectedExamResults(selectedExamDashboardData);
+}
+async function populateExamDashboardOptions(){
+  const select=document.getElementById('examDashboardSelect');if(!select||currentUser?.role!=='admin')return;
+  const previous=selectedExamDashboardId||select.value;
+  try{
+    examDashboardExams=(await secureAdminExamRequest('/admin/exams')).exams||[];
+    select.innerHTML='<option value="">-- اختاري اختبارًا لعرض تفاصيله --</option>'+examDashboardExams.map(exam=>`<option value="${exam.id}">${escapeHtml(exam.subject_name)} · ${escapeHtml(exam.batch)} · ${new Date(exam.opens_at).toLocaleDateString('ar-SA')}</option>`).join('');
+    if(previous&&examDashboardExams.some(exam=>exam.id===previous)){select.value=previous;await selectExamDashboard(previous);}
+  }catch(error){console.error('load exams dashboard options',error);select.innerHTML='<option value="">تعذر تحميل الاختبارات</option>';}
+}
+async function selectExamDashboard(examId){
+  selectedExamDashboardId=examId||'';selectedExamDashboardData=null;
+  const summary=document.getElementById('examDashboardSummary'),charts=document.getElementById('examDashboardCharts'),status=document.getElementById('examDashboardStatus');
+  if(!examId){if(summary)summary.innerHTML='<div class="empty" style="margin-top:16px">اختاري اختبارًا لعرض مؤشرات المشاركة والنجاح.</div>';if(charts)charts.innerHTML='<div class="empty">اختاري اختبارًا لعرض التحليل.</div>';if(status){status.textContent='لم يتم الاختيار';status.className='badge badge-warn';}return;}
+  if(summary)summary.innerHTML='<div class="empty" style="margin-top:16px">جاري إعداد مؤشرات الاختبار...</div>';
+  try{
+    const data=await secureAdminExamRequest(`/admin/exams/${encodeURIComponent(examId)}/dashboard`);selectedExamDashboardData=data;
+    renderExamDashboard(data);renderSelectedExamResults(data);
+    const builder=document.getElementById('examBuilderSchedule');if(builder&&data.exam?.schedule_key){builder.value=data.exam.schedule_key;loadExamQuestionDraft();}
+  }catch(error){console.error('load exam dashboard',error);if(summary)summary.innerHTML='<div class="alert alert-warn">تعذر تحميل تفاصيل الاختبار.</div>';}
+}
+function refreshSelectedExamDashboard(){return selectedExamDashboardId?selectExamDashboard(selectedExamDashboardId):populateExamDashboardOptions();}
+function renderExamDashboard(data){
+  const {exam,metrics,bands,attemptAverages}=data,summary=document.getElementById('examDashboardSummary'),charts=document.getElementById('examDashboardCharts'),status=document.getElementById('examDashboardStatus');
+  const now=Date.now(),opens=new Date(exam.opens_at).getTime(),closes=new Date(exam.closes_at).getTime(),state=exam.status!=='published'?'مسودة':now<opens?'لم يبدأ':now<=closes?'متاح الآن':'منتهٍ';
+  if(status){status.textContent=state;status.className=`badge ${state==='متاح الآن'?'badge-pass':state==='مسودة'?'badge-warn':'badge-info'}`;}
+  if(summary)summary.innerHTML=`<div style="margin-top:15px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><strong style="font-size:18px;color:var(--primary-dark)">${escapeHtml(exam.subject_name)}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:5px">${escapeHtml(exam.batch)} · ${new Date(exam.opens_at).toLocaleString('ar-SA')} — ${new Date(exam.closes_at).toLocaleString('ar-SA')}</div></div><span class="badge badge-admin">${exam.question_count||0} سؤال</span></div><div class="insight-grid"><div class="insight-card" style="--insight:#0D40FC"><div class="insight-value">${metrics.eligible}</div><div class="insight-label">إجمالي الطلاب المسجلين</div></div><div class="insight-card" style="--insight:#18864b"><div class="insight-value">${metrics.submitted}</div><div class="insight-label">قدّموا الاختبار</div></div><div class="insight-card" style="--insight:#d9485f"><div class="insight-value">${metrics.absent}</div><div class="insight-label">لم يقدّموا الاختبار</div></div><div class="insight-card" style="--insight:#7c3aed"><div class="insight-value">${metrics.successRate}%</div><div class="insight-label">نسبة النجاح من المتقدمين</div></div></div></div>`;
+  const participation=metrics.eligible?Math.round(metrics.submitted/metrics.eligible*1000)/10:0,maxBand=Math.max(1,...bands.map(item=>item.count)),first=attemptAverages.first||0,second=attemptAverages.second||0,maxAttempt=Math.max(1,first,second);
+  if(charts)charts.innerHTML=`<div class="analytics-grid"><div class="analytics-card"><div class="card-title">المشاركة في الاختبار</div><div class="donut-wrap"><div class="donut-chart" style="--donut-value:${participation}%;--donut-a:#0D40FC"><div class="donut-center"><strong>${participation}%</strong><span>نسبة المشاركة</span></div></div><div class="chart-legend"><div class="chart-legend-row"><i class="chart-dot" style="background:#0D40FC"></i>قدّموا: <strong>${metrics.submitted}</strong></div><div class="chart-legend-row"><i class="chart-dot" style="background:#e8edf7"></i>لم يقدّموا: <strong>${metrics.absent}</strong></div><div class="chart-legend-row"><i class="chart-dot" style="background:#18864b"></i>متوسط الدرجة: <strong>${metrics.averageScore===null?'—':metrics.averageScore+'/20'}</strong></div></div></div></div><div class="analytics-card"><div class="card-title">توزيع أعلى الدرجات</div><div class="bar-chart">${bands.map((item,index)=>`<div class="bar-row"><span>${item.label}</span><div class="bar-track"><div class="bar-fill" style="width:${item.count/maxBand*100}%;background:${['#18864b','#55a86d','#e7ba45','#d9485f'][index]}"></div></div><strong>${item.count}</strong></div>`).join('')}</div></div><div class="analytics-card"><div class="card-title">متوسط المحاولات</div><div class="bar-chart"><div class="bar-row"><span>المحاولة الأولى</span><div class="bar-track"><div class="bar-fill" style="width:${first/maxAttempt*100}%"></div></div><strong>${first||'—'}</strong></div><div class="bar-row"><span>المحاولة الثانية</span><div class="bar-track"><div class="bar-fill" style="width:${second/maxAttempt*100}%;background:linear-gradient(90deg,#7c3aed,#b39af7)"></div></div><strong>${second||'—'}</strong></div></div></div><div class="analytics-card"><div class="card-title">قراءة سريعة</div><div style="display:grid;gap:10px;font-size:12px;margin-top:13px"><div class="alert alert-info" style="margin:0">نجح <strong>${metrics.passed}</strong> من أصل <strong>${metrics.submitted}</strong> متقدمًا، وفق حد الاجتياز 16/20.</div><div class="alert alert-info" style="margin:0">وصل <strong>${metrics.responseCount}</strong> تقييمًا للمقرر بعد الاختبار.</div></div></div></div>`;
+}
+function renderSelectedExamResults(data){
+  const host=document.getElementById('examAdminResults');if(!host)return;
+  if(!selectedExamDashboardId||!data){host.innerHTML='<div class="empty">اختاري اختبارًا أولًا.</div>';return;}
+  host.innerHTML=`<div class="filter-toolbar" style="grid-template-columns:minmax(220px,1fr) 190px"><div class="form-group" style="margin:0"><label>بحث بالاسم أو الرقم</label><input id="examResultSearch" oninput="filterSelectedExamResults()" placeholder="اكتبي اسم الطالب أو رقمه"></div><div class="form-group" style="margin:0"><label>الحالة</label><select id="examResultStatus" onchange="filterSelectedExamResults()"><option value="all">جميع الطلاب</option><option value="passed">ناجح</option><option value="failed">غير مجتاز</option><option value="absent">لم يقدّم</option><option value="exception">لديه استثناء</option></select></div></div><div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>الطالب</th><th>المشاركة</th><th>المحاولات</th><th>أعلى درجة</th><th>النتيجة</th><th>آخر تسليم</th></tr></thead><tbody id="selectedExamResultsBody">${data.students.map(row=>{const student=students.find(item=>item._fbKey===row.studentKey),name=student?getStudentFullName(student):row.studentKey,status=row.submittedCount===0?'absent':row.bestScore>=16?'passed':'failed';return `<tr data-search="${escapeHtml((name+' '+(student?.id||'')).toLowerCase())}" data-status="${status}" data-exception="${row.hasException?'yes':'no'}"><td><strong>${escapeHtml(name)}</strong><div style="font-size:10px;color:var(--text-muted)">${escapeHtml(student?.id||'')}${row.hasException?' · استثناء نشط':''}</div></td><td><span class="badge ${row.submittedCount?'badge-pass':'badge-warn'}">${row.submittedCount?'قدّم':'لم يقدّم'}</span></td><td>${row.attemptCount}</td><td><strong>${row.bestScore===null?'—':row.bestScore+'/20'}</strong></td><td><span class="badge ${status==='passed'?'badge-pass':status==='failed'?'badge-fail':'badge-warn'}">${status==='passed'?'ناجح':status==='failed'?'غير مجتاز':'غائب'}</span></td><td>${row.lastSubmittedAt?new Date(row.lastSubmittedAt).toLocaleString('ar-SA'):'—'}</td></tr>`;}).join('')}</tbody></table></div>`;
+}
+function filterSelectedExamResults(){const query=(document.getElementById('examResultSearch')?.value||'').trim().toLowerCase(),status=document.getElementById('examResultStatus')?.value||'all';document.querySelectorAll('#selectedExamResultsBody tr').forEach(row=>{const statusMatch=status==='all'||(status==='exception'?row.dataset.exception==='yes':row.dataset.status===status);row.style.display=(!query||row.dataset.search.includes(query))&&statusMatch?'':'none';});}
 
 async function secureAdminExamRequest(path,options={}){
   const user=firebase.auth().currentUser;
@@ -6191,6 +6277,7 @@ async function loadExamAdminResults(){
   host.innerHTML='<div class="empty">جاري تحميل المحاولات...</div>';
   try{
     examAdminResultsData=(await secureAdminExamRequest('/admin/results')).results||[];
+    if(selectedExamDashboardId){await selectExamDashboard(selectedExamDashboardId);return;}
     if(!examAdminResultsData.length){host.innerHTML='<div class="empty">لا توجد محاولات حتى الآن.</div>';return;}
     host.innerHTML=`<div class="table-wrap"><table><thead><tr><th>الطالب</th><th>الدفعة</th><th>المقرر</th><th>المحاولات</th><th>الدرجة المعتمدة</th><th>التقييم</th><th>آخر تسليم</th></tr></thead><tbody>${examAdminResultsData.map(row=>{const student=students.find(item=>item._fbKey===row.student_key);return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.student_key)}</strong><div style="font-size:10px;color:var(--text-muted)">${escapeHtml(student?.id||'')}</div></td><td>${escapeHtml(row.batch||'')}</td><td>${escapeHtml(row.subject_name||'')}</td><td>${row.attempt_count}</td><td>${row.evaluated?`<strong style="color:var(--success)">${row.best_score}/20</strong>`:'مخفية'}</td><td><span class="badge ${row.evaluated?'badge-pass':'badge-warn'}">${row.evaluated?'مكتمل':'بانتظار التقييم'}</span></td><td>${row.last_submitted_at?new Date(row.last_submitted_at).toLocaleString('ar-SA'):'—'}</td></tr>`;}).join('')}</tbody></table></div>`;
     // المزامنة التلقائية لا تكتب إلا النتائج الجديدة أو المتغيرة، وتبقي الدرجة
@@ -6199,15 +6286,29 @@ async function loadExamAdminResults(){
   }catch(error){console.error('load exam results error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل نتائج الاختبارات.</div>';}
 }
 const examEvaluationLabels={q5:'تنظيم وتسلسل المحتوى العلمي',q6:'فاعلية الأنشطة في تعزيز الفهم',q7:'وضوح وتنظيم عرض المحاضر',q8:'سرعة استجابة المحاضر',q9:'وضوح إجابات المحاضر',q10:'تشجيع المشاركة والتفاعل',q11:'وضوح مواعيد المحاضرات',q12:'وضوح متطلبات المقرر وتعليماته',q13:'سرعة رصد الدرجات',q14:'وضوح إرشادات المرشد الأكاديمي',q15:'سرعة استجابة المرشد الأكاديمي'};
+let examEvaluationGroups=[];
 async function loadExamEvaluationAnalytics(){
   const host=document.getElementById('examEvaluationAnalytics');if(!host||currentUser?.role!=='admin')return;
   host.innerHTML='<div class="empty">جاري تحليل التقييمات...</div>';
   try{
-    const groups=(await secureAdminExamRequest('/admin/evaluations')).evaluations||[];
-    if(!groups.length){host.innerHTML='<div class="empty">لم تصل تقييمات للمقررات بعد.</div>';return;}
-    host.innerHTML=groups.map(group=>evaluationReportCard(group,true)).join('');
+    examEvaluationGroups=(await secureAdminExamRequest('/admin/evaluations')).evaluations||[];
+    if(!examEvaluationGroups.length){host.innerHTML='<div class="empty">لم تصل تقييمات للمقررات بعد.</div>';return;}
+    populateEvaluationCourseOptions();
   }catch(error){console.error('load evaluation analytics error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل تحليل التقييمات الآن.</div>';}
 }
+function populateEvaluationCourseOptions(){
+  const select=document.getElementById('evaluationCourseSelect'),host=document.getElementById('examEvaluationAnalytics');if(!select||!host)return;
+  const previous=select.value,status=document.getElementById('evaluationStatusFilter')?.value||'all',visible=examEvaluationGroups.filter(group=>status==='all'||group.publicationStatus===status);
+  select.innerHTML='<option value="">-- اختاري مقررًا لعرض تقييمه --</option>'+visible.map(group=>`<option value="${group.examId}">${escapeHtml(group.subjectName)} · ${escapeHtml(group.batch)} · ${group.responseCount} استجابة</option>`).join('');
+  if(previous&&visible.some(group=>group.examId===previous)){select.value=previous;renderSelectedEvaluation(previous);}else host.innerHTML='<div class="empty">اختاري مقررًا لعرض رضا الطلاب وتحليل التقييم.</div>';
+}
+function renderSelectedEvaluation(examId){
+  const host=document.getElementById('examEvaluationAnalytics'),group=examEvaluationGroups.find(item=>item.examId===examId);if(!host)return;if(!group){host.innerHTML='<div class="empty">اختاري مقررًا لعرض تقييمه.</div>';return;}
+  const questions=Object.entries(group.questions||{}),overall=questions.length?Math.round(questions.reduce((sum,[,item])=>sum+Number(item.percent||0),0)/questions.length*10)/10:0,ranked=questions.map(([key,item])=>({label:examEvaluationLabels[key]||key,percent:Number(item.percent)||0})).sort((a,b)=>b.percent-a.percent),strengths=ranked.slice(0,3),improvements=[...ranked].sort((a,b)=>a.percent-b.percent).slice(0,3),published=group.publicationStatus==='published',comments=group.comments||{};
+  const renderRanked=(items,color)=>`<div class="bar-chart">${items.map(item=>`<div class="bar-row"><span>${escapeHtml(item.label)}</span><div class="bar-track"><div class="bar-fill" style="width:${item.percent}%;background:${color}"></div></div><strong>${item.percent}%</strong></div>`).join('')}</div>`;
+  host.innerHTML=`<div class="insight-grid"><div class="insight-card" style="--insight:#18864b"><div class="insight-value">${overall}%</div><div class="insight-label">رضا الطلاب العام</div></div><div class="insight-card" style="--insight:#0D40FC"><div class="insight-value">${group.responseCount}</div><div class="insight-label">عدد الاستجابات</div></div><div class="insight-card" style="--insight:#7c3aed"><div class="insight-value">${group.responseRate||0}%</div><div class="insight-label">نسبة المشاركة في التقييم</div></div><div class="insight-card" style="--insight:${published?'#18864b':'#e7ba45'}"><div class="insight-value" style="font-size:18px">${published?'منشور':'مسودة'}</div><div class="insight-label">حالة التقرير</div></div></div><div class="analytics-grid"><div class="analytics-card"><div class="card-title">مؤشر الرضا العام</div><div class="donut-wrap"><div class="donut-chart" style="--donut-value:${overall}%;--donut-a:${overall>=80?'#18864b':overall>=60?'#e7ba45':'#d9485f'}"><div class="donut-center"><strong>${overall}%</strong><span>${group.responseCount} من ${group.eligibleCount||0}</span></div></div><div class="chart-legend"><div class="chart-legend-row"><i class="chart-dot" style="background:#18864b"></i>80% فأعلى: رضا مرتفع</div><div class="chart-legend-row"><i class="chart-dot" style="background:#e7ba45"></i>60–79%: يحتاج متابعة</div><div class="chart-legend-row"><i class="chart-dot" style="background:#d9485f"></i>أقل من 60%: أولوية تحسين</div></div></div></div><div class="analytics-card"><div class="card-title">نقاط القوة</div>${renderRanked(strengths,'linear-gradient(90deg,#18864b,#79c88c)')}<div class="card-title" style="margin-top:20px">فرص التحسين</div>${renderRanked(improvements,'linear-gradient(90deg,#e7a725,#f1d78e)')}</div></div><div class="card card-accent" style="margin-top:14px"><div class="card-title">توزيع إجابات الطلاب</div><div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);margin:8px 0 12px">${[['لا أوافق بشدة','#d9485f'],['لا أوافق','#f08b68'],['محايد','#e7ba45'],['أوافق','#79c88c'],['أوافق بشدة','#18864b']].map(([label,color])=>`<span class="chart-legend-row"><i class="chart-dot" style="background:${color}"></i>${label}</span>`).join('')}</div>${questions.map(([key,item])=>{const distribution=item.distribution||[0,0,0,0,0],total=distribution.reduce((sum,value)=>sum+value,0)||1;return `<div class="likert-row"><span>${escapeHtml(examEvaluationLabels[key]||key)}</span><div class="likert-stack">${distribution.map((count,index)=>`<span class="likert-${index+1}" style="width:${count/total*100}%" title="${count} استجابة"></span>`).join('')}</div><strong>${item.percent}%</strong></div>`;}).join('')}</div>${renderEvaluationComments(comments)}<div class="card" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700"><input type="checkbox" id="evaluationComments_${group.examId}" ${group.showComments?'checked':''}> إظهار الملاحظات النصية للمحاضر</label><button class="btn ${published?'btn-danger':'btn-success'}" onclick="setEvaluationPublication('${group.examId}','${published?'draft':'published'}')">${published?'إلغاء النشر':'اعتماد ونشر للمحاضر'}</button></div>`;
+}
+function renderEvaluationComments(comments){const sections=[['مقترحات التطوير',comments.improvements],['رسائل للمحاضر',comments.lecturerMessages],['ملاحظات إضافية',comments.additionalNotes]].filter(([,items])=>items?.length);if(!sections.length)return '<div class="card"><div class="empty">لا توجد ملاحظات نصية.</div></div>';return `<div class="card"><div class="card-title">الملاحظات النصية المجهولة</div><div style="display:grid;gap:12px">${sections.map(([title,items])=>`<details><summary style="cursor:pointer;font-weight:800;color:var(--primary)">${title} (${items.length})</summary><div style="display:grid;gap:7px;margin-top:9px">${items.map(item=>`<div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#f9fbff;font-size:12px">${escapeHtml(item.text)}</div>`).join('')}</div></details>`).join('')}</div></div>`;}
 function evaluationReportCard(group,adminMode=false){
   const questions=Object.entries(group.questions||{}),overall=questions.length?Math.round(questions.reduce((sum,[,item])=>sum+Number(item.percent||0),0)/questions.length*10)/10:0,comments=group.comments||{},published=group.publicationStatus==='published';
   const ranked=questions.map(([key,item])=>({label:examEvaluationLabels[key]||key,percent:Number(item.percent)||0})).sort((a,b)=>b.percent-a.percent),strengths=ranked.slice(0,3),improvements=[...ranked].sort((a,b)=>a.percent-b.percent).slice(0,3);

@@ -1,0 +1,7 @@
+.tools/
+.firebase-cli/
+node-portable.zip
+node_modules/
+exam-worker/node_modules/
+exam-worker/.wrangler/
+exam-worker/.wrangler-config/
