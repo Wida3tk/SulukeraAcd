@@ -1166,11 +1166,15 @@ function renderStudentTranscriptTab(){
 function renderStudentRequestsTab(){
   const requests = getStudentRequests();
   const { mySubjects } = getCurrentStudentAcademicData();
-  const professionalOnly=!!getStudentProfessionalContext()&&!Object.values(dbData.enrollments||{}).some(enrollment=>enrollment?.studentKey===currentUser.fbKey);
+  const professionalContext=getStudentProfessionalContext(),professionalOnly=!!professionalContext&&!Object.values(dbData.enrollments||{}).some(enrollment=>enrollment?.studentKey===currentUser.fbKey),professionalFinalExam=professionalContext?.program?.finalExam||{},professionalExamOptions=[];
+  if(professionalFinalExam.date)professionalExamOptions.push({key:professionalFinalExam.subjectKey||'professional_organizational_behavior_final',title:professionalFinalExam.title||'الاختبار النهائي للبرنامج',date:professionalFinalExam.date});
+  Object.entries(dbData.examSchedules||{}).forEach(([scheduleKey,exam])=>{if((exam?.professionalProgramId===PROFESSIONAL_PROGRAM_ID||String(exam?.batch||'').startsWith('PRO-'))&&exam.date)professionalExamOptions.push({key:exam.subjectKey||scheduleKey,title:exam.subjectName||exam.title||'اختبار البرنامج المهني',date:exam.date});});
+  const uniqueProfessionalExamOptions=[...new Map(professionalExamOptions.map(exam=>[`${exam.key}|${exam.date}`,exam])).values()].sort((a,b)=>a.date.localeCompare(b.date));
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
       <div class="card-title">📝 رفع طلب جديد</div>
-      <div class="field"><label>نوع الطلب</label><select id="studentRequestType" onchange="toggleStudentRequestFields()">${professionalOnly?'<option value="professional_support">طلب إرشاد أو دعم</option><option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل التدريب</option><option value="certificate_request">طلب إفادة تدريبية</option>':'<option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="exam_postponement">طلب تأجيل الاختبارات</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option><option value="certificate_request">طلب إفادة</option>'}</select></div>
+      <div class="field"><label>نوع الطلب</label><select id="studentRequestType" onchange="toggleStudentRequestFields()">${professionalOnly?'<option value="professional_support">طلب إرشاد أو دعم</option><option value="leave">طلب إجازة</option><option value="exam_postponement">طلب تأجيل اختبار</option><option value="postpone">طلب تأجيل التدريب</option><option value="certificate_request">طلب إفادة تدريبية</option>':'<option value="leave">طلب إجازة</option><option value="postpone">طلب تأجيل</option><option value="exam_postponement">طلب تأجيل الاختبارات</option><option value="grade_review">طلب مراجعة درجات</option><option value="academic_support">طلب دعم أكاديمي</option><option value="certificate_request">طلب إفادة</option>'}</select></div>
+      ${professionalOnly?`<div id="professionalLeaveDateFields" style="display:none"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="field"><label>بداية الإجازة *</label><input type="date" id="professionalLeaveStartDate"></div><div class="field"><label>نهاية الإجازة *</label><input type="date" id="professionalLeaveEndDate"></div></div><div style="font-size:11px;color:var(--muted);margin:-5px 0 12px">عند اعتماد الطلب، يفحص النظام جدول اختبارات البرنامج ويضيف الاستثناء تلقائيًا لأي اختبار يقع خلال الإجازة.</div></div><div class="field" id="professionalExamPostponementField" style="display:none"><label>الاختبار المطلوب تأجيله *</label><select id="professionalExamPostponement"><option value="">-- اختر الاختبار --</option>${uniqueProfessionalExamOptions.map(exam=>`<option value="${escapeHtml(exam.key)}" data-date="${escapeHtml(exam.date)}">${escapeHtml(exam.title)} — ${escapeHtml(exam.date)}</option>`).join('')}</select>${uniqueProfessionalExamOptions.length?'':'<div style="font-size:11px;color:var(--muted);margin-top:5px">لا يوجد اختبار مهني مجدول حاليًا.</div>'}</div>`:''}
       <div class="field" id="studentGradeReviewSubjectField" style="display:none"><label>المقرر المطلوب مراجعته</label><select id="studentGradeReviewSubject"><option value="">-- اختر المقرر --</option>${mySubjects.map(subject=>`<option value="${subject.key}">${subject.name}${subject.batch?` — ${subject.batch}`:''}</option>`).join('')}</select></div>
       <div class="field" id="studentExamReturnDateField" style="display:none"><label>تاريخ العودة المتوقع *</label><input type="date" id="studentExamReturnDate"><div style="font-size:11px;color:var(--muted);margin-top:5px">بعد الموافقة ستبقى الاختبارات مخفية حتى تعيد الإدارة فتحها في تاريخ العودة.</div></div>
       <div id="studentCertificateFields" style="display:none"><div class="field"><label>نوع الإفادة *</label><select id="studentCertificateType"><option value="study">إفادة دراسة</option><option value="training">موافقة تدريب أو إشراف</option></select></div><div class="field"><label>الجهة المرسل إليها *</label><input id="studentCertificateRecipient" placeholder="مثال: مركز عبور — فرع الجبيل"></div><div class="field"><label>الغرض من الإفادة</label><input id="studentCertificatePurpose" placeholder="مثال: استكمال متطلبات التدريب العملي"></div><div style="font-size:11px;color:var(--muted);margin:-6px 0 12px">ستراجع الإدارة الصياغة وتجهز الإفادة الرسمية. لا تظهر المسودة غير المعتمدة للطالب.</div></div>
@@ -1185,12 +1189,13 @@ function renderStudentRequestsTab(){
       <div class="card-title">📂 الطلبات السابقة</div>
       ${requests.length?`<div class="table-wrap"><table><thead><tr><th>النوع</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th><th>متابعة الإدارة</th></tr></thead><tbody>${requests.map(request=>`
         <tr>
-          <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='exam_postponement'?'تأجيل الاختبارات':request.type==='grade_review'?'مراجعة درجات':request.type==='certificate_request'?'طلب إفادة':request.type==='professional_support'?'إرشاد أو دعم':'دعم أكاديمي'}${request.returnDate?`<div style="font-size:11px;color:var(--primary);margin-top:4px">العودة: ${escapeHtml(request.returnDate)}</div>`:''}</td>
+          <td>${request.type==='leave'?'إجازة':request.type==='postpone'?'تأجيل':request.type==='exam_postponement'?'تأجيل الاختبارات':request.type==='grade_review'?'مراجعة درجات':request.type==='certificate_request'?'طلب إفادة':request.type==='professional_support'?'إرشاد أو دعم':'دعم أكاديمي'}${request.leaveStartDate?`<div style="font-size:11px;color:var(--primary);margin-top:4px">${escapeHtml(request.leaveStartDate)} — ${escapeHtml(request.leaveEndDate||request.leaveStartDate)}</div>`:request.returnDate?`<div style="font-size:11px;color:var(--primary);margin-top:4px">العودة: ${escapeHtml(request.returnDate)}</div>`:''}</td>
           <td><strong>${request.title||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${request.details||''}</div></td>
           <td>${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</td>
           <td><span class="badge ${getStudentRequestStatusMeta(request.status).className}">${getStudentRequestStatusMeta(request.status).label}</span></td>
           <td style="min-width:220px">
             ${request.adminNote?`<div style="font-size:12px;font-weight:700">${request.adminNote}</div>`:'<div style="font-size:11px;color:var(--muted)">لا توجد ملاحظة من الإدارة حتى الآن</div>'}
+            ${request.automaticExamPostponement&&request.affectedProfessionalExams?.length?`<div style="font-size:11px;color:#8a5700;background:#fff7dc;border:1px solid #f1d58b;border-radius:8px;padding:7px 9px;margin-top:7px">تم تسجيل استثناء تلقائي للاختبار: ${request.affectedProfessionalExams.map(exam=>`${escapeHtml(exam.title)} (${escapeHtml(exam.date)})`).join('، ')}</div>`:''}
             ${request.lecturerNote?`<div style="font-size:11px;color:var(--muted);margin-top:6px">ملاحظة عضو هيئة التدريس: ${request.lecturerNote}</div>`:''}
             ${request.reviewedAt?`<div style="font-size:10px;color:var(--muted);margin-top:4px">تمت المراجعة في ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')}${request.reviewedBy?` · بواسطة ${request.reviewedBy}`:''}</div>`:''}
           </td>
@@ -1206,6 +1211,8 @@ function toggleStudentRequestFields(){
   if(returnDateField) returnDateField.style.display=type==='exam_postponement'?'block':'none';
   const certificateFields=document.getElementById('studentCertificateFields');
   if(certificateFields) certificateFields.style.display=type==='certificate_request'?'block':'none';
+  const professionalLeave=document.getElementById('professionalLeaveDateFields');if(professionalLeave)professionalLeave.style.display=type==='leave'?'block':'none';
+  const professionalExam=document.getElementById('professionalExamPostponementField');if(professionalExam)professionalExam.style.display=type==='exam_postponement'?'block':'none';
 }
 
 function renderStudentPoliciesTab(){
@@ -1325,14 +1332,17 @@ async function submitStudentRequest(){
   const title=type==='grade_review'&&!titleInput&&subject ? `طلب مراجعة درجات: ${subject.name}` : titleInput;
   const details = document.getElementById('studentRequestDetails')?.value.trim();
   const returnDate=type==='exam_postponement'?document.getElementById('studentExamReturnDate')?.value||'':'';
+  const leaveStartDate=document.getElementById('professionalLeaveStartDate')?.value||'',leaveEndDate=document.getElementById('professionalLeaveEndDate')?.value||'',professionalExamSelect=document.getElementById('professionalExamPostponement'),professionalExamKey=type==='exam_postponement'?professionalExamSelect?.value||'':'',professionalExamOption=professionalExamSelect?.selectedOptions?.[0],professionalExamDate=professionalExamOption?.dataset?.date||'',professionalOnly=!!getStudentProfessionalContext()&&!Object.values(dbData.enrollments||{}).some(enrollment=>enrollment?.studentKey===currentUser.fbKey);
   const certificateType=type==='certificate_request'?document.getElementById('studentCertificateType')?.value||'study':'';
   const recipientEntity=type==='certificate_request'?document.getElementById('studentCertificateRecipient')?.value.trim()||'':'';
   const certificatePurpose=type==='certificate_request'?document.getElementById('studentCertificatePurpose')?.value.trim()||'':'';
   if(type==='grade_review'&&!subject) return toast('يرجى اختيار المقرر المطلوب مراجعته');
-  if(type==='exam_postponement'&&!returnDate) return toast('يرجى تحديد تاريخ العودة المتوقع');
+  if(type==='exam_postponement'&&!returnDate&&!document.getElementById('professionalExamPostponement')) return toast('يرجى تحديد تاريخ العودة المتوقع');
+  if(professionalOnly&&type==='leave'&&(!leaveStartDate||!leaveEndDate||leaveEndDate<leaveStartDate))return toast('يرجى تحديد مدة إجازة صحيحة');
+  if(professionalOnly&&type==='exam_postponement'&&!professionalExamKey)return toast('يرجى اختيار الاختبار المطلوب تأجيله');
   if(type==='certificate_request'&&!recipientEntity) return toast('يرجى كتابة الجهة المرسل إليها');
   if(!title || !details) return toast('يرجى تعبئة عنوان الطلب وتفاصيله');
-  const payload = { studentKey: currentUser.fbKey, type, title, details, returnDate, certificateType, recipientEntity, certificatePurpose, subjectKey:subject?.key||'', subjectName:subject?.name||'', status:'pending', adminNote:'', lecturerNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
+  const payload = { studentKey: currentUser.fbKey, type, title, details, returnDate:professionalOnly&&type==='exam_postponement'?professionalExamDate:returnDate, leaveStartDate, leaveEndDate, professionalProgramId:professionalOnly?PROFESSIONAL_PROGRAM_ID:'', professionalExamKey, certificateType, recipientEntity, certificatePurpose, subjectKey:professionalExamKey||subject?.key||'', subjectName:professionalOnly&&professionalExamKey?(professionalExamOption?.textContent?.split(' — ')[0]||'اختبار البرنامج المهني'):(subject?.name||''), status:'pending', adminNote:'', lecturerNote:'', reviewedAt:'', reviewedBy:'', createdAt:new Date().toISOString() };
   const requestKey = 'req_'+Date.now();
   await fbRef('studentRequests/'+requestKey).set(payload);
   if(!dbData.studentRequests) dbData.studentRequests = {};
