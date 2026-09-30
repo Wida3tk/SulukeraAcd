@@ -447,11 +447,14 @@ tr:hover td{background:#f8faff;}
             <select id="studentBatchFilter" onchange="filterStudents()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
               <option value="">كل الدفعات</option>
             </select>
+            <select id="studentPlanFilter" onchange="filterStudents()" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:inherit;background:white;">
+              <option value="">كل التصنيفات</option><option value="ABA">طلاب ABA فقط</option><option value="QBA">QBA</option><option value="QASP-S">QASP-S</option><option value="PROFESSIONAL">البرنامج المهني</option>
+            </select>
             <button class="btn btn-sm" onclick="clearStudentFilters()">مسح الفلاتر</button>
             <button class="btn btn-sm" onclick="exportStudentsExcel()">📊 تصدير Excel</button>
           </div>
           <div id="studentsCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
-          <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم الثلاثي</th><th>الرقم</th><th>البريد</th><th>البرنامج</th><th>الدفعة</th><th>المتوسط</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="studentsTableBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>الاسم الثلاثي</th><th>الرقم</th><th>البريد</th><th>البرنامج</th><th>الدفعة</th><th>التصنيف</th><th>المتوسط</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="studentsTableBody"></tbody></table></div>
         </div>
       </div>
 
@@ -1412,6 +1415,7 @@ async function loadAllFromFirebase(){
       });
     }
 
+    await repairAmbiguousAbaPlanTypes();
     showLoader(false);
     showToast('✅ تم تحميل البيانات من Firebase');
   } catch(e){
@@ -1437,7 +1441,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     firstName:st.firstName||'', midName:st.midName||'', lastName:st.lastName||'',
     phone:st.phone||'', email:st.email||'', regDate:st.regDate||'',
     program:st.program||'', track:st.track||'', batch:st.batch||'',
-    id:st.id, pkg:st.pkg||'', planType:st.planType||inferPlanType(st.pkg),
+    id:st.id, pkg:st.pkg||'', planType:isProfessionalStudentRecord(st)?'PROFESSIONAL':(getExplicitStudentPlan(st)||inferPlanType(st.pkg)),
     accountStatus:st.accountStatus||'active',
     withdrawnAt:st.withdrawnAt||'',
     withdrawnBy:st.withdrawnBy||'',
@@ -2057,14 +2061,21 @@ function studentEligibleForOffering(student,subject){
 }
 function getExplicitStudentPlan(student){
   const direct=String(student?.planType||'').trim().toUpperCase();
-  if(direct.includes('QASP')) return 'QASP-S';
-  if(direct.includes('QBA')) return 'QBA';
   const pkgId=String(student?.pkg||'').trim();
-  const pkgName=(packagesData||[]).find(pkg=>pkg._fbKey===pkgId)?.name||'';
+  const pkgName=getStudentPackageDisplayName(student);
   const source=`${pkgId} ${pkgName}`.toUpperCase();
-  if(source.includes('QASP')) return 'QASP-S';
-  if(source.includes('QBA')) return 'QBA';
+  const directQasp=direct.includes('QASP'),directQba=direct.includes('QBA');
+  if(directQasp!==directQba)return directQasp?'QASP-S':'QBA';
+  const packageQasp=source.includes('QASP'),packageQba=source.includes('QBA');
+  if(packageQasp!==packageQba)return packageQasp?'QASP-S':'QBA';
+  const track=String(student?.track||'').toUpperCase();
+  if(track.includes('QASP'))return 'QASP-S';
+  if(track.includes('QBA'))return 'QBA';
   return '';
+}
+function getStudentListClassification(student){if(isProfessionalStudentRecord(student))return 'PROFESSIONAL';return getExplicitStudentPlan(student)||'UNCLASSIFIED';}
+async function repairAmbiguousAbaPlanTypes(){
+  if(currentUser?.role!=='admin')return;const updates={};students.forEach(student=>{const direct=String(student.planType||'').toUpperCase();if(!(direct.includes('QASP')&&direct.includes('QBA'))||!student._fbKey)return;const pkgName=getStudentPackageDisplayName(student).toUpperCase(),track=String(student.track||'').toUpperCase(),resolved=pkgName.includes('QASP')&&!pkgName.includes('QBA')?'QASP-S':pkgName.includes('QBA')&&!pkgName.includes('QASP')?'QBA':track.includes('QASP')&&!track.includes('QBA')?'QASP-S':track.includes('QBA')&&!track.includes('QASP')?'QBA':'';if(resolved){student.planType=resolved;updates[`students/${student._fbKey}/planType`]=resolved;}});if(Object.keys(updates).length)await fbRef().update(updates);
 }
 function isStudentExplicitlyEligibleForOffering(student,subject){
   if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
@@ -7790,6 +7801,7 @@ function filterStudents(){
   const progFilter = document.getElementById('studentProgramFilter')?.value||'';
   const batchSelect = document.getElementById('studentBatchFilter');
   const batchFilter = normalizeBatchName(batchSelect?.value||'');
+  const planFilter = document.getElementById('studentPlanFilter')?.value||'';
   
   let filtered = students.map((st,idx)=>({...st,idx}));
   if(query){
@@ -7806,6 +7818,8 @@ function filterStudents(){
   if(batchFilter){
     filtered = filtered.filter(st=>normalizeBatchName(st.batch)===batchFilter);
   }
+  if(planFilter){filtered=filtered.filter(st=>{const classification=getStudentListClassification(st);return planFilter==='ABA'?['QBA','QASP-S'].includes(classification):classification===planFilter;});}
+  filtered.sort((a,b)=>normalizeBatchName(a.batch).localeCompare(normalizeBatchName(b.batch),'en')||getStudentListClassification(a).localeCompare(getStudentListClassification(b),'en')||getStudentFullName(a).localeCompare(getStudentFullName(b),'ar'));
   
   const count = document.getElementById('studentsCount');
   if(count){
@@ -7822,9 +7836,11 @@ function clearStudentFilters(){
   const search=document.getElementById('studentSearchInput');
   const program=document.getElementById('studentProgramFilter');
   const batch=document.getElementById('studentBatchFilter');
+  const plan=document.getElementById('studentPlanFilter');
   if(search) search.value='';
   if(program) program.value='';
   if(batch) batch.value='';
+  if(plan) plan.value='';
   filterStudents();
 }
 
@@ -7832,10 +7848,10 @@ function renderStudentsTableFiltered(filtered){
   const tbody = document.getElementById('studentsTableBody');
   if(!tbody) return;
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>';
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted)">لا توجد نتائج</td></tr>';
     return;
   }
-  tbody.innerHTML = filtered.map((st,rowNumber)=>{
+  let previousGroup='';tbody.innerHTML = filtered.map((st,rowNumber)=>{
     const stdIdx = st.idx;
     const mySubjs = subjects.filter(s=>s.students.includes(stdIdx));
     const tots = mySubjs.map(s=>{const si=subjects.indexOf(s);return grades[si]?.[stdIdx]?calcTotal(grades[si][stdIdx]):0;});
@@ -7847,13 +7863,15 @@ function renderStudentsTableFiltered(filtered){
     const withdrawn=st.accountStatus==='withdrawn';
     const canEdit = canEditStudentRecord();
     const canDelete = canManageAcademicAdmin();
-    return `<tr>
+    const classification=getStudentListClassification(st),groupKey=`${normalizeBatchName(st.batch)||'بدون دفعة'}|${classification}`,classificationLabel=classification==='PROFESSIONAL'?'مهني':classification==='UNCLASSIFIED'?'بحاجة تحديد':classification,groupHeader=groupKey!==previousGroup?`<tr><td colspan="10" style="padding:10px 14px;background:linear-gradient(90deg,#edf3ff,#f8faff);color:var(--primary-dark);font-weight:900;border-top:2px solid #cbdcff">دفعة ${escapeHtml(st.batch||'غير محددة')} · ${escapeHtml(classificationLabel)}</td></tr>`:'';previousGroup=groupKey;
+    return `${groupHeader}<tr>
       <td class="mono">${rowNumber+1}</td>
       <td><strong style="cursor:pointer;color:var(--primary)" onclick="openStudentProfile(${stdIdx})">${getStudentFullName(st)}</strong></td>
       <td class="mono">${st.id}</td>
       <td style="font-size:11px">${st.email||'—'}</td>
       <td style="font-size:11px">${st.program||'—'}</td>
       <td><span class="badge badge-student">${st.batch||'—'}</span></td>
+      <td><span class="badge ${classification==='QBA'?'badge-admin':classification==='QASP-S'?'badge-info':classification==='PROFESSIONAL'?'badge-pass':'badge-warn'}">${escapeHtml(classificationLabel)}</span></td>
       <td>${withdrawn?'—':avg>0?avg+'/100':'—'}</td>
       <td>${withdrawn?'<span class="badge badge-fail">منسحب</span>':`<span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}`}</td>
       <td style="display:flex;gap:4px;">
