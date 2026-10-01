@@ -646,15 +646,16 @@ function sameBatchName(a,b){
   return normalizeBatchName(a)===normalizeBatchName(b);
 }
 function getStudentPlanType(student){
+  const resolve=value=>{const text=String(value||'').trim().toUpperCase(),qasp=text.includes('QASP'),qba=text.includes('QBA');return qasp!==qba?(qasp?'QASP-S':'QBA'):'';};
   const direct=String(student?.planType||'').trim().toUpperCase();
-  if(direct.includes('QASP')) return 'QASP-S';
-  if(direct.includes('QBA')) return 'QBA';
+  const directPlan=resolve(direct);
+  if(directPlan)return directPlan;
   const pkg=student?.pkg||'';
   const pkgName=Object.entries(dbData.packages||{}).find(([key,p])=>key===pkg||p.name===pkg)?.[1]?.name||pkg;
   const source=`${pkg} ${pkgName}`.toUpperCase();
-  if(source.includes('QASP')) return 'QASP-S';
-  if(source.includes('QBA')) return 'QBA';
-  return '';
+  const trackPlan=resolve(student?.track),packagePlan=resolve(source);
+  if(trackPlan&&packagePlan&&trackPlan!==packagePlan)return '';
+  return trackPlan||packagePlan;
 }
 function isStudentEligibleForSubject(student,subject){
   if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
@@ -1304,7 +1305,7 @@ function renderStudentAccountTab(){
         <div class="field"><label>البريد الإلكتروني</label><input type="email" value="${st.email||''}" readonly></div>
         <div class="field"><label>رقم الجوال</label><input type="tel" value="${st.phone||''}" readonly></div>
         <div class="field"><label>${professionalOnly?'البرنامج التدريبي':'الدفعة'}</label><input value="${professionalOnly?(st.program||'إدارة السلوك التنظيمي'):(st.batch||'')}" readonly></div>
-        <div class="field"><label>${professionalOnly?'المسار':'الرخصة الأكاديمية'}</label><input value="${professionalOnly?(st.track||'مسار الممارس OBM-P'):(st.planType||'')}" readonly></div>
+        <div class="field"><label>${professionalOnly?'المسار':'الرخصة الأكاديمية'}</label><input value="${professionalOnly?(st.track||'مسار الممارس OBM-P'):(getStudentPlanType(st)||'بحاجة تحديد')}" readonly></div>
       </div>
     </div>`;
 }

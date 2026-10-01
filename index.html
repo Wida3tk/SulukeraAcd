@@ -885,6 +885,7 @@ tr:hover td{background:#f8faff;}
         <select id="stdBatchSelect" onchange="refreshStudentSubjectOptions(editingStudentIdx); refreshStudentCrossBatchOptions(editingStudentIdx)"><option value="">-- اختر --</option></select></div>
       <div class="form-group"><label>الرخصة الأكاديمية *</label>
         <select id="studentPlanType" onchange="refreshStudentSubjectOptions(editingStudentIdx); refreshStudentCrossBatchOptions(editingStudentIdx)">
+          <option value="">-- حددي الرخصة الأكاديمية --</option>
           <option value="QASP-S">QASP-S — 12 مقرر</option>
           <option value="QBA">QBA — 18 مقرر</option>
         </select>
@@ -965,6 +966,7 @@ tr:hover td{background:#f8faff;}
     <button class="btn btn-primary" onclick="triggerLegacyGradeImportFiles()">اختيار ملفات الدرجات</button>
     <input type="file" id="legacyGradeImportFiles" accept=".xlsx,.xls" multiple onchange="handleLegacyGradeImportFiles(event)" style="display:none;">
   </div>
+  <div class="form-group"><label>حساب الطالب لملف واحد (اختياري عند اختلاف الاسم)</label><select id="legacyGradeImportStudent" onchange="handleLegacyGradeImportFiles({target:document.getElementById('legacyGradeImportFiles')})"><option value="">مطابقة تلقائية من الملف</option></select><div style="font-size:11px;color:var(--text-muted);margin-top:6px">اختاري الحساب بالاسم والرقم الطلابي عند اختلاف الاسم في الملف. راجعي اسم الملف والحساب في المعاينة قبل الاعتماد.</div></div>
   <div id="legacyGradeImportSummary" class="alert alert-warn">لم يتم اختيار ملفات بعد.</div>
   <div id="legacyGradeImportPreview" style="max-height:390px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--bg);"></div>
   <div class="modal-actions">
@@ -1336,7 +1338,7 @@ async function loadAllFromFirebase(){
         phone:s.phone||'', email:s.email||'', regDate:s.regDate||'',
         program:s.program||'', track:s.track||'', batch:s.batch||'',
         id:s.id||key, pkg:s.pkg||'full',
-        planType:s.planType||(String(root.packages?.[s.pkg]?.name||s.pkg||'').toUpperCase().includes('QASP')?'QASP-S':'QBA'),
+        planType:s.planType||'',
         financeMode:s.financeMode||inferFinanceMode(s),
         totalAmount:parseFloat(s.totalAmount)||0, notes:s.notes||'',
         operCustomerId:s.operCustomerId||'',
@@ -1881,7 +1883,7 @@ function getSortedStudentRequests(){
 function inferPlanType(pkg){
   const value=String(pkg||'').toUpperCase();
   const pkgName=(packagesData||[]).find(p=>p._fbKey===pkg)?.name||'';
-  return (value.includes('QASP')||pkgName.toUpperCase().includes('QASP'))?'QASP-S':'QBA';
+  return singleAcademicPlan(`${value} ${pkgName}`);
 }
 function getStudentPackageDisplayName(student){
   const pkgId=String(student?.pkg||'').trim();
@@ -2059,6 +2061,11 @@ function studentEligibleForOffering(student,subject){
   const eligible=subject?.eligiblePlans||[];
   return !!plan && (!eligible.length||eligible.includes(plan));
 }
+function singleAcademicPlan(value){
+  const text=String(value||'').trim().toUpperCase();
+  const qasp=text.includes('QASP'),qba=text.includes('QBA');
+  return qasp!==qba?(qasp?'QASP-S':'QBA'):'';
+}
 function getExplicitStudentPlan(student){
   const direct=String(student?.planType||'').trim().toUpperCase();
   const pkgId=String(student?.pkg||'').trim();
@@ -2066,16 +2073,14 @@ function getExplicitStudentPlan(student){
   const source=`${pkgId} ${pkgName}`.toUpperCase();
   const directQasp=direct.includes('QASP'),directQba=direct.includes('QBA');
   if(directQasp!==directQba)return directQasp?'QASP-S':'QBA';
-  const packageQasp=source.includes('QASP'),packageQba=source.includes('QBA');
-  if(packageQasp!==packageQba)return packageQasp?'QASP-S':'QBA';
-  const track=String(student?.track||'').toUpperCase();
-  if(track.includes('QASP'))return 'QASP-S';
-  if(track.includes('QBA'))return 'QBA';
-  return '';
+  const trackPlan=singleAcademicPlan(student?.track);
+  const packagePlan=singleAcademicPlan(source);
+  if(trackPlan&&packagePlan&&trackPlan!==packagePlan)return '';
+  return trackPlan||packagePlan;
 }
 function getStudentListClassification(student){if(isProfessionalStudentRecord(student))return 'PROFESSIONAL';return getExplicitStudentPlan(student)||'UNCLASSIFIED';}
 async function repairAmbiguousAbaPlanTypes(){
-  if(currentUser?.role!=='admin')return;const updates={};students.forEach(student=>{const direct=String(student.planType||'').toUpperCase();if(!(direct.includes('QASP')&&direct.includes('QBA'))||!student._fbKey)return;const pkgName=getStudentPackageDisplayName(student).toUpperCase(),track=String(student.track||'').toUpperCase(),resolved=pkgName.includes('QASP')&&!pkgName.includes('QBA')?'QASP-S':pkgName.includes('QBA')&&!pkgName.includes('QASP')?'QBA':track.includes('QASP')&&!track.includes('QBA')?'QASP-S':track.includes('QBA')&&!track.includes('QASP')?'QBA':'';if(resolved){student.planType=resolved;updates[`students/${student._fbKey}/planType`]=resolved;}});if(Object.keys(updates).length)await fbRef().update(updates);
+  if(currentUser?.role!=='admin')return;const updates={};students.forEach(student=>{const direct=String(student.planType||'').toUpperCase();if(!(direct.includes('QASP')&&direct.includes('QBA'))||!student._fbKey)return;const resolved=getExplicitStudentPlan(student);if(resolved){student.planType=resolved;updates[`students/${student._fbKey}/planType`]=resolved;}});if(Object.keys(updates).length)await fbRef().update(updates);
 }
 function isStudentExplicitlyEligibleForOffering(student,subject){
   if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
@@ -3253,7 +3258,6 @@ function updateSubjectsForPackage() {
   if(!pkg){ if(info) info.style.display='none'; return; }
   const planSelect=document.getElementById('studentPlanType');
   if(planSelect){
-    planSelect.value=String(pkg.name||'').toUpperCase().includes('QASP')?'QASP-S':'QBA';
     refreshStudentSubjectOptions(editingStudentIdx);
     refreshStudentCrossBatchOptions(editingStudentIdx);
   }
@@ -3613,7 +3617,8 @@ async function confirmStudentImport(){
 //  LEGACY GRADE RECOVERY
 // ══════════════════════════════════════════════
 function normalizeLegacyText(value){
-  return String(value??'').trim().toLowerCase()
+  return String(value??'').normalize('NFKC').trim().toLowerCase()
+    .replace(/\u0640/g,'')
     .replace(/[\u064B-\u065F\u0670]/g,'')
     .replace(/[إأآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي')
     .replace(/[^\p{L}\p{N}]+/gu,'');
@@ -3682,6 +3687,8 @@ function openLegacyGradeImportModal(){
   const preview=document.getElementById('legacyGradeImportPreview');
   const input=document.getElementById('legacyGradeImportFiles');
   const confirmButton=document.getElementById('legacyGradeImportConfirm');
+  const studentSelect=document.getElementById('legacyGradeImportStudent');
+  if(studentSelect){studentSelect.innerHTML='<option value="">مطابقة تلقائية من الملف</option>'+students.map((student,stdIdx)=>({student,stdIdx})).filter(({student})=>student.accountStatus!=='withdrawn').sort((a,b)=>getStudentFullName(a.student).localeCompare(getStudentFullName(b.student),'ar')).map(({student,stdIdx})=>`<option value="${stdIdx}">${escapeHtml(getStudentFullName(student))} — ${escapeHtml(student.id||'')} — ${escapeHtml(student.batch||'')}</option>`).join('');}
   if(summary){ summary.className='alert alert-warn'; summary.textContent='ارفعي ملفات الطلاب وسيظهر ما يمكن استيراده قبل الحفظ.'; }
   if(preview) preview.innerHTML='';
   if(input) input.value='';
@@ -3691,13 +3698,14 @@ function openLegacyGradeImportModal(){
 function triggerLegacyGradeImportFiles(){
   document.getElementById('legacyGradeImportFiles')?.click();
 }
-function parseLegacyGradeWorkbook(workbook,fileName){
+function parseLegacyGradeWorkbook(workbook,fileName,selectedStudentIdx=null){
   const mainSheetName=workbook.SheetNames.find(name=>normalizeLegacyText(name)===normalizeLegacyText('البيانات الرئيسية'));
   if(!mainSheetName) return {rows:[],issues:[`${fileName}: لا توجد ورقة "البيانات الرئيسية".`]};
   const mainRows=XLSX.utils.sheet_to_json(workbook.Sheets[mainSheetName],{header:1,defval:''});
   const sourceName=String(mainRows?.[1]?.[0]||'').trim();
-  const foundStudent=findLegacyStudent(sourceName);
-  if(!foundStudent) return {rows:[],issues:[`${fileName}: لم تتم مطابقة الطالب "${sourceName||'غير محدد'}" بحساب واحد في النظام.`]};
+  const selectedStudent=Number.isInteger(selectedStudentIdx)?students[selectedStudentIdx]:null;
+  const foundStudent=selectedStudent?{student:selectedStudent,stdIdx:selectedStudentIdx}:findLegacyStudent(sourceName);
+  if(!foundStudent) return {rows:[],issues:[`${fileName}: لم تتم مطابقة الطالب "${sourceName||'غير محدد'}" بحساب واحد في النظام. اختاري الحساب الصحيح من قائمة حساب الطالب عند رفع ملف واحد، ثم راجعي المعاينة.`]};
   if(foundStudent.student.accountStatus==='withdrawn') return {rows:[],issues:[`${fileName}: حساب ${sourceName} منسحب؛ لم تُستورد درجاته.`]};
 
   const completionStatus={};
@@ -3706,7 +3714,7 @@ function parseLegacyGradeWorkbook(workbook,fileName){
     if(match) completionStatus['course_'+String(Number(match[1])).padStart(2,'0')]=String(row?.[1]||'').trim();
   });
   const parsedRows=[];
-  const issues=[];
+  const issues=selectedStudent?[`${fileName}: ربط يدوي — اسم الملف: "${sourceName||'غير محدد'}"، الحساب المختار: "${getStudentFullName(selectedStudent)}" (${selectedStudent.id||''}). راجعي الربط قبل الاعتماد.`]:[];
   workbook.SheetNames.filter(name=>name!==mainSheetName).forEach(sheetName=>{
     const rows=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:''});
     const courseKey=getLegacyCourseKey(sheetName,rows);
@@ -3782,12 +3790,15 @@ async function handleLegacyGradeImportFiles(event){
   if(typeof XLSX==='undefined') return showToast('مكتبة Excel غير متاحة الآن');
   legacyGradeImportRows=[];
   legacyGradeImportIssues=[];
+  const selectedValue=document.getElementById('legacyGradeImportStudent')?.value||'';
+  if(selectedValue&&files.length!==1){legacyGradeImportIssues=['اختيار حساب يدوي متاح لملف واحد فقط؛ اختاري المطابقة التلقائية لاستيراد عدة ملفات.'];renderLegacyGradeImportPreview(files.length);return;}
+  const selectedStudentIdx=selectedValue?Number(selectedValue):null;
   showLoader(true);
   try{
     const results=await Promise.all(files.map(file=>new Promise(resolve=>{
       const reader=new FileReader();
       reader.onload=loadEvent=>{
-        try{ resolve(parseLegacyGradeWorkbook(XLSX.read(loadEvent.target.result,{type:'array'}),file.name)); }
+        try{ resolve(parseLegacyGradeWorkbook(XLSX.read(loadEvent.target.result,{type:'array'}),file.name,selectedStudentIdx)); }
         catch(error){ console.error('legacy grade workbook parse error:',error); resolve({rows:[],issues:[`${file.name}: تعذر قراءة ملف الدرجات.`]}); }
       };
       reader.onerror=()=>resolve({rows:[],issues:[`${file.name}: تعذر فتح الملف.`]});
@@ -3891,7 +3902,7 @@ function openStudentModal(si=-1) {
     if(st?.pkg) pkgSel.value = st.pkg;
   }
   document.getElementById('stdNotes').value=st?.notes||'';
-  document.getElementById('studentPlanType').value=st?.planType||inferPlanType(st?.pkg);
+  document.getElementById('studentPlanType').value=getExplicitStudentPlan(st)||'';
   document.getElementById('stdFinanceMode').value=st?.financeMode||inferFinanceMode(st);
   document.getElementById('stdOperCustomerId').value=st?.operCustomerId||'';
   document.getElementById('stdOperOrderId').value=st?.operOrderId||'';
@@ -3946,6 +3957,10 @@ async function saveStudent() {
   const professionalStudent=isProfessionalProgramName(selectedProgram);
   const selectedTrack=professionalStudent?'مسار الممارس OBM-P':document.getElementById('stdTrack').value;
   const selectedBatch=professionalStudent?'PRO-OBM-P':document.getElementById('stdBatchSelect').value.trim();
+  const selectedPlan=singleAcademicPlan(document.getElementById('studentPlanType').value);
+  const trackPlan=singleAcademicPlan(selectedTrack);
+  if(!financialOnly&&!professionalStudent&&!selectedPlan)return showToast('⚠️ حددي رخصة أكاديمية واحدة: QASP-S أو QBA');
+  if(!financialOnly&&!professionalStudent&&trackPlan&&trackPlan!==selectedPlan)return showToast('⚠️ المسار والرخصة الأكاديمية مختلفان؛ اختاري نفس المسار في الحقلين');
   if(!financialOnly && (!selectedProgram||(!professionalStudent&&(!selectedTrack||!selectedBatch))))
     return showToast('⚠️ اختاري البرنامج والمسار والدفعة');
   const duplicateIdx=students.findIndex((st,i)=>i!==editingStudentIdx&&(st.id||'').toUpperCase()===id.toUpperCase());
@@ -3976,7 +3991,7 @@ async function saveStudent() {
     track:selectedTrack,
     batch:selectedBatch,
     id, pkg:document.getElementById('studentPackage').value,
-    planType:professionalStudent?'PROFESSIONAL':document.getElementById('studentPlanType').value,
+    planType:professionalStudent?'PROFESSIONAL':selectedPlan,
     financeMode:document.getElementById('stdFinanceMode').value||'local_manual',
     operCustomerId:document.getElementById('stdOperCustomerId').value.trim(),
     operOrderId:document.getElementById('stdOperOrderId').value.trim(),
