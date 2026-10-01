@@ -8,5 +8,11 @@
       "database_name": "sulukera-exams",
       "database_id": "48012e4b-5b00-47f4-8d7c-a9ff3a61520a"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "GRADUATION_PROJECT_FILES",
+      "id": "7f30bf2f6bb8445b97547c5cf819f1e6"
+    }
   ]
 }

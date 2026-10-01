@@ -931,6 +931,7 @@ function showStudentView(){
   const hasProfessionalProgram=professionalEnrollmentActive||professionalProfile;
   const hasAcademicEnrollment=Object.values(dbData.enrollments||{}).some(enrollment=>enrollment?.studentKey===currentUser.fbKey);
   const professionalOnly=professionalProfile||(hasProfessionalProgram&&!hasAcademicEnrollment);
+  const hasGraduationProject=String(currentUser.data?.batch||'').trim().toUpperCase().startsWith('Q1')&&getStudentPlanType(currentUser.data)==='QASP-S';
   document.getElementById('topbarRole').textContent=professionalOnly?'🎓 متدرب':'👩‍🎓 طالب';
   document.title=professionalOnly?'بوابة المتدرب | سلوكيرا':'Student Information System (SIS) | نظام معلومات الطالب';
   configureAppTabs(professionalOnly?[
@@ -945,6 +946,7 @@ function showStudentView(){
     {id:'courses',label:'📚 مقرراتي'},
     {id:'grades',label:'📊 درجاتي'},
     {id:'transcript',label:'📄 كشف الدرجات'},
+    ...(hasGraduationProject?[{id:'graduation-project',label:'🎓 مشروع التخرج'}]:[]),
     {id:'requests',label:'📝 طلباتي'},
     {id:'policies',label:'📘 السياسات'},
     {id:'account',label:'👤 حسابي'},
@@ -1947,7 +1949,20 @@ function renderStudentPortalTab(tab){
   if(tab==='policies') return renderStudentPoliciesTab();
   if(tab==='account') return renderStudentAccountTab();
   if(tab==='exams') return renderStudentExamsTab();
+  if(tab==='graduation-project') return renderStudentGraduationProject();
 }
+
+async function renderStudentGraduationProject(){
+  const host=document.getElementById('mainContent');host.innerHTML='<div class="card"><div class="empty">جاري تحميل مشروع التخرج...</div></div>';
+  try{
+    const data=await secureExamRequest('/student/graduation-project');
+    if(!data.available){host.innerHTML='<div class="card"><div class="empty">سيظهر مشروع التخرج هنا بعد اعتماد أهليتك من الإدارة.</div></div>';return;}
+    const project=data.project,group=data.group,meetings=project.generalMeetings||[];
+    host.innerHTML=`<div class="pro-shell"><section class="pro-hero"><div class="pro-hero-grid"><div><div class="pro-kicker">خطوتك الختامية</div><h1>مشروع التخرج</h1><p>${escapeHtml(project.batch)} · ${escapeHtml(project.plan_type)}</p></div><div class="pro-account-avatar">🎓</div></div></section><section class="card"><div class="card-title">موضوعات المشروع</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px">${project.topics?.length?project.topics.map((topic,index)=>`<div style="padding:14px;border:1px solid #dbe5ff;border-radius:14px;background:#f7f9ff"><span class="badge badge-student">${index+1}</span><strong style="display:block;margin-top:9px">${escapeHtml(topic)}</strong></div>`).join(''):'<div class="empty">سيتم نشر الموضوعات قريبًا.</div>'}</div></section><section class="card"><div class="card-title">اللقاءات مع المشرف</div>${meetings.length?meetings.map(meeting=>`<div style="padding:13px;margin-top:10px;border:1px solid #dbe5ff;border-radius:12px"><strong>${escapeHtml(meeting.title||'لقاء جماعي')}</strong><div style="font-size:11px;color:var(--muted);margin-top:5px">${meeting.at?new Date(meeting.at).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh'}):'سيتم تحديد الموعد'}</div>${meeting.link?`<a class="btn btn-sm" style="margin-top:8px" href="${escapeHtml(meeting.link)}" target="_blank" rel="noopener">دخول اللقاء</a>`:''}</div>`).join(''):'<div class="empty">سيتم تحديد اللقاءين الجماعيين قريبًا.</div>'}</section>${group?`<section class="card card-accent"><div class="card-title">${escapeHtml(group.name)}</div><div class="alert alert-info"><strong>الموضوع:</strong> ${escapeHtml(group.topic||'بانتظار الاختيار')}<br><strong>المشرف:</strong> ${escapeHtml(group.supervisor_name||'سيتم تحديده')}<br><strong>موعد مجموعتك:</strong> ${group.meeting_at?new Date(group.meeting_at).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh'}):'سيتم تحديده'}</div>${group.meeting_link?`<a class="btn" href="${escapeHtml(group.meeting_link)}" target="_blank" rel="noopener">دخول مقابلة المجموعة</a>`:''}<div style="margin-top:18px;padding:16px;border:1px dashed #b8c9f6;border-radius:14px;background:#f8faff"><strong>رفع ملف المشروع</strong><p style="font-size:11px;color:var(--muted)">PDF أو PowerPoint أو Word — بحد أقصى 20MB.</p><input type="file" id="graduationProjectFile" accept=".pdf,.ppt,.pptx,.doc,.docx"><button class="btn btn-primary" style="margin-top:10px" onclick="uploadGraduationProject('${group.id}')">رفع الملف</button></div>${group.submissions?.length?`<div style="margin-top:14px"><strong>الملفات المرفوعة</strong>${group.submissions.map(file=>`<div style="margin-top:8px"><button class="btn btn-sm" onclick="downloadStudentGraduationFile('${file.id}','${escapeHtml(file.file_name)}')">${escapeHtml(file.file_name)}</button> <span style="font-size:10px;color:var(--muted)">${new Date(file.submitted_at).toLocaleString('ar-SA')}</span></div>`).join('')}</div>`:''}${group.grade?`<div class="alert alert-success" style="margin-top:16px"><strong>نتيجة المشروع: ${group.grade.total_score}/100</strong><div style="margin-top:7px">المحتوى ${group.grade.content_score}/30 · المنهجية ${group.grade.methodology_score}/30 · المخرجات ${group.grade.output_score}/25 · العرض والمناقشة ${group.grade.presentation_score}/15</div>${group.grade.notes?`<div style="margin-top:7px">${escapeHtml(group.grade.notes)}</div>`:''}</div>`:''}</section>`:'<section class="card"><div class="empty">أنت مؤهل للمشروع، وسيظهر موضوعك ومجموعتك بعد اعتماد التقسيم.</div></section>'}</div>`;
+  }catch(error){console.error(error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل مشروع التخرج الآن.</div>'}
+}
+async function uploadGraduationProject(groupId){const input=document.getElementById('graduationProjectFile'),file=input?.files?.[0];if(!file)return toast('اختر ملف المشروع أولًا');if(file.size>20*1024*1024)return toast('حجم الملف يجب ألا يتجاوز 20MB');try{loader(true);await secureExamRequest('/student/graduation-project/upload',{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream','X-File-Name':encodeURIComponent(file.name),'X-Group-Id':groupId},body:file});toast('✅ تم رفع ملف المشروع بنجاح');await renderStudentGraduationProject()}catch(error){console.error(error);toast('⚠️ تعذر رفع الملف، تحقق من نوعه وحجمه')}finally{loader(false)}}
+async function downloadStudentGraduationFile(id,name){try{const response=await fetch(`${EXAM_API_BASE}/graduation-project-files/${id}`,{headers:{Authorization:'Bearer '+await firebase.auth().currentUser.getIdToken()}});if(!response.ok)throw new Error();const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}catch{toast('⚠️ تعذر فتح الملف')}}
 function renderLecturerPortalTab(tab){
   currentAppTab = tab;
   if(tab==='professional-teaching') return renderProfessionalLecturerPortal();

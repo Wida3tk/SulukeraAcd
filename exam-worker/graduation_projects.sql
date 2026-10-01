@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS graduation_projects (id TEXT PRIMARY KEY,batch TEXT NOT NULL,plan_type TEXT NOT NULL,title TEXT NOT NULL,required_semesters INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'open',topics_json TEXT NOT NULL DEFAULT '[]',general_meetings_json TEXT NOT NULL DEFAULT '[]',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(batch,plan_type));
+CREATE TABLE IF NOT EXISTS graduation_project_students (project_id TEXT NOT NULL,student_key TEXT NOT NULL,eligible INTEGER NOT NULL DEFAULT 1,added_at TEXT NOT NULL,PRIMARY KEY(project_id,student_key));
+CREATE TABLE IF NOT EXISTS graduation_project_groups (id TEXT PRIMARY KEY,project_id TEXT NOT NULL,name TEXT NOT NULL,topic TEXT NOT NULL DEFAULT '',supervisor_name TEXT NOT NULL DEFAULT '',meeting_at TEXT,meeting_link TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS graduation_project_group_members (group_id TEXT NOT NULL,student_key TEXT NOT NULL,PRIMARY KEY(group_id,student_key));
+CREATE TABLE IF NOT EXISTS graduation_project_submissions (id TEXT PRIMARY KEY,group_id TEXT NOT NULL,student_key TEXT NOT NULL,file_name TEXT NOT NULL,file_type TEXT NOT NULL,file_size INTEGER NOT NULL,kv_key TEXT NOT NULL,submitted_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS graduation_project_grades (group_id TEXT PRIMARY KEY,content_score REAL NOT NULL DEFAULT 0,methodology_score REAL NOT NULL DEFAULT 0,output_score REAL NOT NULL DEFAULT 0,presentation_score REAL NOT NULL DEFAULT 0,total_score REAL NOT NULL DEFAULT 0,notes TEXT NOT NULL DEFAULT '',graded_by TEXT NOT NULL,graded_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_grad_project_students ON graduation_project_students(student_key,project_id);
+CREATE INDEX IF NOT EXISTS idx_grad_project_groups ON graduation_project_groups(project_id);
+CREATE INDEX IF NOT EXISTS idx_grad_project_members ON graduation_project_group_members(student_key,group_id);
