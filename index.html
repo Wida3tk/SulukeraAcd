@@ -1432,7 +1432,8 @@ async function loadAllFromFirebase(){
 
 async function ensureOctober2026AcademicFoundation(root){
   if(currentUser?.role!=='admin')return false;
-  const startDate='2026-10-04',course=FIXED_COURSES.find(item=>item.key==='course_07')||{key:'course_07',name:'تدخلات تغيير السلوك',eligiblePlans:['QASP-S','QBA']};
+  const startDate='2026-10-04',previousEndDate='2026-10-03';
+  const coursesForSemester=number=>FIXED_COURSES.slice((number-1)*3,number*3);
   const liveStudents=root.students||{},liveSubjects=root.subjects||{},liveSemesters=root.semesters||{},liveEnrollments=root.enrollments||{},updates={};
   const batchNames=[...new Set(Object.values(liveStudents).map(student=>String(student?.batch||'').trim()).filter(Boolean))];
   const batchFor=code=>batchNames.find(batch=>new RegExp(`^${code}(?:-|$)`,'i').test(normalizeBatchName(batch)))||'';
@@ -1440,25 +1441,28 @@ async function ensureOctober2026AcademicFoundation(root){
   const lecturerMatches=Object.values(root.users||{}).filter(user=>user?.role==='lecturer'&&String(user.name||user.username||'').includes('نوف'));
   const noufUsername=lecturerMatches.length===1?(lecturerMatches[0].username||lecturerMatches[0].id||''):'';
   const existingPairs=new Set(Object.values(liveEnrollments).map(item=>`${item.studentKey}|${item.subjectKey}`));
-  if(q1Batch){
-    Object.entries(liveStudents).forEach(([studentKey,student])=>{if(student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,q1Batch)&&student.planType!=='QBA')updates[`students/${studentKey}/planType`]='QBA';});
-    const semesterKey='sem_2026_10_q1',old=liveSemesters[semesterKey]||{},next={...old,name:old.name||`${q1Batch} — فصل أكتوبر 2026`,startDate,batches:[q1Batch],subjects:old.subjects||[],status:old.status||'active'};
-    if(JSON.stringify(old)!==JSON.stringify(next))updates[`semesters/${semesterKey}`]=next;
-  }
-  [{batch:q2Batch,cohort:'q2'},{batch:q3Batch,cohort:'q3'}].filter(item=>item.batch).forEach(({batch,cohort})=>{
-    const offeringKey=offeringKeyFor(batch,course.key),oldOffering=liveSubjects[offeringKey]||{},offering={...oldOffering,name:course.name,courseKey:course.key,batch,startDate,semesterKey:`sem_2026_10_${cohort}`,semesterNo:Number(curriculumTemplate?.[course.key]?.semesterNo)||Number(oldOffering.semesterNo)||0,eligiblePlans:course.eligiblePlans,lecturerUserId:oldOffering.lecturerUserId||noufUsername||null,sourceSubjectKey:oldOffering.sourceSubjectKey||''};
-    if(JSON.stringify(oldOffering)!==JSON.stringify(offering))updates[`subjects/${offeringKey}`]=offering;
-    const semesterKey=`sem_2026_10_${cohort}`,oldSemester=liveSemesters[semesterKey]||{},semesterSubjects=[...new Set([...(oldSemester.subjects||[]),offeringKey])],nextSemester={...oldSemester,name:oldSemester.name||`${batch} — فصل أكتوبر 2026`,startDate,batches:[batch],subjects:semesterSubjects,status:oldSemester.status||'active'};
-    if(JSON.stringify(oldSemester)!==JSON.stringify(nextSemester))updates[`semesters/${semesterKey}`]=nextSemester;
-    Object.entries(liveStudents).forEach(([studentKey,student])=>{
-      if(student.accountStatus==='withdrawn'||!sameBatchName(student.batch,batch)||existingPairs.has(`${studentKey}|${offeringKey}`))return;
-      const enrollmentKey=(`enr_${studentKey}_${offeringKey}`).replace(/[.#$[\]]/g,'_');
-      updates[`enrollments/${enrollmentKey}`]={studentKey,subjectKey:offeringKey,sourceType:'october_2026_foundation',status:'active'};
-      existingPairs.add(`${studentKey}|${offeringKey}`);
+  const cohorts=[{batch:q1Batch,cohort:'q1',semesterNo:5},{batch:q2Batch,cohort:'q2',semesterNo:3},{batch:q3Batch,cohort:'q3',semesterNo:3}].filter(item=>item.batch);
+  cohorts.forEach(({batch,cohort,semesterNo})=>{
+    if(cohort==='q1')Object.entries(liveStudents).forEach(([studentKey,student])=>{if(student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,batch)&&student.planType!=='QBA')updates[`students/${studentKey}/planType`]='QBA';});
+    const semesterKey=`sem_2026_10_${cohort}`,semesterSubjectKeys=[];
+    coursesForSemester(semesterNo).forEach(course=>{
+      const offeringKey=offeringKeyFor(batch,course.key),oldOffering=liveSubjects[offeringKey]||{},isNoufCourse=course.key==='course_07',offering={...oldOffering,name:course.name,courseKey:course.key,batch,startDate,endDate:'',semesterKey,semesterNo,eligiblePlans:course.eligiblePlans,lecturerUserId:oldOffering.lecturerUserId||(isNoufCourse?noufUsername:'')||null,sourceSubjectKey:oldOffering.sourceSubjectKey||''};
+      semesterSubjectKeys.push(offeringKey);
+      if(JSON.stringify(oldOffering)!==JSON.stringify(offering))updates[`subjects/${offeringKey}`]=offering;
+      Object.entries(liveStudents).forEach(([studentKey,student])=>{
+        if(student.accountStatus==='withdrawn'||!sameBatchName(student.batch,batch)||existingPairs.has(`${studentKey}|${offeringKey}`))return;
+        const enrollmentKey=(`enr_${studentKey}_${offeringKey}`).replace(/[.#$[\]]/g,'_');
+        updates[`enrollments/${enrollmentKey}`]={studentKey,subjectKey:offeringKey,sourceType:'october_2026_foundation',status:'active'};
+        existingPairs.add(`${studentKey}|${offeringKey}`);
+      });
     });
+    const oldSemester=liveSemesters[semesterKey]||{},semesterSubjects=[...new Set([...(oldSemester.subjects||[]),...semesterSubjectKeys])],nextSemester={...oldSemester,name:`${batch} — الفصل ${semesterNo} — أكتوبر 2026`,startDate,batches:[batch],subjects:semesterSubjects,status:'active'};
+    if(JSON.stringify(oldSemester)!==JSON.stringify(nextSemester))updates[`semesters/${semesterKey}`]=nextSemester;
   });
+  Object.entries(liveSemesters).forEach(([key,semester])=>{if(key.startsWith('sem_2026_10_')||semester.status!=='active'||!(semester.batches||[]).some(batch=>cohorts.some(item=>sameBatchName(item.batch,batch))))return;updates[`semesters/${key}/status`]='inactive';if(!semester.endDate)updates[`semesters/${key}/endDate`]=previousEndDate;});
+  Object.entries(root.schedule?.weekly||{}).forEach(([key,slot])=>{if(slot.active===false||String(slot.termStartDate||'')>=startDate||!cohorts.some(item=>sameBatchName(item.batch,slot.batch)))return;updates[`schedule/weekly/${key}/active`]=false;updates[`schedule/weekly/${key}/archivedAt`]=new Date().toISOString();updates[`schedule/weekly/${key}/archiveReason`]='انتهاء الفصل السابق قبل 4 أكتوبر 2026';});
   if(!Object.keys(updates).length)return false;
-  updates['systemMigrations/october2026AcademicFoundation']={startDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,noufAssigned:!!noufUsername};
+  updates['systemMigrations/october2026AcademicFoundation']={startDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,q1Semester:5,q2Semester:3,q3Semester:3,coursesPerBatch:3,noufAssigned:!!noufUsername};
   await fbRef('/').update(updates);
   Object.entries(updates).forEach(([path,value])=>{
     const [collection,key,field]=path.split('/');
@@ -1469,6 +1473,10 @@ async function ensureOctober2026AcademicFoundation(root){
       else{subjects.push({_fbKey:key,...value,students:[]});grades[subjects.length-1]={};}
     }
     if(collection==='semesters'&&!field)semestersData[key]=value;
+    if(collection==='semesters'&&field&&semestersData[key])semestersData[key][field]=value;
+    if(collection==='schedule'&&key==='weekly'){
+      const [,slotKey,slotField]=path.split('/').slice(1);if(scheduleData.weekly?.[slotKey])scheduleData.weekly[slotKey][slotField]=value;
+    }
     if(collection==='enrollments'&&!field&&!enrollmentsData.some(item=>item._fbKey===key)){
       enrollmentsData.push({_fbKey:key,...value});
       const subjectIndex=subjects.findIndex(item=>item._fbKey===value.subjectKey),studentIndex=students.findIndex(item=>item._fbKey===value.studentKey);
@@ -1479,7 +1487,7 @@ async function ensureOctober2026AcademicFoundation(root){
       }
     }
   });
-  showToast(`✅ تم تجهيز فصل 4 أكتوبر${noufUsername?' وربط د. نوف بالمقرر':' — أضيفي المحاضر من الخطط الدراسية'}`);
+  showToast(`✅ تم تجهيز الفصول الجديدة: Q1 فصل 5، وQ2 وQ3 فصل 3`);
   return true;
 }
 
@@ -2844,7 +2852,7 @@ function renderAdminDashboard(){
   const batches=getAllKnownBatches().map(batch=>({
     batch,
     studentCount:students.filter(student=>sameBatchName(student.batch,batch)).length,
-    scheduledCount:Object.values(scheduleData?.weekly||{}).filter(slot=>sameBatchName(slot.batch,batch)).length,
+    scheduledCount:Object.values(scheduleData?.weekly||{}).filter(slot=>slot.active!==false&&sameBatchName(slot.batch,batch)).length,
     sectionCount:subjects.filter(subject=>sameBatchName(subject.batch,batch)).length,
     assignedCount:subjects.filter(subject=>sameBatchName(subject.batch,batch)&&subject.lecturerUserId).length
   }));
@@ -2869,7 +2877,7 @@ function renderAdminDashboard(){
   if(financeReview.length) actions.push({tone:'warn',title:'ملفات مالية تحتاج مراجعة',count:financeReview.length,action:"navTo('students',null)",detail:'تحتاج إدخالاً أو اعتماداً من موظف المالية.'});
   if(unscheduledBatches.length) actions.push({tone:'warn',title:'دفعات بلا جدول أسبوعي',count:unscheduledBatches.length,action:"navTo('schedule',null)",detail:unscheduledBatches.map(item=>item.batch).join('، ')});
   if(pendingGradeItems.length) actions.push({tone:'warn',title:'درجات مقررات تحتاج إلى استكمال',count:pendingGradeCount,action:"navTo('grades',null)",detail:'طلاب لهم محاضر مسند ولم تُحفظ درجة اختبارهم النهائي بعد.'});
-  const slots=[...Object.values(scheduleData?.weekly||{})].sort((a,b)=>(DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day))||String(a.timeStart||'').localeCompare(String(b.timeStart||'')));
+  const slots=[...Object.values(scheduleData?.weekly||{})].filter(slot=>slot.active!==false).sort((a,b)=>(DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day))||String(a.timeStart||'').localeCompare(String(b.timeStart||'')));
   const todaySlots=slots.filter(slot=>slot.day===todayName);
   const publishedExams=Object.entries(examSchedulesData||{}).map(([key,value])=>({key,...value})).filter(exam=>exam.published!==false);
   const openExams=publishedExams.filter(exam=>{
@@ -2929,7 +2937,7 @@ function getTimeRangeHours(start,end){
 function getLecturerScheduledHours(lecturer){
   const lecturerName=String(lecturer?.name||'').trim();
   const lecturerId=String(lecturer?.username||lecturer?.id||'').trim();
-  return Object.values(scheduleData?.weekly||{}).reduce((total,slot)=>{
+  return Object.values(scheduleData?.weekly||{}).filter(slot=>slot.active!==false).reduce((total,slot)=>{
     const subject=subjects.find(item=>item.name===slot.subject);
     const matchesName=String(slot.lecturer||'').trim()===lecturerName;
     const matchesSubject=subject && [lecturerId,lecturer?._fbKey,lecturer?.id].filter(Boolean).includes(subject.lecturerUserId);
@@ -5525,7 +5533,7 @@ function getStudentPortalNotifications(st, stdIdx, mySubjs){
 }
 function getStudentWeeklySchedule(st, mySubjs){
   const subjectNames=new Set(mySubjs.map(subj=>subj.name));
-  return Object.values(scheduleData.weekly||{}).filter(slot=>subjectNames.has(slot.subject)).sort((a,b)=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day) || String(a.timeStart||'').localeCompare(String(b.timeStart||'')));
+  return Object.values(scheduleData.weekly||{}).filter(slot=>slot.active!==false&&subjectNames.has(slot.subject)).sort((a,b)=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day) || String(a.timeStart||'').localeCompare(String(b.timeStart||'')));
 }
 function renderStudentScheduleCards(slots){
   if(!slots.length) return '<div class="alert alert-info">لم يتم اعتماد جدول المحاضرات لهذه الدفعة حتى الآن.</div>';
@@ -6977,7 +6985,7 @@ async function addScheduleSlot(){
   const existingSlot=editingScheduleSlotKey ? scheduleData.weekly?.[editingScheduleSlotKey] : null;
   const colorIdx = Object.keys(scheduleData.weekly||{}).length % SLOT_COLORS.length;
   const key = editingScheduleSlotKey || 'slot_'+Date.now();
-  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:existingSlot?.color||SLOT_COLORS[colorIdx]};
+  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:existingSlot?.color||SLOT_COLORS[colorIdx],active:true,termStartDate:subjectRecord.startDate||'2026-10-04'};
 
   if(!scheduleData.weekly) scheduleData.weekly={};
   scheduleData.weekly[key]=slot;
@@ -7018,7 +7026,7 @@ function cancelScheduleSlotEdit(){
 function renderWeeklySlots(){
   const el=document.getElementById('weeklySlotsList');
   if(!el) return;
-  const slots=Object.entries(scheduleData.weekly||{});
+  const slots=Object.entries(scheduleData.weekly||{}).filter(([,slot])=>slot.active!==false);
   if(!slots.length){el.innerHTML='<div class="alert alert-warn">لا توجد محاضرات مضافة</div>';return;}
   el.innerHTML=slots.sort(([,a],[,b])=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day)||a.timeStart?.localeCompare(b.timeStart)).map(([key,s])=>`
     <div class="slot-item">
@@ -7047,7 +7055,7 @@ async function deleteSlot(key){
 function renderWeeklyPreview(){
   const el=document.getElementById('weeklyPreview');
   if(!el) return;
-  const slots=Object.values(scheduleData.weekly||{});
+  const slots=Object.values(scheduleData.weekly||{}).filter(slot=>slot.active!==false);
   if(!slots.length){el.innerHTML='<div class="alert alert-info">أضف محاضرات لرؤية المعاينة</div>';return;}
   const batches=[...new Set(slots.map(slot=>slot.batch||'جدول عام'))].sort();
   const orderedSlots=[...slots].sort((a,b)=>{

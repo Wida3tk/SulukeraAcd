@@ -1566,7 +1566,7 @@ function sortScheduleSlots(slots){
 }
 function getStudentScheduleSlots(student=currentUser?.data){
   if(!student) return [];
-  const weekly = Object.values(dbData.schedule?.weekly||{});
+  const weekly = Object.values(dbData.schedule?.weekly||{}).filter(slot=>slot.active!==false);
   // Only a schedule explicitly assigned to this batch overrides the approved fallback.
   const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch));
   if(matched.length) return sortScheduleSlots(matched);
@@ -1584,7 +1584,7 @@ function getMeetingLinkMarkup(value){
 function getLecturerScheduleSlots(){
   const lecturerName = currentUser?.data?.name;
   const mySubjectNames = new Set(getLecturerSubjects().map(subject=>subject.name));
-  const weekly = Object.values(dbData.schedule?.weekly||{});
+  const weekly = Object.values(dbData.schedule?.weekly||{}).filter(slot=>slot.active!==false);
   const matched = weekly.filter(slot=>
     (slot.lecturer && lecturerName && slot.lecturer===lecturerName) ||
     (slot.subject && mySubjectNames.has(slot.subject))
