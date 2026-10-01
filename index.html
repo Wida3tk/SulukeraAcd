@@ -1322,6 +1322,8 @@ async function loadAllFromFirebase(){
         semesterKey:s.semesterKey||'',
         sourceSubjectKey:s.sourceSubjectKey||'',
         courseKey:s.courseKey||'',
+        startDate:s.startDate||'',
+        endDate:s.endDate||'',
         semesterNo:Number(s.semesterNo)||0,
         gradeFollowUpVisible:s.gradeFollowUpVisible===true,
         eligiblePlans:Array.isArray(s.eligiblePlans)?s.eligiblePlans:[],
@@ -1417,6 +1419,7 @@ async function loadAllFromFirebase(){
       });
     }
 
+    await ensureOctober2026AcademicFoundation(root);
     await repairAmbiguousAbaPlanTypes();
     showLoader(false);
     showToast('✅ تم تحميل البيانات من Firebase');
@@ -1425,6 +1428,59 @@ async function loadAllFromFirebase(){
     showLoader(false);
     showToast('⚠️ تعذر الاتصال بـ Firebase');
   }
+}
+
+async function ensureOctober2026AcademicFoundation(root){
+  if(currentUser?.role!=='admin')return false;
+  const startDate='2026-10-04',course=FIXED_COURSES.find(item=>item.key==='course_07')||{key:'course_07',name:'تدخلات تغيير السلوك',eligiblePlans:['QASP-S','QBA']};
+  const liveStudents=root.students||{},liveSubjects=root.subjects||{},liveSemesters=root.semesters||{},liveEnrollments=root.enrollments||{},updates={};
+  const batchNames=[...new Set(Object.values(liveStudents).map(student=>String(student?.batch||'').trim()).filter(Boolean))];
+  const batchFor=code=>batchNames.find(batch=>new RegExp(`^${code}(?:-|$)`,'i').test(normalizeBatchName(batch)))||'';
+  const q1Batch=batchFor('Q1'),q2Batch=batchFor('Q2'),q3Batch=batchFor('Q3');
+  const lecturerMatches=Object.values(root.users||{}).filter(user=>user?.role==='lecturer'&&String(user.name||user.username||'').includes('نوف'));
+  const noufUsername=lecturerMatches.length===1?(lecturerMatches[0].username||lecturerMatches[0].id||''):'';
+  const existingPairs=new Set(Object.values(liveEnrollments).map(item=>`${item.studentKey}|${item.subjectKey}`));
+  if(q1Batch){
+    Object.entries(liveStudents).forEach(([studentKey,student])=>{if(student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,q1Batch)&&student.planType!=='QBA')updates[`students/${studentKey}/planType`]='QBA';});
+    const semesterKey='sem_2026_10_q1',old=liveSemesters[semesterKey]||{},next={...old,name:old.name||`${q1Batch} — فصل أكتوبر 2026`,startDate,batches:[q1Batch],subjects:old.subjects||[],status:old.status||'active'};
+    if(JSON.stringify(old)!==JSON.stringify(next))updates[`semesters/${semesterKey}`]=next;
+  }
+  [{batch:q2Batch,cohort:'q2'},{batch:q3Batch,cohort:'q3'}].filter(item=>item.batch).forEach(({batch,cohort})=>{
+    const offeringKey=offeringKeyFor(batch,course.key),oldOffering=liveSubjects[offeringKey]||{},offering={...oldOffering,name:course.name,courseKey:course.key,batch,startDate,semesterKey:`sem_2026_10_${cohort}`,semesterNo:Number(curriculumTemplate?.[course.key]?.semesterNo)||Number(oldOffering.semesterNo)||0,eligiblePlans:course.eligiblePlans,lecturerUserId:oldOffering.lecturerUserId||noufUsername||null,sourceSubjectKey:oldOffering.sourceSubjectKey||''};
+    if(JSON.stringify(oldOffering)!==JSON.stringify(offering))updates[`subjects/${offeringKey}`]=offering;
+    const semesterKey=`sem_2026_10_${cohort}`,oldSemester=liveSemesters[semesterKey]||{},semesterSubjects=[...new Set([...(oldSemester.subjects||[]),offeringKey])],nextSemester={...oldSemester,name:oldSemester.name||`${batch} — فصل أكتوبر 2026`,startDate,batches:[batch],subjects:semesterSubjects,status:oldSemester.status||'active'};
+    if(JSON.stringify(oldSemester)!==JSON.stringify(nextSemester))updates[`semesters/${semesterKey}`]=nextSemester;
+    Object.entries(liveStudents).forEach(([studentKey,student])=>{
+      if(student.accountStatus==='withdrawn'||!sameBatchName(student.batch,batch)||existingPairs.has(`${studentKey}|${offeringKey}`))return;
+      const enrollmentKey=(`enr_${studentKey}_${offeringKey}`).replace(/[.#$[\]]/g,'_');
+      updates[`enrollments/${enrollmentKey}`]={studentKey,subjectKey:offeringKey,sourceType:'october_2026_foundation',status:'active'};
+      existingPairs.add(`${studentKey}|${offeringKey}`);
+    });
+  });
+  if(!Object.keys(updates).length)return false;
+  updates['systemMigrations/october2026AcademicFoundation']={startDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,noufAssigned:!!noufUsername};
+  await fbRef('/').update(updates);
+  Object.entries(updates).forEach(([path,value])=>{
+    const [collection,key,field]=path.split('/');
+    if(collection==='students'&&field==='planType'){const student=students.find(item=>item._fbKey===key);if(student)student.planType=value;}
+    if(collection==='subjects'&&!field){
+      const existingSubject=subjects.find(item=>item._fbKey===key);
+      if(existingSubject)Object.assign(existingSubject,value);
+      else{subjects.push({_fbKey:key,...value,students:[]});grades[subjects.length-1]={};}
+    }
+    if(collection==='semesters'&&!field)semestersData[key]=value;
+    if(collection==='enrollments'&&!field&&!enrollmentsData.some(item=>item._fbKey===key)){
+      enrollmentsData.push({_fbKey:key,...value});
+      const subjectIndex=subjects.findIndex(item=>item._fbKey===value.subjectKey),studentIndex=students.findIndex(item=>item._fbKey===value.studentKey);
+      if(subjectIndex>=0&&studentIndex>=0){
+        if(!subjects[subjectIndex].students.includes(studentIndex))subjects[subjectIndex].students.push(studentIndex);
+        grades[subjectIndex]=grades[subjectIndex]||{};
+        grades[subjectIndex][studentIndex]=grades[subjectIndex][studentIndex]||makeEmptyGrade();
+      }
+    }
+  });
+  showToast(`✅ تم تجهيز فصل 4 أكتوبر${noufUsername?' وربط د. نوف بالمقرر':' — أضيفي المحاضر من الخطط الدراسية'}`);
+  return true;
 }
 
 // ══════════════════════════════════════════════
