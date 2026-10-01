@@ -1966,6 +1966,7 @@ async function downloadStudentGraduationFile(id,name){try{const response=await f
 function renderLecturerPortalTab(tab){
   currentAppTab = tab;
   if(tab==='professional-teaching') return renderProfessionalLecturerPortal();
+  if(tab==='lecturer-requests') return renderLecturerRequestsTab();
   if(tab==='home') return renderLecturerHomeTab();
   if(tab==='courses') return renderLecturerCoursesTab();
   if(tab==='grades') return renderLecDashboard();
@@ -1992,11 +1993,12 @@ function showLecturerView(){
   document.getElementById('topbarRole').className = 'user-role role-lecturer';
   const professionalUnits=getProfessionalLecturerUnits(),academicSubjects=getLecturerSubjects(),professionalOnly=professionalUnits.length>0&&!academicSubjects.length;
   const tabs=professionalOnly
-    ? [{id:'professional-teaching',label:'🚀 مساري المهني'}]
+    ? [{id:'professional-teaching',label:'🚀 مساري المهني'},{id:'lecturer-requests',label:'📝 طلباتي'}]
     : [
       { id:'home', label:'🏠 الرئيسية' },
       { id:'courses', label:'📚 المقررات المسندة' },
       { id:'grades', label:'📊 سجل الدرجات' },
+      { id:'lecturer-requests', label:'📝 طلباتي' },
       { id:'schedule', label:'📅 الجدول الأسبوعي' },
       ...(professionalUnits.length?[{id:'professional-teaching',label:'🚀 مساري المهني'}]:[])
     ];
@@ -2367,6 +2369,10 @@ function renderLecturerHomeTab(){
         </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بالحساب حالياً</div>'}
     </div>`;
 }
+
+function getLecturerLeaveRequests(){const uid=currentUser?.authUid||firebase.auth().currentUser?.uid;return Object.entries(dbData.lecturerFollowUps||{}).filter(([,item])=>item.type==='lecturer_leave'&&item.lecturerUid===uid).map(([key,item])=>({key,...item})).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));}
+function renderLecturerRequestsTab(){const requests=getLecturerLeaveRequests(),status=item=>item.status==='approved'?['معتمدة','badge-pass']:item.status==='rejected'?['مرفوضة','badge-fail']:item.status==='completed'?['منتهية','badge-info']:['قيد المراجعة','badge-warn'];document.getElementById('mainContent').innerHTML=`<div class="pro-shell"><section class="pro-hero"><div class="pro-hero-grid"><div><div class="pro-kicker">الخدمات الإدارية</div><h1>طلبات المحاضر</h1><p>ارفع طلب الإجازة وتابع قرار الإدارة من حسابك.</p></div><div class="pro-account-avatar">📝</div></div></section><section class="card card-accent"><div class="card-title">طلب إجازة جديد</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"><div class="field"><label>من تاريخ *</label><input type="date" id="lecturerLeaveFrom"></div><div class="field"><label>إلى تاريخ *</label><input type="date" id="lecturerLeaveTo"></div></div><div class="field"><label>سبب الإجازة أو ملاحظات</label><textarea id="lecturerLeaveReason" placeholder="اكتب التفاصيل التي تحتاج الإدارة لمعرفتها"></textarea></div><button class="btn-primary" onclick="submitLecturerLeaveRequest()">إرسال الطلب</button></section><section class="card"><div class="card-title">سجل طلباتي</div>${requests.length?`<div class="table-wrap"><table><thead><tr><th>الفترة</th><th>التفاصيل</th><th>الحالة</th><th>ملاحظة الإدارة</th></tr></thead><tbody>${requests.map(item=>{const meta=status(item);return `<tr><td><strong>${escapeHtml(item.fromDate)}</strong> — <strong>${escapeHtml(item.toDate)}</strong></td><td>${escapeHtml(item.reason||'—')}</td><td><span class="badge ${meta[1]}">${meta[0]}</span></td><td>${escapeHtml(item.adminNote||'—')}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد طلبات سابقة.</div>'}</section></div>`;}
+async function submitLecturerLeaveRequest(){const fromDate=document.getElementById('lecturerLeaveFrom')?.value||'',toDate=document.getElementById('lecturerLeaveTo')?.value||'',reason=document.getElementById('lecturerLeaveReason')?.value.trim()||'';if(!fromDate||!toDate||toDate<fromDate)return toast('يرجى تحديد فترة إجازة صحيحة');const user=firebase.auth().currentUser,key=fbRef('lecturerFollowUps').push().key,payload={type:'lecturer_leave',lecturerUid:user.uid,lecturerKey:currentUser.fbKey||currentUser.data?.username||'',lecturerName:currentUser.data?.name||'',fromDate,toDate,reason,status:'pending',adminNote:'',createdAt:new Date().toISOString(),reviewedAt:'',reviewedBy:''};try{loader(true);await fbRef('lecturerFollowUps/'+key).set(payload);dbData.lecturerFollowUps=dbData.lecturerFollowUps||{};dbData.lecturerFollowUps[key]=payload;toast('✅ تم إرسال طلب الإجازة للإدارة');renderLecturerRequestsTab()}catch(error){console.error(error);toast('⚠️ تعذر إرسال الطلب')}finally{loader(false)}}
 
 function renderLecturerCoursesTab(){
   const { mySubjects, batchMap } = getLecturerAcademicData();
