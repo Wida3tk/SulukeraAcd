@@ -662,6 +662,11 @@ tr:hover td{background:#f8faff;}
 
         <!-- Weekly Schedule Panel -->
         <div id="sched-weekly">
+          <div style="display:flex;gap:7px;margin-bottom:1rem;flex-wrap:wrap" id="scheduleTermTabs">
+            <button class="btn btn-primary btn-sm" id="scheduleCurrentTab" onclick="switchScheduleTermView('current')">الفصل الحالي</button>
+            <button class="btn btn-sm" id="scheduleArchiveTab" onclick="switchScheduleTermView('archive')">فصول منتهية</button>
+          </div>
+          <div id="scheduleCurrentView">
           <div class="card card-accent">
             <div class="card-title">📅 إدارة الجدول الأسبوعي</div>
             <div class="alert alert-info">أضف المحاضرات الأسبوعية — ستظهر للطلاب والمحاضرين في student.html</div>
@@ -707,6 +712,14 @@ tr:hover td{background:#f8faff;}
           <div class="card card-accent" id="weeklyPreviewCard">
             <div class="card-title">👁️ معاينة الجدول</div>
             <div id="weeklyPreview" style="overflow-x:auto;"></div>
+          </div>
+          </div>
+          <div id="scheduleArchiveView" style="display:none">
+            <div class="card card-accent">
+              <div class="card-title">🗂️ الفصول المنتهية</div>
+              <div class="alert alert-info">مرجع محفوظ للجداول السابقة. لا تظهر هذه المحاضرات في حسابات الطلاب أو المحاضرين.</div>
+              <div id="archivedSchedulesList"></div>
+            </div>
           </div>
         </div>
 
@@ -1460,7 +1473,16 @@ async function ensureOctober2026AcademicFoundation(root){
     if(JSON.stringify(oldSemester)!==JSON.stringify(nextSemester))updates[`semesters/${semesterKey}`]=nextSemester;
   });
   Object.entries(liveSemesters).forEach(([key,semester])=>{if(key.startsWith('sem_2026_10_')||semester.status!=='active'||!(semester.batches||[]).some(batch=>cohorts.some(item=>sameBatchName(item.batch,batch))))return;updates[`semesters/${key}/status`]='inactive';if(!semester.endDate)updates[`semesters/${key}/endDate`]=previousEndDate;});
-  Object.entries(root.schedule?.weekly||{}).forEach(([key,slot])=>{if(slot.active===false||String(slot.termStartDate||'')>=startDate||!cohorts.some(item=>sameBatchName(item.batch,slot.batch)))return;updates[`schedule/weekly/${key}/active`]=false;updates[`schedule/weekly/${key}/archivedAt`]=new Date().toISOString();updates[`schedule/weekly/${key}/archiveReason`]='انتهاء الفصل السابق قبل 4 أكتوبر 2026';});
+  Object.entries(root.schedule?.weekly||{}).forEach(([key,slot])=>{
+    const cohort=cohorts.find(item=>sameBatchName(item.batch,slot.batch));if(!cohort||String(slot.termStartDate||'')>=startDate)return;
+    const previousSemester=Object.entries(liveSemesters).filter(([semesterKey,semester])=>!semesterKey.startsWith('sem_2026_10_')&&(semester.batches||[]).some(batch=>sameBatchName(batch,slot.batch))).sort(([,a],[,b])=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0];
+    if(slot.active!==false)updates[`schedule/weekly/${key}/active`]=false;
+    if(!slot.archivedAt)updates[`schedule/weekly/${key}/archivedAt`]=new Date().toISOString();
+    if(!slot.archiveReason)updates[`schedule/weekly/${key}/archiveReason`]='انتهاء الفصل السابق قبل 4 أكتوبر 2026';
+    if(!slot.semesterKey&&previousSemester)updates[`schedule/weekly/${key}/semesterKey`]=previousSemester[0];
+    if(!slot.termStartDate)updates[`schedule/weekly/${key}/termStartDate`]=previousSemester?.[1]?.startDate||'';
+    if(!slot.termEndDate)updates[`schedule/weekly/${key}/termEndDate`]=previousSemester?.[1]?.endDate||previousEndDate;
+  });
   if(!Object.keys(updates).length)return false;
   updates['systemMigrations/october2026AcademicFoundation']={startDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,q1Semester:5,q2Semester:3,q3Semester:3,coursesPerBatch:3,noufAssigned:!!noufUsername};
   await fbRef('/').update(updates);
@@ -6957,6 +6979,7 @@ async function renderScheduleAdmin(){
   }
   renderWeeklySlots();
   renderWeeklyPreview();
+  renderArchivedSchedules();
   renderUnitsList();
 }
 
@@ -6965,6 +6988,15 @@ function switchSchedTab(tab, el){
   el.classList.add('active');
   document.getElementById('sched-weekly').style.display = tab==='weekly'?'block':'none';
   document.getElementById('sched-program').style.display = tab==='program'?'block':'none';
+}
+
+function switchScheduleTermView(view){
+  const archive=view==='archive';
+  document.getElementById('scheduleCurrentView').style.display=archive?'none':'block';
+  document.getElementById('scheduleArchiveView').style.display=archive?'block':'none';
+  document.getElementById('scheduleCurrentTab').className=`btn btn-sm ${archive?'':'btn-primary'}`;
+  document.getElementById('scheduleArchiveTab').className=`btn btn-sm ${archive?'btn-primary':''}`;
+  if(archive)renderArchivedSchedules();
 }
 
 // ── WEEKLY ────────────────────────────────────
@@ -6982,10 +7014,11 @@ async function addScheduleSlot(){
   const subj = subjectRecord.name;
   const lecUser = subjectRecord;
   const lecName = lecUser ? getLecturerName(lecUser.lecturerUserId) : '';
+  const semesterEntry=Object.entries(semestersData||{}).find(([,semester])=>semester.status==='active'&&(semester.batches||[]).some(item=>sameBatchName(item,batch))&&(semester.subjects||[]).includes(subjectKey));
   const existingSlot=editingScheduleSlotKey ? scheduleData.weekly?.[editingScheduleSlotKey] : null;
   const colorIdx = Object.keys(scheduleData.weekly||{}).length % SLOT_COLORS.length;
   const key = editingScheduleSlotKey || 'slot_'+Date.now();
-  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:existingSlot?.color||SLOT_COLORS[colorIdx],active:true,termStartDate:subjectRecord.startDate||'2026-10-04'};
+  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:existingSlot?.color||SLOT_COLORS[colorIdx],active:true,semesterKey:semesterEntry?.[0]||subjectRecord.semesterKey||'',termStartDate:semesterEntry?.[1]?.startDate||subjectRecord.startDate||'2026-10-04',termEndDate:semesterEntry?.[1]?.endDate||subjectRecord.endDate||''};
 
   if(!scheduleData.weekly) scheduleData.weekly={};
   scheduleData.weekly[key]=slot;
@@ -7087,6 +7120,22 @@ function renderWeeklyPreview(){
         </div>`;
       }).join('')}
     </div>`;
+}
+function renderArchivedSchedules(){
+  const host=document.getElementById('archivedSchedulesList');if(!host)return;
+  const archived=Object.entries(scheduleData.weekly||{}).filter(([,slot])=>slot.active===false);
+  if(!archived.length){host.innerHTML='<div class="empty">لا توجد فصول منتهية محفوظة حتى الآن.</div>';return;}
+  const groups={};
+  archived.forEach(([slotKey,slot])=>{
+    const groupKey=slot.semesterKey||`legacy_${normalizeBatchName(slot.batch)}_${slot.termEndDate||'ended'}`;
+    if(!groups[groupKey])groups[groupKey]={semesterKey:slot.semesterKey||'',slots:[]};
+    groups[groupKey].slots.push({slotKey,...slot});
+  });
+  const rows=Object.values(groups).map(group=>{
+    const semester=semestersData[group.semesterKey]||{},first=group.slots[0]||{},batches=[...new Set(group.slots.map(slot=>slot.batch||'جدول عام'))],startDate=semester.startDate||first.termStartDate||'',endDate=semester.endDate||first.termEndDate||'',title=semester.name||`${batches.join('، ')} — فصل منتهٍ`;
+    return {...group,semester,batches,startDate,endDate,title};
+  }).sort((a,b)=>String(b.endDate||'').localeCompare(String(a.endDate||'')));
+  host.innerHTML=`<div style="display:grid;gap:12px">${rows.map((group,index)=>`<details ${index===0?'open':''} style="border:1px solid var(--border);border-radius:14px;background:#fff;overflow:hidden"><summary style="cursor:pointer;padding:15px 17px;background:linear-gradient(135deg,#f7f9ff,#eef3ff);display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><strong style="color:var(--primary-dark);font-size:14px">${escapeHtml(group.title)}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:5px">بدأ في ${escapeHtml(group.startDate||'غير محدد')} · انتهى في ${escapeHtml(group.endDate||'غير محدد')}</div></div><span class="badge badge-info">${group.slots.length} محاضرات محفوظة</span></summary><div style="padding:14px;display:grid;gap:13px">${group.batches.map((batch,batchIndex)=>{const slots=group.slots.filter(slot=>(slot.batch||'جدول عام')===batch).sort((a,b)=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day)||String(a.timeStart||'').localeCompare(String(b.timeStart||''))),accent=SLOT_COLORS[batchIndex%SLOT_COLORS.length];return `<section style="border:1px solid var(--border);border-radius:12px;overflow:hidden"><div style="background:${accent};color:#fff;padding:10px 13px;font-weight:850">${escapeHtml(batch)}</div><div class="table-wrap"><table style="font-size:11px"><thead><tr><th>اليوم</th><th>الموعد</th><th>المقرر</th><th>المحاضر</th><th>الرابط المرجعي</th></tr></thead><tbody>${slots.map(slot=>`<tr><td><strong>${escapeHtml(slot.day||'—')}</strong></td><td dir="ltr">${escapeHtml(slot.timeStart||'—')} - ${escapeHtml(slot.timeEnd||'—')}</td><td>${escapeHtml(slot.subject||'—')}</td><td>${escapeHtml(slot.lecturer||'غير محدد')}</td><td>${getScheduleMeetingLink(slot.room)}</td></tr>`).join('')}</tbody></table></div></section>`;}).join('')}</div></details>`).join('')}</div>`;
 }
 function toggleStudentPortalGradeReviewSubject(){
   const isGradeReview=document.getElementById('studentPortalRequestType')?.value==='grade_review';
