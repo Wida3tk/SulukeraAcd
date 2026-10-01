@@ -667,6 +667,7 @@ tr:hover td{background:#f8faff;}
             <button class="btn btn-sm" id="scheduleArchiveTab" onclick="switchScheduleTermView('archive')">فصول منتهية</button>
           </div>
           <div id="scheduleCurrentView">
+          <div class="alert alert-info" style="margin-bottom:1rem"><strong>الفصل الحالي:</strong> من 04 أكتوبر 2026 إلى 05 نوفمبر 2026. الجداول الظاهرة هنا فقط هي الجداول النشطة لهذا الفصل.</div>
           <div class="card card-accent">
             <div class="card-title">📅 إدارة الجدول الأسبوعي</div>
             <div class="alert alert-info">أضف المحاضرات الأسبوعية — ستظهر للطلاب والمحاضرين في student.html</div>
@@ -1445,7 +1446,7 @@ async function loadAllFromFirebase(){
 
 async function ensureOctober2026AcademicFoundation(root){
   if(currentUser?.role!=='admin')return false;
-  const startDate='2026-10-04',previousEndDate='2026-10-03';
+  const startDate='2026-10-04',endDate='2026-11-05',previousStartDate='2026-08-23',previousEndDate='2026-09-24';
   const coursesForSemester=number=>FIXED_COURSES.slice((number-1)*3,number*3);
   const liveStudents=root.students||{},liveSubjects=root.subjects||{},liveSemesters=root.semesters||{},liveEnrollments=root.enrollments||{},updates={};
   const batchNames=[...new Set(Object.values(liveStudents).map(student=>String(student?.batch||'').trim()).filter(Boolean))];
@@ -1469,22 +1470,29 @@ async function ensureOctober2026AcademicFoundation(root){
         existingPairs.add(`${studentKey}|${offeringKey}`);
       });
     });
-    const oldSemester=liveSemesters[semesterKey]||{},semesterSubjects=[...new Set([...(oldSemester.subjects||[]),...semesterSubjectKeys])],nextSemester={...oldSemester,name:`${batch} — الفصل ${semesterNo} — أكتوبر 2026`,startDate,batches:[batch],subjects:semesterSubjects,status:'active'};
+    const oldSemester=liveSemesters[semesterKey]||{},semesterSubjects=[...new Set([...(oldSemester.subjects||[]),...semesterSubjectKeys])],nextSemester={...oldSemester,name:`${batch} — الفصل ${semesterNo} — أكتوبر 2026`,startDate,endDate,batches:[batch],subjects:semesterSubjects,status:'active'};
     if(JSON.stringify(oldSemester)!==JSON.stringify(nextSemester))updates[`semesters/${semesterKey}`]=nextSemester;
+    const archivedSlots=Object.entries(root.schedule?.weekly||{}).filter(([,slot])=>sameBatchName(slot.batch,batch)&&!coursesForSemester(semesterNo).some(course=>slot.subjectKey===offeringKeyFor(batch,course.key)||normalizeLegacyText(slot.subject)===normalizeLegacyText(course.name)));
+    if(archivedSlots.length){
+      const archiveSemesterKey=`sem_2026_08_${cohort}`,oldArchive=liveSemesters[archiveSemesterKey]||{},archiveSubjectKeys=[...new Set(archivedSlots.map(([,slot])=>slot.subjectKey).filter(Boolean))],previousSemesterNo=semesterNo-1,archiveSemester={...oldArchive,name:`${batch} — الفصل ${previousSemesterNo} — أغسطس 2026`,startDate:previousStartDate,endDate:previousEndDate,batches:[batch],subjects:archiveSubjectKeys,status:'inactive'};
+      if(JSON.stringify(oldArchive)!==JSON.stringify(archiveSemester))updates[`semesters/${archiveSemesterKey}`]=archiveSemester;
+    }
   });
   Object.entries(liveSemesters).forEach(([key,semester])=>{if(key.startsWith('sem_2026_10_')||semester.status!=='active'||!(semester.batches||[]).some(batch=>cohorts.some(item=>sameBatchName(item.batch,batch))))return;updates[`semesters/${key}/status`]='inactive';if(!semester.endDate)updates[`semesters/${key}/endDate`]=previousEndDate;});
   Object.entries(root.schedule?.weekly||{}).forEach(([key,slot])=>{
-    const cohort=cohorts.find(item=>sameBatchName(item.batch,slot.batch));if(!cohort||String(slot.termStartDate||'')>=startDate)return;
-    const previousSemester=Object.entries(liveSemesters).filter(([semesterKey,semester])=>!semesterKey.startsWith('sem_2026_10_')&&(semester.batches||[]).some(batch=>sameBatchName(batch,slot.batch))).sort(([,a],[,b])=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0];
+    const cohort=cohorts.find(item=>sameBatchName(item.batch,slot.batch));if(!cohort)return;
+    const currentCourses=coursesForSemester(cohort.semesterNo),isCurrentCourse=currentCourses.some(course=>slot.subjectKey===offeringKeyFor(cohort.batch,course.key)||normalizeLegacyText(slot.subject)===normalizeLegacyText(course.name));
+    if(isCurrentCourse&&String(slot.termStartDate||'')>=startDate)return;
+    const archiveSemesterKey=`sem_2026_08_${cohort.cohort}`;
     if(slot.active!==false)updates[`schedule/weekly/${key}/active`]=false;
     if(!slot.archivedAt)updates[`schedule/weekly/${key}/archivedAt`]=new Date().toISOString();
     if(!slot.archiveReason)updates[`schedule/weekly/${key}/archiveReason`]='انتهاء الفصل السابق قبل 4 أكتوبر 2026';
-    if(!slot.semesterKey&&previousSemester)updates[`schedule/weekly/${key}/semesterKey`]=previousSemester[0];
-    if(!slot.termStartDate)updates[`schedule/weekly/${key}/termStartDate`]=previousSemester?.[1]?.startDate||'';
-    if(!slot.termEndDate)updates[`schedule/weekly/${key}/termEndDate`]=previousSemester?.[1]?.endDate||previousEndDate;
+    if(slot.semesterKey!==archiveSemesterKey)updates[`schedule/weekly/${key}/semesterKey`]=archiveSemesterKey;
+    if(slot.termStartDate!==previousStartDate)updates[`schedule/weekly/${key}/termStartDate`]=previousStartDate;
+    if(slot.termEndDate!==previousEndDate)updates[`schedule/weekly/${key}/termEndDate`]=previousEndDate;
   });
   if(!Object.keys(updates).length)return false;
-  updates['systemMigrations/october2026AcademicFoundation']={startDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,q1Semester:5,q2Semester:3,q3Semester:3,coursesPerBatch:3,noufAssigned:!!noufUsername};
+  updates['systemMigrations/october2026AcademicFoundation']={startDate,endDate,previousStartDate,previousEndDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,q1Semester:5,q2Semester:3,q3Semester:3,coursesPerBatch:3,noufAssigned:!!noufUsername};
   await fbRef('/').update(updates);
   Object.entries(updates).forEach(([path,value])=>{
     const [collection,key,field]=path.split('/');
