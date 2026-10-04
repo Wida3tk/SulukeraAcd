@@ -1437,14 +1437,20 @@ async function loadAllFromFirebase(){
       });
     }
 
-    await ensureOctober2026AcademicFoundation(root);
-    await repairAmbiguousAbaPlanTypes();
+    let maintenanceFailed=false;
+    try{
+      await ensureOctober2026AcademicFoundation(root);
+      await repairAmbiguousAbaPlanTypes();
+    }catch(maintenanceError){
+      maintenanceFailed=true;
+      console.error('Academic maintenance error:',maintenanceError);
+    }
     showLoader(false);
-    showToast('✅ تم تحميل البيانات من Firebase');
+    showToast(maintenanceFailed?'⚠️ تم تحميل البيانات، لكن تعذر إكمال تحديث الإعدادات الأكاديمية':'✅ تم تحميل البيانات من Firebase');
   } catch(e){
     console.error('Firebase load error:',e);
     showLoader(false);
-    showToast('⚠️ تعذر الاتصال بـ Firebase');
+    showToast(String(e?.code||e?.message||'').toLowerCase().includes('permission')?'⚠️ تعذر تحميل البيانات بسبب صلاحيات الحساب':'⚠️ تعذر تحميل البيانات من Firebase؛ تحققي من الاتصال ثم أعيدي المحاولة');
   }
 }
 
@@ -1495,7 +1501,7 @@ async function ensureOctober2026AcademicFoundation(root){
     if(slot.termEndDate!==previousEndDate)updates[`schedule/weekly/${key}/termEndDate`]=previousEndDate;
   });
   if(!Object.keys(updates).length)return false;
-  updates['systemMigrations/october2026AcademicFoundation']={startDate,endDate,previousStartDate,previousEndDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,q1Semester:5,q2Semester:3,q3Semester:3,coursesPerBatch:3,noufAssigned:!!noufUsername};
+  updates['settings/systemMigrations/october2026AcademicFoundation']={startDate,endDate,previousStartDate,previousEndDate,preparedAt:new Date().toISOString(),preparedBy:currentUser.username||currentUser.id||'admin',q1Batch,q2Batch,q3Batch,q1Semester:5,q2Semester:3,q3Semester:3,coursesPerBatch:3,noufAssigned:!!noufUsername};
   await fbRef('/').update(updates);
   Object.entries(updates).forEach(([path,value])=>{
     const [collection,key,field]=path.split('/');
