@@ -105,6 +105,21 @@ const fixtures = () => {
   };
   return { sql, call, config, records };
 };
+test("current semester excludes unassigned courses and templates survive a new batch", async () => {
+  const f = fixtures();
+  f.records.subjects.course.courseKey = "shared-course";
+  f.records.subjects.unassigned = {...f.records.subjects.course};
+  f.records.semesters.current = {startDate:"2026-10-04",endDate:"2026-11-05",batches:["Q2-26"],subjects:["course"],status:"active"};
+  const list = (await f.call("admin", "")).data;
+  assert.deepEqual(list.subjects.map(s=>s.key), ["course"]);
+  await f.call("admin", "/lesson", f.config);
+  f.records.subjects.nextBatch = {...f.records.subjects.course,batch:"Q3-26"};
+  f.records.semesters.current.batches.push("Q3-26");
+  f.records.semesters.current.subjects.push("nextBatch");
+  const next = (await f.call("admin", "")).data;
+  assert.deepEqual(next.templates[0].questions,f.config.questions);
+  assert.equal(next.lessons.some(l=>l.subject_key==="nextBatch"),false);
+});
 test("homework score and attendance boundaries", () => {
   assert.equal(gradeHomework([{ correct: 0 }, { correct: 1 }], [0, 2], 5), 2.5);
   assert.equal(attendanceGrade(79.99, 5), null);

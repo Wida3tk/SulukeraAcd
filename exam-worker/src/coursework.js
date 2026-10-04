@@ -30,13 +30,17 @@ function isProfessional(s) {
     String(s?.program || "").includes("السلوك التنظيمي")
   );
 }
-function isCurrent(subject, semesters) {
-  const term = semesters?.[subject.semesterKey],
+function isCurrent(subject, semesters, key) {
+  const todaySaudi = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  const currentTerms = Object.entries(semesters || {}).filter(([,t]) => t.startDate && t.endDate && t.startDate <= todaySaudi && t.endDate >= todaySaudi && !["inactive","finished","completed","archived"].includes(t.status));
+  const matching = currentTerms.find(([k,t]) => (k === subject.semesterKey || (t.batches || []).includes(subject.batch)) && (t.subjects || []).includes(key));
+  if (currentTerms.length && !matching) return false;
+  const term = matching?.[1] || semesters?.[subject.semesterKey],
     today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }),
-    start = subject.startDate || term?.startDate,
-    end = subject.endDate || term?.endDate;
+    start = term?.startDate || subject.startDate,
+    end = term?.endDate || subject.endDate;
   return (
-    (!start || start <= today) &&
+    !!start && !!end && (start <= today) &&
     (!end || end >= today) &&
     !["inactive", "finished", "completed", "archived"].includes(term?.status)
   );
@@ -246,7 +250,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       data: {
         subjects: Object.entries(s.subjects)
           .filter(
-            ([k, v]) => s.allowed.includes(k) && isCurrent(v, s.semesters),
+            ([k, v]) => s.allowed.includes(k) && isCurrent(v, s.semesters, k),
           )
           .map(([key, v]) => ({ key, ...v })),
         lessons: lessons.map((l) => {
@@ -263,6 +267,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
         }),
         maxHomework: Number(s.settings.hw) || 5,
         maxAttendance: Number(s.settings.attend) || 5,
+        templates: s.role === "admin" ? (await env.DB.prepare("SELECT * FROM homework_templates").all()).results.map(t => ({courseKey:t.course_key,week:t.week,questions:JSON.parse(t.questions_json)})) : [],
       },
     };
   }
@@ -335,6 +340,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
         new Date().toISOString(),
       )
       .run();
+    const courseKey = s.subjects[b.subjectKey].courseKey;
+    if (courseKey) await env.DB.prepare("INSERT INTO homework_templates VALUES (?,?,?,?) ON CONFLICT(course_key,week) DO UPDATE SET questions_json=excluded.questions_json,updated_at=excluded.updated_at").bind(courseKey,b.week,JSON.stringify(qs),new Date().toISOString()).run();
     return { data: { saved: true, id } };
   }
   if (path === "/coursework/questions" && request.method === "POST") {

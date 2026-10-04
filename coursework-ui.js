@@ -5,6 +5,7 @@ const CW_REFLECTION_QUESTIONS = [
   "ما النقطة التي تحتاج إلى توضيح أو ترغب بمناقشتها؟",
 ];
 let cwData = null,
+  cwSelectedSubject = "",
   cwReport = null,
   cwPreview = null,
   cwActiveLesson = null,
@@ -65,7 +66,7 @@ async function renderAcademicCoursework() {
       admin = role === "admin";
     host.innerHTML = `<section class="card" style="background:linear-gradient(135deg,#071b4d,#1244f3);color:white"><h2>${role === "student" ? "مقرراتي ومحاضراتي" : "المحاضرات والواجبات"}</h2><p>${role === "student" ? "تابع محاضرات الفصل، حل واجب كل محاضرة، وراجع نتيجة مشاركتك." : "إعداد الواجبات، متابعة المحاولات، ومراجعة الحضور وتعويضه."}</p></section>${role !== "student" ? '<button class="btn" onclick="cwRetrySync()">إعادة مزامنة الدرجات المعلقة</button>' : ""}${
       cwData.subjects.length
-        ? cwData.subjects
+        ? cwData.subjects.filter(subject => role === "student" || subject.key === cwSelectedSubject)
             .map(
               (subject) =>
                 `<section class="card" style="margin-top:16px"><h3>${cwEscape(subject.name)}</h3><div style="color:#718096;font-size:12px">${cwEscape(subject.batch)}</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:15px">${[
@@ -90,6 +91,7 @@ async function renderAcademicCoursework() {
             .join("")
         : '<div class="card"><div class="empty">لا توجد مقررات حالية مرتبطة بالحساب.</div></div>'
     }`;
+    if (role !== "student") host.firstElementChild.insertAdjacentHTML("afterend", `<section class="card" style="margin-top:16px"><div class="field"><label>اختر المقرر المتاح هذا الفصل</label><select onchange="cwSelectedSubject=this.value;renderAcademicCoursework()"><option value="">— اختر المقرر —</option>${cwData.subjects.map(s=>`<option value="${cwEscape(s.key)}" ${s.key===cwSelectedSubject?'selected':''}>${cwEscape(s.name)} · ${cwEscape(s.batch)}</option>`).join('')}</select></div><p>تظهر مقررات الفصل الحالي المعتمدة فقط. اختر مقررًا لعرض محاضراته وواجباته.</p></section>`);
   } catch (e) {
     host.innerHTML = `<div class="card"><div class="alert alert-warn">تعذر تحميل الواجبات. ${cwEscape(e.message)}</div><button class="btn" onclick="renderAcademicCoursework()">إعادة المحاولة</button></div>`;
   }
@@ -99,7 +101,7 @@ function cwEditLesson(subjectKey, week) {
       cwData.lessons.find(
         (x) => x.subject_key === subjectKey && x.week === week,
       ) || {},
-    qs = l.questions || [{ prompt: "", choices: ["", "", "", ""], correct: 0 }];
+    qs = l.questions || cwData.templates?.find(t=>t.courseKey===cwData.subjects.find(s=>s.key===subjectKey)?.courseKey && t.week===week)?.questions || [{ prompt: "", choices: ["", "", "", ""], correct: 0 }];
   cwHost().innerHTML = `<section class="card"><h3>إعداد المحاضرة ${week} والواجب</h3><div class="field"><label>العنوان</label><input id="cwTitle" value="${cwEscape(l.title || `المحاضرة ${week}`)}"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="field"><label>فتح الواجب — السعودية</label><input id="cwOpens" type="datetime-local" value="${cwLocal(l.opens_at)}"></div><div class="field"><label>إغلاق الواجب — السعودية</label><input id="cwCloses" type="datetime-local" value="${cwLocal(l.closes_at)}"></div></div>${[
     ["Zoom", "رابط Zoom", l.zoom_url],
     ["Recording", "رابط التسجيل", l.recording_url],

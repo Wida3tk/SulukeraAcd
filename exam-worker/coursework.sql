@@ -26,3 +26,7 @@ CREATE TABLE IF NOT EXISTS coursework_sync (
  updated_at TEXT NOT NULL, PRIMARY KEY(lesson_id,student_key)
 );
 CREATE INDEX IF NOT EXISTS homework_student_lesson ON homework_attempts(student_key,lesson_id);
+CREATE TABLE IF NOT EXISTS homework_templates (
+ course_key TEXT NOT NULL, week INTEGER NOT NULL, questions_json TEXT NOT NULL,
+ updated_at TEXT NOT NULL, PRIMARY KEY(course_key,week)
+);
