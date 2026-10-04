@@ -1410,7 +1410,7 @@ async function loadAllFromFirebase(){
     enrollmentsData.forEach(enrollment=>{
       const si=subjects.findIndex(s=>s._fbKey===enrollment.subjectKey);
       const stdIdx=students.findIndex(s=>s._fbKey===enrollment.studentKey);
-      if(si>=0 && stdIdx>=0 && students[stdIdx].accountStatus!=='withdrawn' && !subjects[si].students.includes(stdIdx)){
+      if(si>=0 && stdIdx>=0 && (Number(subjects[si].semesterNo)<5||getExplicitStudentPlan(students[stdIdx])==='QBA'||!subjects[si].semesterNo) && students[stdIdx].accountStatus!=='withdrawn' && !subjects[si].students.includes(stdIdx)){
         subjects[si].students.push(stdIdx);
       }
     });
