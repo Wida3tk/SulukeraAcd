@@ -659,6 +659,7 @@ function getStudentPlanType(student){
   return trackPlan||packagePlan;
 }
 function isStudentEligibleForSubject(student,subject){
+  if(Number(subject?.semesterNo)>=5&&getStudentPlanType(student)!=='QBA')return false;
   if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
      !['course_04','course_05','course_06'].includes(subject?.courseKey)) return false;
   const eligible=Array.isArray(subject?.eligiblePlans)?subject.eligiblePlans:[];

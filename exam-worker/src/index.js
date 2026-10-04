@@ -790,7 +790,12 @@ async function studentContext(auth) {
     );
   if (professional?.status === "active")
     subjectKeys.add("professional_organizational_behavior_final");
+  const academicSubjects = await firebaseRead("subjects", auth.token);
+  if(String(student.planType || "").toUpperCase() !== "QBA") for(const subjectKey of subjectKeys) {
+    if(Number(academicSubjects?.[subjectKey]?.semesterNo)>=5) subjectKeys.delete(subjectKey);
+  }
   return { studentKey: auth.profile.studentKey, student, subjectKeys };
+ 
 }
 async function studentExams(env, auth) {
   const { studentKey, student, subjectKeys } = await studentContext(auth);

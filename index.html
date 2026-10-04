@@ -2181,6 +2181,7 @@ async function repairAmbiguousAbaPlanTypes(){
   if(currentUser?.role!=='admin')return;const updates={};students.forEach(student=>{const direct=String(student.planType||'').toUpperCase();if(!(direct.includes('QASP')&&direct.includes('QBA'))||!student._fbKey)return;const resolved=getExplicitStudentPlan(student);if(resolved){student.planType=resolved;updates[`students/${student._fbKey}/planType`]=resolved;}});if(Object.keys(updates).length)await fbRef().update(updates);
 }
 function isStudentExplicitlyEligibleForOffering(student,subject){
+  if(Number(subject?.semesterNo)>=5&&getExplicitStudentPlan(student)!=='QBA')return false;
   if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
      !['course_04','course_05','course_06'].includes(subject?.courseKey)) return false;
   const plan=getExplicitStudentPlan(student);
