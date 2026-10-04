@@ -132,6 +132,26 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(79.99,3),2);
   assert.equal(attendanceGrade(80,3),3);
 });
+test("shared Zoom file is approved independently per batch without zeroing unmatched students", async () => {
+  const f=fixtures();
+  f.records.subjects.second={...f.records.subjects.course,batch:'Q3-26'};
+  f.records.students.other={id:'SUL-2',batch:'Q3-26',planType:'QBA',accountStatus:'active'};
+  f.records.students.missing={id:'SUL-3',batch:'Q2-26',planType:'QBA',accountStatus:'active'};
+  f.records.enrollments.two={studentKey:'other',subjectKey:'second'};
+  f.records.enrollments.three={studentKey:'missing',subjectKey:'course'};
+  const one=(await f.call('admin','/lesson',f.config)).data.id;
+  const two=(await f.call('admin','/lesson',{...f.config,subjectKey:'second'})).data.id;
+  await f.call('admin','/attendance',{lessonId:one,sourceHash:'shared',rows:[{studentKey:'student',percent:90}],confirmedAbsentKeys:[]});
+  assert.equal(f.sql.prepare('SELECT COUNT(*) count FROM course_attendance').get().count,1);
+  await assert.rejects(f.call('admin','/attendance',{lessonId:one,sourceHash:'shared',rows:[{studentKey:'other',percent:0}]}),/INVALID_ATTENDANCE_ROW/);
+  await assert.rejects(f.call('admin','/attendance',{lessonId:one,sourceHash:'shared',rows:[{studentKey:'missing',percent:0,kind:'confirmed_absence'}]}),/ABSENCE_CONFIRMATION_REQUIRED/);
+  await f.call('admin','/attendance',{lessonId:two,sourceHash:'shared',rows:[{studentKey:'other',percent:80}],confirmedAbsentKeys:[]});
+  assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE lesson_id=?').get(one).percent,90);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) count FROM course_attendance WHERE student_key=?').get('missing').count,0);
+  const context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+  const groups=context.cwAttendanceReviewGroups([{studentKey:'student'},{studentKey:'',name:'unresolved'},{studentKey:'',excluded:true}],[{key:'student'},{key:'missing'}]);
+  assert.equal(groups.linked.length,1);assert.equal(groups.review.length,1);assert.equal(groups.excluded.length,1);assert.equal(groups.missing[0].key,'missing');
+});
 test("Zoom meeting duration is automatic; participant-only duration is not meeting duration", () => {
   const context={Date};vm.createContext(context);
   vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);

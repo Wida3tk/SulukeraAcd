@@ -589,7 +589,9 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       b.meeting.durationMinutes=(end-start)/60000;
     }
     const seen = new Set();
+    const confirmedAbsences=new Set(b.confirmedAbsentKeys||[]);
     for (const row of b.rows) {
+      if(row.kind==='confirmed_absence'&&(!confirmedAbsences.has(row.studentKey)||row.percent!==0))reject("ABSENCE_CONFIRMATION_REQUIRED");
       if (
         !eligible.has(row.studentKey) ||
         seen.has(row.studentKey) ||

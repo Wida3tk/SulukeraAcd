@@ -432,17 +432,25 @@ function cwClipIntervals(intervals,meeting){
   return intervals.map(([a,b])=>[Math.max(a,start),Math.min(b,end)]).filter(([a,b])=>b>a);
 }
 function cwRenderAttendancePreview() {
-  document.getElementById("cwAttendancePreview").innerHTML =
-    `<div style="border:1px solid #dbe5ff;padding:14px;border-radius:14px"><p><strong>مدة الاجتماع الفعلية: ${Math.round(cwPreview.meeting.durationMinutes*100)/100} دقيقة</strong><br>من ${cwDate(cwPreview.meeting.start)} إلى ${cwDate(cwPreview.meeting.end)} · مستخرجة تلقائيًا من ملخص Zoom</p><p>راجعي مطابقة الأسماء. اجمعي الأسماء المختلفة للطالب نفسه باختيار حسابه. سيُسجل الطلاب غير الموجودين في السجل بنسبة 0 بعد الاعتماد.</p>${cwPreview.rows.map((row, i) => `<div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap"><span>${cwEscape(row.name)} (${Math.round(cwUnionMinutes(cwClipIntervals(row.intervals,cwPreview.meeting)))} دقيقة)</span><select onchange="cwPreview.rows[${i}].studentKey=this.value"><option value="">استبعاد / لم يتم الربط</option>${cwReport.students.map((s) => `<option value="${s.key}" ${s.key === row.studentKey ? "selected" : ""}>${cwEscape(cwName(s))}</option>`).join("")}</select></div>`).join("")}<button class="btn btn-primary" onclick="cwApproveAttendance(this)">اعتماد الحضور ودرجاته</button></div>`;
+  const groups=cwAttendanceReviewGroups(cwPreview.rows,cwReport.students);
+  const renderRows=list=>list.map(({row,i})=>`<div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap"><span>${cwEscape(row.name)} (${Math.round(cwUnionMinutes(cwClipIntervals(row.intervals,cwPreview.meeting)))} دقيقة)</span><select onchange="cwSetAttendanceMatch(${i},this.value)"><option value="">بحاجة للمراجعة — دون تغيير درجات</option><option value="__exclude" ${row.excluded?'selected':''}>خارج الدفعة / استبعاد — لن يتأثر</option>${cwReport.students.map(s=>`<option value="${cwEscape(s.key)}" ${s.key===row.studentKey?'selected':''}>${cwEscape(cwName(s))}</option>`).join('')}</select></div>`).join('')||'<p>لا توجد أسماء.</p>';
+  document.getElementById('cwAttendancePreview').innerHTML=`<section style="border:1px solid #dbe5ff;padding:14px;border-radius:14px"><h3>اعتماد حضور دفعة ${cwEscape(cwData.subjects.find(s=>s.key===cwReport.lesson.subject_key)?.batch||'المقرر المختار')}</h3><p>مدة الاجتماع: ${Math.round(cwPreview.meeting.durationMinutes*100)/100} دقيقة · من ${cwDate(cwPreview.meeting.start)} إلى ${cwDate(cwPreview.meeting.end)}</p><p>يمكن استيراد الملف نفسه للدفعة الأخرى. لن تتغير درجات أي حساب خارج قائمة هذه الدفعة، ولا يُرصد الغياب تلقائيًا.</p><h4>حضور مرتبط (${groups.linked.length})</h4>${renderRows(groups.linked)}<h4>أسماء بحاجة للمراجعة (${groups.review.length})</h4>${renderRows(groups.review)}<h4>أسماء خارج الدفعة / مستبعدة (${groups.excluded.length})</h4>${renderRows(groups.excluded)}<h4>طلاب الدفعة غير المرتبطين بالسجل (${groups.missing.length})</h4><p>تبقى درجاتهم الحالية كما هي. لرصد الغياب، راجعي كل الأسماء غير المرتبطة أولًا، ثم اختاري الغائبين وأكّدي اكتمال السجل.</p>${groups.missing.map(s=>`<label style="display:block;margin:9px 0"><input type="checkbox" class="cw-confirm-absent" value="${cwEscape(s.key)}" ${groups.review.length?'disabled':''}> ${cwEscape(cwName(s))} — رصد غياب 0</label>`).join('')||'<p>جميع طلاب الدفعة مرتبطون بالسجل.</p>'}<label style="display:block;margin:14px 0"><input id="cwConfirmAbsence" type="checkbox" ${groups.review.length?'disabled':''}> راجعت المطابقة والسجل كامل لهذه الدفعة، وأعتمد غياب الأسماء التي اخترتها فقط</label><button class="btn btn-primary" onclick="cwApproveAttendance(this)">اعتماد حضور الدفعة المختارة فقط</button></section>`;
 }
+function cwAttendanceReviewGroups(rows,students){
+  const indexed=rows.map((row,i)=>({row,i})),linked=indexed.filter(x=>x.row.studentKey),review=indexed.filter(x=>!x.row.studentKey&&!x.row.excluded),excluded=indexed.filter(x=>!x.row.studentKey&&x.row.excluded),keys=new Set(linked.map(x=>x.row.studentKey));
+  return {linked,review,excluded,missing:students.filter(s=>!keys.has(s.key))};
+}
+function cwSetAttendanceMatch(i,value){cwPreview.rows[i].studentKey=value==='__exclude'?'':value;cwPreview.rows[i].excluded=value==='__exclude';cwRenderAttendancePreview();}
 async function cwApproveAttendance(button) {
   try {
     if(!cwPreview?.rows?.length)throw Error('استورد سجل الحضور وراجع المطابقة أولًا');
     if(!cwPreview.rows.some(row=>row.studentKey))throw Error('لم يتم ربط أي اسم بحساب طالب');
     button.disabled = true;
-    const groups = new Map(cwReport.students.map((s) => [s.key, []]));
+    const confirmedAbsentKeys=[...document.querySelectorAll('.cw-confirm-absent:checked')].map(el=>el.value);
+    if(confirmedAbsentKeys.length&&(!document.getElementById('cwConfirmAbsence')?.checked||cwPreview.rows.some(row=>!row.studentKey&&!row.excluded)))throw Error('راجعي جميع الأسماء وأكّدي اكتمال السجل قبل رصد الغياب');
+    const groups = new Map();
     for (const row of cwPreview.rows)
-      if (row.studentKey) groups.get(row.studentKey).push(...row.intervals);
+      if (row.studentKey) {if(!groups.has(row.studentKey))groups.set(row.studentKey,[]);groups.get(row.studentKey).push(...row.intervals);}
     const rows = [...groups].map(([studentKey, intervals]) => ({
       studentKey,
       percent: Math.min(
@@ -453,11 +461,13 @@ async function cwApproveAttendance(button) {
         ) / 100,
       ),
     }));
+    for(const studentKey of confirmedAbsentKeys)if(!groups.has(studentKey))rows.push({studentKey,percent:0,kind:'confirmed_absence'});
     const r = await cwApi("/attendance", {
       lessonId: cwActiveLesson,
       sourceHash: cwPreview.sourceHash,
       meeting:cwPreview.meeting,
       rows,
+      confirmedAbsentKeys,
     });
     cwNotify(
       `تم اعتماد ${r.count} سجل${r.pending ? ` · ${r.pending} درجات بانتظار المزامنة` : ""}`,
