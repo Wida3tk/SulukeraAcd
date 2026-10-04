@@ -1,4 +1,5 @@
 import { handleGraduationProject } from "./graduation-projects.js";
+import { handleCoursework } from "./coursework.js";
 const PROJECT_ID = "sulukeraacd";
 const FIREBASE_DB = "https://sulukeraacd-default-rtdb.firebaseio.com";
 const ALLOWED_ORIGINS = new Set([
@@ -224,7 +225,7 @@ async function firebaseAdminToken(env) {
     payload = base64Url(
       JSON.stringify({
         iss: account.client_email,
-        scope: "https://www.googleapis.com/auth/identitytoolkit",
+        scope: "https://www.googleapis.com/auth/identitytoolkit https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
         aud: "https://oauth2.googleapis.com/token",
         iat: now,
         exp: now + 3600,
@@ -1060,6 +1061,10 @@ export default {
       if (path === "/health")
         return reply(request, { ok: true, service: "sulukera-exams" });
       const auth = await authenticate(request);
+      const coursework = await handleCoursework(request, env, auth, path, {
+        firebaseRead, firebaseAdminToken, studentContext,
+      });
+      if (coursework) return reply(request, coursework.data);
       const graduation = await handleGraduationProject(request, env, auth, path, {
         firebaseRead,
         corsHeaders,

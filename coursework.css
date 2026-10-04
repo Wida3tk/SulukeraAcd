@@ -1,0 +1,13 @@
+#academicCourseworkContent .field,#mainContent .cw-field{margin:12px 0}
+#academicCourseworkContent input:not([type=radio]):not([type=file]),#academicCourseworkContent select,#academicCourseworkContent textarea,
+#mainContent [id^=cw] input:not([type=radio]):not([type=file]),#mainContent input[id^=cw],#mainContent select[id^=cw],#mainContent textarea[id^=cw],.cw-question-editor input.cw-choice,.cw-question-editor textarea{
+ box-sizing:border-box;max-width:100%;padding:11px 13px;border:1px solid #cad8f7;border-radius:10px;background:#fff;color:#153466;font:inherit;
+}
+#academicCourseworkContent .field input,#academicCourseworkContent .field select,#academicCourseworkContent .field textarea{width:100%}
+#academicCourseworkContent label{display:block;margin-bottom:7px;font-size:12px;font-weight:700}
+#academicCourseworkContent .card,#mainContent .cw-question-editor{overflow-wrap:anywhere}
+.cw-question-editor textarea{min-height:90px}
+#academicCourseworkContent textarea{min-height:110px;resize:vertical}
+#academicCourseworkContent button{font-family:inherit;cursor:pointer}
+#academicCourseworkContent button:disabled{opacity:.6;cursor:wait}
+@media(max-width:600px){#academicCourseworkContent .card{padding:15px}#academicCourseworkContent .field input{min-width:0}}

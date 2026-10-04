@@ -293,6 +293,7 @@ tr:hover td{background:#f8faff;}
 .sch-pc{padding:3px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:44px;}
 .sch-ps{border-radius:5px;padding:4px 6px;font-size:10px;color:white;height:100%;display:flex;flex-direction:column;justify-content:center;}
 </style>
+<link rel="stylesheet" href="coursework.css?v=20261004">
 </head>
 <body>
 
@@ -558,6 +559,7 @@ tr:hover td{background:#f8faff;}
       <div class="page" id="page-professionalstudents"><div id="professionalStudentsAdminContent"><div class="card card-accent"><div class="card-title">👥 طلاب البرنامج المهني</div><div class="alert alert-info">جاري تحميل القائمة...</div></div></div></div>
       <div class="page" id="page-professionalprogress"><div id="professionalProgressAdminContent"><div class="card card-accent"><div class="card-title">📊 تقدم المتدربين</div><div class="alert alert-info">جاري تحميل بيانات المتابعة...</div></div></div></div>
       <div class="page" id="page-graduationprojects"><div id="graduationProjectsAdminContent"><div class="card card-accent"><div class="card-title">🎓 مشاريع التخرج</div><div class="alert alert-info">جاري تحميل المشاريع...</div></div></div></div>
+      <div class="page" id="page-coursework"><div id="academicCourseworkContent"></div></div>
 
       <!-- BATCH-CENTRIC ACADEMIC PLANS -->
       <div class="page" id="page-batchplans">
@@ -2590,6 +2592,7 @@ const navConfig = {
     {id:'certificates',icon:'📄',label:'الإفادات التجريبية'},
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'exams',icon:'📝',label:'الاختبارات'},
+    {id:'coursework',icon:'📝',label:'المحاضرات والواجبات'},
     {id:'evaluations',icon:'📈',label:'التقييم'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'},
   ],
@@ -2678,6 +2681,7 @@ function updateStudentRequestsNavBadge(){
   if(count) item.insertAdjacentHTML('beforeend',`<span class="nav-count-badge" id="studentRequestsNavBadge">${count}</span>`);
 }
 const pageTitles={
+  coursework:'المحاضرات والواجبات',
   dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'المحاضرون والمستخدمون',
   grades:'إدخال الدرجات',reports:'التقارير الأكاديمية',programs:'البرامج والمسارات والدفعات',professionalprogram:'محتوى ومسارات البرنامج المهني',professionalprogress:'تقدم متدربي البرنامج المهني', batchplans:'الخطط الدراسية', graduationprojects:'مشاريع التخرج', alerts:'الطلبات والتنبيهات', schedule:'الجدول الأكاديمي', exams:'الاختبارات', evaluations:'التقييم ورضا الطلاب', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
@@ -2739,6 +2743,7 @@ function refreshPage(p) {
   if (p==='graduationprojects') renderGraduationProjectsAdmin();
   if (p==='schedule') renderScheduleAdmin();
   if (p==='exams') renderExamSchedulesAdmin();
+  if (p==='coursework')renderAcademicCoursework();
   if (p==='evaluations') loadExamEvaluationAnalytics();
   if (p==='semesters') renderSemestersPage();
   if (p==='alerts') renderAlertsPage();
@@ -8609,6 +8614,7 @@ async function cleanDuplicateStudents(){
 
 
 </script>
+<script src="coursework-ui.js?v=20261004"></script>
 </body>
 </html>
 

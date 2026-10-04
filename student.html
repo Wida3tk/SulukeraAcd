@@ -329,6 +329,7 @@ tr:hover td{background:#f8faff;}
 .secure-result{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-radius:15px;padding:15px 17px;margin-top:14px;border:1px solid}.secure-result-copy{font-size:12px;line-height:1.7}.secure-result-score{font-size:25px;font-weight:950;direction:ltr}.secure-result-high{background:#ecfdf3;border-color:#86d7a3;color:#126334}.secure-result-mid{background:#fff8e6;border-color:#efcd73;color:#7a5600}.secure-result-low{background:#fff0f1;border-color:#efadb4;color:#8d2430}
 @media(max-width:600px){.secure-exam-shell,.evaluation-shell{padding:14px;border-radius:16px}.secure-question{padding:16px}.secure-question-list{gap:18px}.evaluation-score{min-width:43px;padding:8px 10px}}
 </style>
+<link rel="stylesheet" href="coursework.css?v=20261004">
 </head>
 <body>
 
@@ -1120,6 +1121,7 @@ function renderStudentHomeTab(){
 }
 
 function renderStudentCoursesTab(){
+  return renderAcademicCoursework();
   const { st, mySubjects } = getCurrentStudentAcademicData();
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
@@ -1979,6 +1981,7 @@ async function uploadGraduationProject(groupId){const input=document.getElementB
 async function downloadStudentGraduationFile(id,name){try{const response=await fetch(`${EXAM_API_BASE}/graduation-project-files/${id}`,{headers:{Authorization:'Bearer '+await firebase.auth().currentUser.getIdToken()}});if(!response.ok)throw new Error();const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}catch{toast('⚠️ تعذر فتح الملف')}}
 function renderLecturerPortalTab(tab){
   currentAppTab = tab;
+  if(tab==='coursework')return renderAcademicCoursework();
   if(tab==='professional-teaching') return renderProfessionalLecturerPortal();
   if(tab==='lecturer-requests') return renderLecturerRequestsTab();
   if(tab==='home') return renderLecturerHomeTab();
@@ -2011,6 +2014,7 @@ function showLecturerView(){
     : [
       { id:'home', label:'🏠 الرئيسية' },
       { id:'courses', label:'📚 المقررات المسندة' },
+      { id:'coursework', label:'📝 الواجبات والحضور' },
       { id:'grades', label:'📊 سجل الدرجات' },
       { id:'lecturer-requests', label:'📝 طلباتي' },
       { id:'schedule', label:'📅 الجدول الأسبوعي' },
@@ -3017,5 +3021,6 @@ window.addEventListener('load', initFB);
 
 
 </script>
+<script src="coursework-ui.js?v=20261004"></script>
 </body>
 </html>
