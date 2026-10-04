@@ -1459,14 +1459,13 @@ async function ensureOctober2026AcademicFoundation(root){
   const existingPairs=new Set(Object.values(liveEnrollments).map(item=>`${item.studentKey}|${item.subjectKey}`));
   const cohorts=[{batch:q1Batch,cohort:'q1',semesterNo:5},{batch:q2Batch,cohort:'q2',semesterNo:3},{batch:q3Batch,cohort:'q3',semesterNo:3}].filter(item=>item.batch);
   cohorts.forEach(({batch,cohort,semesterNo})=>{
-    if(cohort==='q1')Object.entries(liveStudents).forEach(([studentKey,student])=>{if(student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,batch)&&student.planType!=='QBA')updates[`students/${studentKey}/planType`]='QBA';});
     const semesterKey=`sem_2026_10_${cohort}`,semesterSubjectKeys=[];
     coursesForSemester(semesterNo).forEach(course=>{
       const offeringKey=offeringKeyFor(batch,course.key),oldOffering=liveSubjects[offeringKey]||{},isNoufCourse=course.key==='course_07',offering={...oldOffering,name:course.name,courseKey:course.key,batch,startDate,endDate:'',semesterKey,semesterNo,eligiblePlans:course.eligiblePlans,lecturerUserId:oldOffering.lecturerUserId||(isNoufCourse?noufUsername:'')||null,sourceSubjectKey:oldOffering.sourceSubjectKey||''};
       semesterSubjectKeys.push(offeringKey);
       if(JSON.stringify(oldOffering)!==JSON.stringify(offering))updates[`subjects/${offeringKey}`]=offering;
       Object.entries(liveStudents).forEach(([studentKey,student])=>{
-        if(student.accountStatus==='withdrawn'||!sameBatchName(student.batch,batch)||existingPairs.has(`${studentKey}|${offeringKey}`))return;
+        if(student.accountStatus==='withdrawn'||!sameBatchName(student.batch,batch)||!course.eligiblePlans.includes(getExplicitStudentPlan(student))||existingPairs.has(`${studentKey}|${offeringKey}`))return;
         const enrollmentKey=(`enr_${studentKey}_${offeringKey}`).replace(/[.#$[\]]/g,'_');
         updates[`enrollments/${enrollmentKey}`]={studentKey,subjectKey:offeringKey,sourceType:'october_2026_foundation',status:'active'};
         existingPairs.add(`${studentKey}|${offeringKey}`);

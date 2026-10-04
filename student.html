@@ -535,26 +535,26 @@ const PORTAL_BATCH_SEMESTERS = {
   'Q1-26': {
     code: 'Q1-26',
     batchLabel: 'الدفعة العاشرة',
-    name: 'الفصل الرابع',
-    semesterNo: 4,
-    startDate: '2026/08/23',
-    endDate: '2026/09/19'
+    name: 'الفصل الخامس',
+    semesterNo: 5,
+    startDate: '2026-10-04',
+    endDate: '2026-11-05'
   },
   'Q2-26': {
     code: 'Q2-26',
     batchLabel: 'الدفعة الحادية عشرة',
-    name: 'الفصل الثاني',
-    semesterNo: 2,
-    startDate: '2026/08/23',
-    endDate: '2026/09/19'
+    name: 'الفصل الثالث',
+    semesterNo: 3,
+    startDate: '2026-10-04',
+    endDate: '2026-11-05'
   },
   'Q3-26': {
     code: 'Q3-26',
     batchLabel: 'الدفعة الثانية عشرة',
-    name: 'الفصل الأول',
-    semesterNo: 1,
-    startDate: '2026/08/23',
-    endDate: '2026/09/19'
+    name: 'الفصل الثالث',
+    semesterNo: 3,
+    startDate: '2026-10-04',
+    endDate: '2026-11-05'
   }
 };
 const PORTAL_FALLBACK_WEEKLY = {
@@ -998,7 +998,9 @@ function renderStudentHomeTab(){
     <div class="student-header">
       <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
       <div style="flex:1">
-        <div style="font-size:22px;font-weight:800">حياك الله، ${fullName}</div>
+        <div style="font-size:22px;font-weight:800">أهلًا بكم وعودًا حميدًا 🌿</div>
+        <div style="margin-top:8px;font-size:14px">أهلًا ${escapeHtml(fullName)}</div>
+        <div style="margin-top:10px;font-size:13px;line-height:1.9;max-width:760px">سعداء بعودتكم إلى سلوكيرا وبداية فصل جديد معكم. نكمل معًا رحلة التعلّم والإنجاز، ونتمنى لكم فصلًا مليئًا بالتقدم والتوفيق.</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:3px">${st.id} · ${st.batch||'—'} · ${st.planType||'—'}</div>
         <div style="margin-top:8px;font-size:13px;color:var(--neon)">${motivation}</div>
       </div>
@@ -1543,10 +1545,13 @@ function getPortalBatchProfile(batch){
   return PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()] || null;
 }
 function getCurrentSemesterForBatch(batch){
-  const liveSemester = Object.values(dbData.semesters||{}).find(semester=>
+  if(sameBatchName(batch,currentUser?.data?.batch)&&/^Q1(?:-|$)/i.test(String(batch||'').trim())&&getStudentPlanType(currentUser?.data)==='QASP-S')return {name:'مرحلة مشروع التخرج',semesterNo:4,startDate:'',endDate:'',batches:[batch],status:'project'};
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
+  const liveSemester = Object.values(dbData.semesters||{}).filter(semester=>
     (semester.status==='active' || semester.status==='current') &&
+    (!semester.endDate||String(semester.endDate).replace(/\//g,'-')>=today) &&
     (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
-  );
+  ).sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0];
   if(liveSemester) return liveSemester;
   const fallback = getPortalBatchProfile(batch);
   return fallback ? {
