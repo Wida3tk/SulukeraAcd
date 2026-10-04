@@ -44,3 +44,8 @@ CREATE TABLE IF NOT EXISTS assessment_templates (
  attendance_max REAL NOT NULL, discussion_max REAL NOT NULL, discussion_prompt TEXT NOT NULL,
  PRIMARY KEY(course_key,week)
 );
+CREATE TABLE IF NOT EXISTS attendance_meeting_imports (
+ lesson_id TEXT NOT NULL, source_hash TEXT NOT NULL, starts_at TEXT NOT NULL,
+ ends_at TEXT NOT NULL, duration_minutes REAL NOT NULL, approved_by TEXT NOT NULL,
+ approved_at TEXT NOT NULL, PRIMARY KEY(lesson_id,source_hash)
+);

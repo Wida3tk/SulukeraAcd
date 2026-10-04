@@ -333,6 +333,8 @@ async function cwPreviewZoom(file) {
         row.some((cell) => /^name(?: \(original name\))?$/i.test(cell.trim())),
       );
     if (headerIndex < 0) throw Error("لم يتم العثور على أعمدة سجل Zoom");
+    const meeting=cwZoomMeetingPeriod(rows.slice(0,headerIndex));
+    if(!meeting)throw Error('الملف يحتوي سجل المشاركين فقط، ولا يحدد مدة الاجتماع الفعلية. صدّري تقرير Zoom الذي يتضمن ملخص الاجتماع وبدايته ونهايته؛ لم يُعدّل أي حضور.');
     const headers = rows[headerIndex].map((x) => x.trim().toLowerCase()),
       col = (names) => names.map((x) => headers.indexOf(x)).find((i) => i >= 0),
       nameCol = col(["name (original name)", "name"]),
@@ -350,8 +352,8 @@ async function cwPreviewZoom(file) {
       if (!name) continue;
       const email = row[emailCol]?.trim() || "",
         id = email.toLowerCase() || cwNormalize(name),
-        start = Date.parse(row[joinCol]),
-        end = Date.parse(row[leaveCol]);
+        start = cwZoomTimestamp(row[joinCol]),
+        end = cwZoomTimestamp(row[leaveCol]);
       if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
         continue;
       const person = people.get(id) || { name, email, intervals: [] };
@@ -360,6 +362,7 @@ async function cwPreviewZoom(file) {
     }
     if(!people.size)throw Error('لا توجد فترات حضور صالحة في الملف؛ لم يتم تعديل أي حضور');
     cwPreview = {
+      meeting,
       sourceHash: Array.from(
         new Uint8Array(
           await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
@@ -401,9 +404,35 @@ function cwUnionMinutes(intervals) {
   if (last) total += last[1] - last[0];
   return total / 60000;
 }
+function cwZoomTimestamp(value){
+  const v=String(value||'').trim();
+  if(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(v))return Date.parse(v);
+  const us=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if(us){let h=Number(us[4]);if(us[7])h=h%12+(/PM/i.test(us[7])?12:0);return Date.parse(`${us[3]}-${us[1].padStart(2,'0')}-${us[2].padStart(2,'0')}T${String(h).padStart(2,'0')}:${us[5]}:${us[6]||'00'}+03:00`);}
+  if(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?$/.test(v))return Date.parse(v.replace(' ','T')+(v.length===16?':00':'')+'+03:00');
+  return NaN;
+}
+function cwZoomMeetingPeriod(rows){
+  const norm=v=>String(v||'').trim().toLowerCase().replace(/[\s_-]+/g,'');
+  const startNames=['starttime','meetingstarttime','actualstarttime','وقتالبداية','بدايةالاجتماع'],endNames=['endtime','meetingendtime','actualendtime','وقتالنهاية','نهايةالاجتماع'];
+  for(let i=0;i<rows.length-1;i++){
+    const header=rows[i].map(norm),startCol=header.findIndex(x=>startNames.includes(x)),endCol=header.findIndex(x=>endNames.includes(x));
+    const durationCol=header.findIndex(x=>['duration','duration(minutes)','durationminutes','مدةالاجتماع'].includes(x));
+    if(startCol<0||(endCol<0&&durationCol<0))continue;
+    const start=cwZoomTimestamp(rows[i+1][startCol]);
+    const minutes=Number(rows[i+1][durationCol]);
+    const end=endCol>=0?cwZoomTimestamp(rows[i+1][endCol]):start+minutes*60000;
+    if(Number.isFinite(start)&&Number.isFinite(end)&&end>start&&end-start<=86400000)return {start:new Date(start).toISOString(),end:new Date(end).toISOString(),durationMinutes:(end-start)/60000,source:'zoom_meeting_summary'};
+  }
+  return null;
+}
+function cwClipIntervals(intervals,meeting){
+  const start=Date.parse(meeting.start),end=Date.parse(meeting.end);
+  return intervals.map(([a,b])=>[Math.max(a,start),Math.min(b,end)]).filter(([a,b])=>b>a);
+}
 function cwRenderAttendancePreview() {
   document.getElementById("cwAttendancePreview").innerHTML =
-    `<div style="border:1px solid #dbe5ff;padding:14px;border-radius:14px"><p>راجعي مطابقة الأسماء. اجمعي الأسماء المختلفة للطالب نفسه باختيار حسابه. سيُسجل الطلاب غير الموجودين في السجل بنسبة 0 بعد الاعتماد.</p>${cwPreview.rows.map((row, i) => `<div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap"><span>${cwEscape(row.name)} (${Math.round(cwUnionMinutes(row.intervals))} دقيقة)</span><select onchange="cwPreview.rows[${i}].studentKey=this.value"><option value="">استبعاد / لم يتم الربط</option>${cwReport.students.map((s) => `<option value="${s.key}" ${s.key === row.studentKey ? "selected" : ""}>${cwEscape(cwName(s))}</option>`).join("")}</select></div>`).join("")}<button class="btn btn-primary" onclick="cwApproveAttendance(this)">اعتماد الحضور ودرجاته</button></div>`;
+    `<div style="border:1px solid #dbe5ff;padding:14px;border-radius:14px"><p><strong>مدة الاجتماع الفعلية: ${Math.round(cwPreview.meeting.durationMinutes*100)/100} دقيقة</strong><br>من ${cwDate(cwPreview.meeting.start)} إلى ${cwDate(cwPreview.meeting.end)} · مستخرجة تلقائيًا من ملخص Zoom</p><p>راجعي مطابقة الأسماء. اجمعي الأسماء المختلفة للطالب نفسه باختيار حسابه. سيُسجل الطلاب غير الموجودين في السجل بنسبة 0 بعد الاعتماد.</p>${cwPreview.rows.map((row, i) => `<div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap"><span>${cwEscape(row.name)} (${Math.round(cwUnionMinutes(cwClipIntervals(row.intervals,cwPreview.meeting)))} دقيقة)</span><select onchange="cwPreview.rows[${i}].studentKey=this.value"><option value="">استبعاد / لم يتم الربط</option>${cwReport.students.map((s) => `<option value="${s.key}" ${s.key === row.studentKey ? "selected" : ""}>${cwEscape(cwName(s))}</option>`).join("")}</select></div>`).join("")}<button class="btn btn-primary" onclick="cwApproveAttendance(this)">اعتماد الحضور ودرجاته</button></div>`;
 }
 async function cwApproveAttendance(button) {
   try {
@@ -418,7 +447,7 @@ async function cwApproveAttendance(button) {
       percent: Math.min(
         100,
         Math.round(
-          (cwUnionMinutes(intervals) / cwReport.lesson.duration_minutes) *
+          (cwUnionMinutes(cwClipIntervals(intervals,cwPreview.meeting)) / cwPreview.meeting.durationMinutes) *
             10000,
         ) / 100,
       ),
@@ -426,6 +455,7 @@ async function cwApproveAttendance(button) {
     const r = await cwApi("/attendance", {
       lessonId: cwActiveLesson,
       sourceHash: cwPreview.sourceHash,
+      meeting:cwPreview.meeting,
       rows,
     });
     cwNotify(

@@ -583,6 +583,11 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           .map((e) => e.studentKey),
       );
     if (!Array.isArray(b.rows) || !b.sourceHash) reject("INVALID_IMPORT");
+    if(b.meeting){
+      const start=Date.parse(b.meeting.start),end=Date.parse(b.meeting.end);
+      if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start||end-start>86400000||b.meeting.source!=="zoom_meeting_summary")reject("INVALID_MEETING_PERIOD");
+      b.meeting.durationMinutes=(end-start)/60000;
+    }
     const seen = new Set();
     for (const row of b.rows) {
       if (
@@ -594,6 +599,10 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       )
         reject("INVALID_ATTENDANCE_ROW");
       seen.add(row.studentKey);
+    }
+    if(b.meeting){
+      await env.DB.prepare("INSERT INTO attendance_meeting_imports VALUES (?,?,?,?,?,?,?) ON CONFLICT(lesson_id,source_hash) DO UPDATE SET starts_at=excluded.starts_at,ends_at=excluded.ends_at,duration_minutes=excluded.duration_minutes,approved_by=excluded.approved_by,approved_at=excluded.approved_at").bind(l.id,b.sourceHash,b.meeting.start,b.meeting.end,b.meeting.durationMinutes,auth.uid,new Date().toISOString()).run();
+      await env.DB.prepare("UPDATE course_lessons SET duration_minutes=? WHERE id=?").bind(b.meeting.durationMinutes,l.id).run();
     }
     let pending = 0;
     for (const row of b.rows) {

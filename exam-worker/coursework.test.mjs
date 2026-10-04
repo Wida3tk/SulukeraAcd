@@ -126,6 +126,19 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(80, 5), 5);
   assert.equal(attendanceGrade(97, 5), 5);
 });
+test("Zoom meeting duration is automatic; participant-only duration is not meeting duration", () => {
+  const context={Date};vm.createContext(context);
+  vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+  assert.equal(context.cwZoomMeetingPeriod([]),null);
+  const shorter=context.cwZoomMeetingPeriod([['Start time','End time'],['10/04/2026 06:00:00 PM','10/04/2026 08:00:00 PM']]);
+  assert.equal(shorter.durationMinutes,120);
+  const longer=context.cwZoomMeetingPeriod([['Start Time','Duration (Minutes)'],['10/04/2026 06:00:00 PM','180']]);
+  assert.equal(longer.durationMinutes,180);
+  const start=Date.parse(shorter.start),end=Date.parse(shorter.end);
+  const clipped=context.cwClipIntervals([[start-600000,start+3600000],[start+3000000,end+600000]],shorter);
+  assert.equal(context.cwUnionMinutes(clipped),120);
+  assert.equal(context.cwZoomTimestamp('10/04/2026 06:00:00 PM'),Date.parse('2026-10-04T18:00:00+03:00'));
+});
 test("grade sync preserves other weeks and exam while writing 6/6/3 components", async () => {
   const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
   f.sql.prepare('INSERT INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'نقاش');
