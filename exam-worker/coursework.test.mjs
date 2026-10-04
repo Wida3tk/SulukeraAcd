@@ -173,6 +173,15 @@ test("lecture cards separate absence, partial attendance and reviewed compensati
   assert.ok(host.innerHTML.includes('يحتاج تصحيحًا فقط'));
   const totals=context.cwReportTotals({attendance:{percent:60},result:{score:6}},{attendanceMax:3,homeworkMax:6,discussionMax:6},null);
   assert.equal(totals.attendance,2);assert.equal(totals.total,null);
+  assert.ok(host.innerHTML.includes('المشاركات المستلمة: <strong>0'));
+  assert.ok(cards.innerHTML.includes('لم تصل مشاركة من الطالب بعد'));
+  vm.runInContext(`currentUser.role='admin';cwReport.lesson.discussionPrompt='سؤال النقاش';cwReport.discussions=[{student_key:'partial',answer:'إجابة الطالب',score:null}];cwReportFilter='discussionPending';cwRenderReport();`,context);
+  assert.ok(host.innerHTML.includes('سؤال النقاش'));
+  assert.ok(host.innerHTML.includes('المشاركات المستلمة: <strong>1'));
+  assert.ok(cards.innerHTML.includes('إجابة الطالب'));
+  assert.ok(cards.innerHTML.includes('حفظ تقييم المناقشة'));
+  assert.ok(cards.innerHTML.includes('class="cw-review-detail" open'));
+  assert.equal(cards.innerHTML.includes('<h4>غائب</h4>'),false);
 });
 test("shared Zoom file is approved independently per batch without zeroing unmatched students", async () => {
   const f=fixtures();
