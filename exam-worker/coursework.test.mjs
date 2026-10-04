@@ -132,6 +132,18 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(79.99,3),2);
   assert.equal(attendanceGrade(80,3),3);
 });
+test("lecture cards separate absence, partial attendance and reviewed compensation without treating missing grades as zero", () => {
+  const host={innerHTML:''},cards={innerHTML:''},context={currentUser:{role:'lecturer'},document:{getElementById:id=>id==='cwReportCards'?cards:host}};
+  vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+  vm.runInContext(`cwData={subjects:[{key:'course',name:'مقرر',batch:'Q2'}],lessons:[{id:'one',subject_key:'course',title:'المحاضرة الأولى'}]};cwReport={lesson:{id:'one',subject_key:'course',title:'المحاضرة الأولى',attendanceMax:3,homeworkMax:6,discussionMax:6},discussions:[],students:[{key:'absent',name:'غائب',batch:'Q2',attendance:{percent:0}},{key:'partial',name:'جزئي',batch:'Q2',attendance:{percent:60}},{key:'live',name:'حاضر',batch:'Q2',attendance:{percent:90}},{key:'reviewed',name:'معتمد',batch:'Q2',attendance:{percent:0},result:{score:6,attempts:1},reflection:{score:3,answers_json:'["أ","ب","ج"]',reviewed_at:'2026-10-05T12:00:00Z'}}]};cwRenderReport();`,context);
+  assert.ok(cards.innerHTML.includes('الغياب — تعويض الحضور مطلوب'));
+  assert.ok(cards.innerHTML.includes('الحضور الجزئي'));
+  assert.ok(cards.innerHTML.includes('درجة الحضور الأصلية: 0'));
+  assert.ok(cards.innerHTML.includes('بانتظار اكتمال التقييم'));
+  assert.ok(host.innerHTML.includes('يحتاج تصحيحًا فقط'));
+  const totals=context.cwReportTotals({attendance:{percent:60},result:{score:6}},{attendanceMax:3,homeworkMax:6,discussionMax:6},null);
+  assert.equal(totals.attendance,2);assert.equal(totals.total,null);
+});
 test("shared Zoom file is approved independently per batch without zeroing unmatched students", async () => {
   const f=fixtures();
   f.records.subjects.second={...f.records.subjects.course,batch:'Q3-26'};
