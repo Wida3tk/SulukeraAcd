@@ -279,6 +279,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
         }),
         maxHomework: Number(s.settings.hw) || 5,
         maxAttendance: Number(s.settings.attend) || 5,
+        maxDiscussion: Number(s.settings.disc) || 5,
+        assessmentTemplates: s.role === 'admin' ? (await env.DB.prepare('SELECT * FROM assessment_templates').all()).results : [],
         templates: s.role === "admin" ? (await env.DB.prepare("SELECT * FROM homework_templates").all()).results.map(t => ({courseKey:t.course_key,week:t.week,questions:JSON.parse(t.questions_json)})) : [],
       },
     };
@@ -329,6 +331,13 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       .first();
     if (existing && old?.questions_json !== JSON.stringify(qs))
       reject("QUESTIONS_LOCKED_AFTER_SUBMISSION", 409);
+    const previousAssessment=await env.DB.prepare("SELECT * FROM lesson_assessment WHERE lesson_id=?").bind(id).first();
+    const discussionPrompt=b.discussionPrompt===undefined?undefined:String(b.discussionPrompt).trim();
+    if(discussionPrompt!==undefined){
+      if(discussionPrompt.length>10000)reject("INVALID_DISCUSSION_PROMPT");
+      const submission=await env.DB.prepare("SELECT lesson_id FROM academic_discussions WHERE lesson_id=? LIMIT 1").bind(id).first();
+      if(submission&&discussionPrompt!==(previousAssessment?.discussion_prompt||''))reject("DISCUSSION_LOCKED_AFTER_SUBMISSION",409);
+    }
     const duration = Number(b.durationMinutes);
     if (!Number.isFinite(duration) || duration <= 0) reject("INVALID_DURATION");
     for (const url of [b.zoomUrl, b.recordingUrl, b.pdfUrl])
@@ -359,6 +368,13 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       if(template)await env.DB.prepare("INSERT INTO lesson_assessment VALUES (?,?,?,?,?) ON CONFLICT(lesson_id) DO NOTHING").bind(id,template.homework_max,template.attendance_max,template.discussion_max,template.discussion_prompt).run();
     }
     await env.DB.prepare("INSERT INTO lesson_assessment VALUES (?,?,?,?,?) ON CONFLICT(lesson_id) DO NOTHING").bind(id,Number(s.settings.hw)||5,3,Number(s.settings.disc)||5,'').run();
+    if(discussionPrompt!==undefined){
+      await env.DB.prepare("UPDATE lesson_assessment SET discussion_prompt=? WHERE lesson_id=?").bind(discussionPrompt,id).run();
+      if(courseKey){
+        const assessment=await env.DB.prepare("SELECT * FROM lesson_assessment WHERE lesson_id=?").bind(id).first();
+        await env.DB.prepare("INSERT INTO assessment_templates VALUES (?,?,?,?,?,?) ON CONFLICT(course_key,week) DO UPDATE SET discussion_prompt=excluded.discussion_prompt").bind(courseKey,b.week,assessment.homework_max,assessment.attendance_max,assessment.discussion_max,discussionPrompt).run();
+      }
+    }
     return { data: { saved: true, id } };
   }
   if (path === "/coursework/questions" && request.method === "POST") {

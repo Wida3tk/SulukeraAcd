@@ -120,6 +120,23 @@ test("current semester excludes unassigned courses and templates survive a new b
   assert.deepEqual(next.templates[0].questions,f.config.questions);
   assert.equal(next.lessons.some(l=>l.subject_key==="nextBatch"),false);
 });
+test("admin discussion editor saves reusable prompt and protects existing submissions", async () => {
+  const f=fixtures();
+  f.records.subjects.course.courseKey='shared-course';
+  await f.call('admin','/lesson',{...f.config,discussionPrompt:'ناقش تطبيق المفهوم'});
+  const id='course_lesson_1';
+  assert.equal(f.sql.prepare('SELECT discussion_prompt FROM lesson_assessment WHERE lesson_id=?').get(id).discussion_prompt,'ناقش تطبيق المفهوم');
+  const list=(await f.call('admin','')).data;
+  assert.equal(list.assessmentTemplates[0].discussion_prompt,'ناقش تطبيق المفهوم');
+  f.records.subjects.nextBatch={...f.records.subjects.course,batch:'Q3-26'};
+  await f.call('admin','/lesson',{...f.config,subjectKey:'nextBatch'});
+  assert.equal(f.sql.prepare('SELECT discussion_prompt FROM lesson_assessment WHERE lesson_id=?').get('nextBatch_lesson_1').discussion_prompt,'ناقش تطبيق المفهوم');
+  await f.call('student','/discussion',{lessonId:id,answer:'مشاركتي في المناقشة'});
+  await assert.rejects(f.call('admin','/lesson',{...f.config,discussionPrompt:'سؤال مختلف'}),/DISCUSSION_LOCKED_AFTER_SUBMISSION/);
+  await f.call('admin','/lesson',{...f.config,discussionPrompt:'ناقش تطبيق المفهوم',title:'عنوان محدث'});
+  assert.equal(f.sql.prepare('SELECT answer FROM academic_discussions WHERE lesson_id=?').get(id).answer,'مشاركتي في المناقشة');
+  await assert.rejects(f.call('teacher','/lesson',{...f.config,discussionPrompt:'تعديل'}),/FORBIDDEN/);
+});
 test("homework score and attendance boundaries", () => {
   assert.equal(gradeHomework([{ correct: 0 }, { correct: 1 }], [0, 2], 5), 2.5);
   assert.equal(attendanceGrade(79.99, 5), null);
