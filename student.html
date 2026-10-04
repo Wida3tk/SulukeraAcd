@@ -1049,9 +1049,9 @@ function renderStudentHomeTab(){
           </div>
         </div>
         <div style="display:grid;gap:8px;">
-          <button class="btn-out" onclick="switchAppTab('grades', document.querySelectorAll('.app-tab')[2])">📊 فتح الدرجات</button>
-          <button class="btn-out" onclick="switchAppTab('requests', document.querySelectorAll('.app-tab')[4])">📝 رفع طلب</button>
-          <button class="btn-out" onclick="switchAppTab('transcript', document.querySelectorAll('.app-tab')[3])">📄 كشف الدرجات</button>
+          <button class="btn-out" onclick="switchAppTab('grades', getAppTabButtonById('grades'))">📊 فتح الدرجات</button>
+          <button class="btn-out" onclick="switchAppTab('requests', getAppTabButtonById('requests'))">📝 رفع طلب</button>
+          <button class="btn-out" onclick="switchAppTab('transcript', getAppTabButtonById('transcript'))">📄 كشف الدرجات</button>
           <button class="btn-out" onclick="switchAppTab('schedule', getAppTabButtonById('schedule'))">📅 فتح الجدول</button>
         </div>
       </div>
@@ -1571,13 +1571,26 @@ function sortScheduleSlots(slots){
     return String(a.timeStart||'').localeCompare(String(b.timeStart||''));
   });
 }
+function isCurrentAcademicScheduleSlot(slot){
+  if(!slot||slot.active===false||slot.archivedAt)return false;
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
+  const subject=dbData.subjects?.[slot.subjectKey],semester=dbData.semesters?.[slot.semesterKey||subject?.semesterKey];
+  if(semester&&['inactive','completed','finished','archived'].includes(semester.status))return false;
+  const start=String(slot.termStartDate||subject?.startDate||semester?.startDate||'').replace(/\//g,'-');
+  const end=String(slot.termEndDate||subject?.endDate||semester?.endDate||'').replace(/\//g,'-');
+  if((start&&start>today)||(end&&end<today))return false;
+  const current=getCurrentSemesterForBatch(slot.batch);
+  if(current?.status==='project')return false;
+  const currentStart=String(current?.startDate||'').replace(/\//g,'-');
+  if(currentStart&&start&&start<currentStart)return false;
+  return true;
+}
 function getStudentScheduleSlots(student=currentUser?.data){
   if(!student) return [];
-  const weekly = Object.values(dbData.schedule?.weekly||{}).filter(slot=>slot.active!==false);
-  // Only a schedule explicitly assigned to this batch overrides the approved fallback.
+  const weekly = Object.values(dbData.schedule?.weekly||{}).filter(isCurrentAcademicScheduleSlot);
   const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch));
   if(matched.length) return sortScheduleSlots(matched);
-  return sortScheduleSlots(PORTAL_FALLBACK_WEEKLY[String(student.batch||'').trim().toUpperCase()] || []);
+  return [];
 }
 
 function getMeetingLinkMarkup(value){
@@ -1591,17 +1604,13 @@ function getMeetingLinkMarkup(value){
 function getLecturerScheduleSlots(){
   const lecturerName = currentUser?.data?.name;
   const mySubjectNames = new Set(getLecturerSubjects().map(subject=>subject.name));
-  const weekly = Object.values(dbData.schedule?.weekly||{}).filter(slot=>slot.active!==false);
+  const weekly = Object.values(dbData.schedule?.weekly||{}).filter(isCurrentAcademicScheduleSlot);
   const matched = weekly.filter(slot=>
     (slot.lecturer && lecturerName && slot.lecturer===lecturerName) ||
     (slot.subject && mySubjectNames.has(slot.subject))
   );
   if(matched.length) return sortScheduleSlots(matched);
-  const fallback = getLecturerSubjects().flatMap(subject=>{
-    const batchKey = normalizeBatchName(subject.batch);
-    return (PORTAL_FALLBACK_WEEKLY[batchKey] || []).filter(slot=>slot.subject===subject.name);
-  });
-  return sortScheduleSlots(fallback);
+  return [];
 }
 function getProgramScheduleForRole(){
   if(currentUser?.role==='student'){
