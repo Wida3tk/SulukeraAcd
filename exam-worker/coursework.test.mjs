@@ -125,6 +125,12 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(79.99, 5), null);
   assert.equal(attendanceGrade(80, 5), 5);
   assert.equal(attendanceGrade(97, 5), 5);
+  assert.equal(attendanceGrade(0,3),0);
+  assert.equal(attendanceGrade(0.1,3),1);
+  assert.equal(attendanceGrade(49.99,3),1);
+  assert.equal(attendanceGrade(50,3),2);
+  assert.equal(attendanceGrade(79.99,3),2);
+  assert.equal(attendanceGrade(80,3),3);
 });
 test("Zoom meeting duration is automatic; participant-only duration is not meeting duration", () => {
   const context={Date};vm.createContext(context);
@@ -141,7 +147,7 @@ test("Zoom meeting duration is automatic; participant-only duration is not meeti
 });
 test("grade sync preserves other weeks and exam while writing 6/6/3 components", async () => {
   const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
-  f.sql.prepare('INSERT INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'نقاش');
+  f.sql.prepare('INSERT OR REPLACE INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'نقاش');
   f.ctx.firebaseAdminToken=async()=> 'test-token';
   const original=globalThis.fetch;
   let grade={exam:20,w2_hw:5},writes=0;
@@ -157,11 +163,17 @@ test("grade sync preserves other weeks and exam while writing 6/6/3 components",
     await f.call('admin','/attendance',{lessonId:id,sourceHash:'file',rows:[{studentKey:'student',percent:97}]});
     assert.equal(grade.w1_hw,6);assert.equal(grade.w1_disc,6);assert.equal(grade.w1_attend,3);
     assert.equal(grade.exam,20);assert.equal(grade.w2_hw,5);assert.equal(writes,3);
+    await f.call('admin','/attendance',{lessonId:id,sourceHash:'partial',rows:[{studentKey:'student',percent:60}]});
+    assert.equal(grade.w1_attend,2);
+    await f.call('student','/reflection',{lessonId:id,answers:['الأول','الثاني','الثالث']});
+    await assert.rejects(f.call('teacher','/review',{lessonId:id,studentKey:'student',score:1.5}),/INVALID_SCORE/);
+    await f.call('teacher','/review',{lessonId:id,studentKey:'student',score:1});
+    assert.equal(grade.w1_attend,1);
   }finally{globalThis.fetch=original;}
 });
 test("six-point homework and discussion are independent; discussion review is scoped and bounded", async () => {
   const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
-  f.sql.prepare('INSERT INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'سؤال نقاش');
+  f.sql.prepare('INSERT OR REPLACE INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'سؤال نقاش');
   const attempt=(await f.call('student','/submit',{lessonId:id,answers:[1],requestId:'six'})).data;
   assert.equal(attempt.score,6);
   await f.call('student','/discussion',{lessonId:id,answer:'مشاركة الطالب'});
@@ -269,12 +281,12 @@ test("reflection only for attendance below threshold; lecturer reviews and atten
   await f.call("teacher", "/review", {
     lessonId: id,
     studentKey: "student",
-    score: 4,
+    score: 3,
     feedback: "جيد",
   });
   assert.equal(
     f.sql.prepare("SELECT score FROM attendance_reflections").get().score,
-    4,
+    3,
   );
   await assert.rejects(
     f.call("student", "/reflection", {

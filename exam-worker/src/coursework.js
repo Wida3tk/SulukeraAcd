@@ -21,6 +21,7 @@ export function gradeHomework(questions, answers, max) {
   return Math.round((correct / questions.length) * max * 100) / 100;
 }
 export function attendanceGrade(percent, max) {
+  if(max===3)return percent>=80?3:percent>=50?2:percent>0?1:0;
   return percent >= 80 ? max : null;
 }
 function isProfessional(s) {
@@ -151,10 +152,7 @@ async function synchronize(env, ctx, l, studentKey, actor) {
       ? attendanceGrade(attendance.percent, maxAttend)
       : null;
     if (attend != null || reflection?.score != null)
-      fields[`w${l.week}_attend`] = Math.max(
-        attend ?? 0,
-        reflection?.score ?? 0,
-      );
+      fields[`w${l.week}_attend`] = reflection?.score ?? attend;
     else if (attendance) fields[`w${l.week}_attend`] = null;
     const key = safeKey(`grade_${studentKey}_${l.subject_key}`),
       legacy = safeKey(`${studentKey}_${l.subject_key}`);
@@ -360,6 +358,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       const template=await env.DB.prepare("SELECT * FROM assessment_templates WHERE course_key=? AND week=?").bind(courseKey,b.week).first();
       if(template)await env.DB.prepare("INSERT INTO lesson_assessment VALUES (?,?,?,?,?) ON CONFLICT(lesson_id) DO NOTHING").bind(id,template.homework_max,template.attendance_max,template.discussion_max,template.discussion_prompt).run();
     }
+    await env.DB.prepare("INSERT INTO lesson_assessment VALUES (?,?,?,?,?) ON CONFLICT(lesson_id) DO NOTHING").bind(id,Number(s.settings.hw)||5,3,Number(s.settings.disc)||5,'').run();
     return { data: { saved: true, id } };
   }
   if (path === "/coursework/questions" && request.method === "POST") {
@@ -478,6 +477,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       b.score === "" ||
       b.score == null ||
       !Number.isFinite(score) ||
+      ((await assessmentFor(env,l,s.settings)).attendanceMax===3&&!Number.isInteger(score)) ||
       score < 0 ||
       score > (await assessmentFor(env,l,s.settings)).attendanceMax
     )

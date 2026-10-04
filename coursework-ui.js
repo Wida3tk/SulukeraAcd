@@ -1,8 +1,8 @@
 /* Academic coursework; all authorization and scoring are enforced by the worker. */
 const CW_REFLECTION_QUESTIONS = [
-  "ما أبرز فكرة تعلمتها من هذا اللقاء؟ اشرحها بأسلوبك.",
-  "كيف يمكنك تطبيقها؟ قدّم مثالًا مرتبطًا بمحتوى اللقاء.",
-  "ما النقطة التي تحتاج إلى توضيح أو ترغب بمناقشتها؟",
+  "اذكر ثلاثة موضوعات رئيسية تمت مناقشتها في المحاضرة",
+  "اذكر أهم مفهوم أو معلومة جديدة تعلمتها من المحاضرة، واشرحها باختصار",
+  "كيف يمكن تطبيق أحد المفاهيم التي تناولتها المحاضرة في الممارسة المهنية أو الحياة اليومية؟",
 ];
 let cwData = null,
   cwSelectedSubject = "",
@@ -84,7 +84,7 @@ async function renderAcademicCoursework() {
                         now <= Date.parse(l.closes_at),
                       attend = l.attendance,
                       reflection = l.reflection;
-                    return `<article style="border:1px solid #dbe5ff;border-radius:16px;padding:16px;background:linear-gradient(135deg,#fff,#f2f8ff)"><h4>${cwEscape(l.title)}</h4><div style="display:flex;gap:7px;flex-wrap:wrap">${cwLink(l.zoom_url, "دخول Zoom")}${cwLink(l.pdf_url, "مشاهدة الملف")}${cwLink(l.recording_url, "مشاهدة التسجيل")}</div><p style="font-size:12px;line-height:1.8">فتح الواجب: ${cwDate(l.opens_at)}<br>الإغلاق: ${cwDate(l.closes_at)}<br>المواعيد بتوقيت السعودية</p>${role === "student" ? `<p>واجب المحاضرة: ${l.result ? `${l.result.score}/${l.homeworkMax} · ${l.result.attempts} محاولات` : "لم يُحل بعد"}</p><p style="font-size:12px">${attend ? (attend.percent >= 80 ? `الحضور المباشر مكتمل · ${l.attendanceMax}/${l.attendanceMax}` : reflection?.score != null ? `تعويض الحضور: ${reflection.score}/${l.attendanceMax}` : reflection ? "تعويض الحضور بانتظار المراجعة" : "بحاجة لتعويض الحضور") : "الحضور بانتظار الرصد"}</p>${open ? `<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result ? "إعادة المحاولة" : "حل واجب المحاضرة"}</button>` : `<span class="badge">${now < Date.parse(l.opens_at) ? "يفتح في الموعد المحدد" : "انتهت فترة الواجب"}</span>`}${attend && attend.percent < 80 && reflection?.score == null && open ? `<button class="btn-out" style="margin-top:8px" onclick="cwReflection('${l.id}')">${reflection ? "تعديل إجابة التعويض" : "إجابة تعويض الحضور"}</button>` : ""}${l.discussionPrompt ? cwDiscussionCard(l,open) : ""}${reflection?.feedback ? `<p>${cwEscape(reflection.feedback)}</p>` : ""}` : `<span class="badge">${l.status === "published" ? "منشور" : "مسودة"}</span><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">${admin ? `<button class="btn" onclick="cwEditLesson('${subject.key}',${week})">تعديل</button>` : ""}<button class="btn" onclick="cwOpenReport('${l.id}')">الحضور والتسليمات</button></div>`}</article>`;
+                    return `<article style="border:1px solid #dbe5ff;border-radius:16px;padding:16px;background:linear-gradient(135deg,#fff,#f2f8ff)"><h4>${cwEscape(l.title)}</h4><div style="display:flex;gap:7px;flex-wrap:wrap">${cwLink(l.zoom_url, "دخول Zoom")}${cwLink(l.pdf_url, "مشاهدة الملف")}${cwLink(l.recording_url, "مشاهدة التسجيل")}</div><p style="font-size:12px;line-height:1.8">فتح الواجب: ${cwDate(l.opens_at)}<br>الإغلاق: ${cwDate(l.closes_at)}<br>المواعيد بتوقيت السعودية</p>${role === "student" ? `<p>واجب المحاضرة: ${l.result ? `${l.result.score}/${l.homeworkMax} · ${l.result.attempts} محاولات` : "لم يُحل بعد"}</p><p style="font-size:12px">${attend ? (attend.percent >= 80 ? `الحضور المباشر مكتمل · ${l.attendanceMax}/${l.attendanceMax}` : reflection?.score != null ? `تعويض الحضور: ${reflection.score}/${l.attendanceMax}` : reflection ? `الحضور: ${cwAttendancePoints(attend.percent,l.attendanceMax)}/${l.attendanceMax} · تعويض الحضور بانتظار المراجعة` : `الحضور: ${cwAttendancePoints(attend.percent,l.attendanceMax)}/${l.attendanceMax} · لتعويض درجة الحضور يرجى مشاهدة المحاضرة بشكل مسجل والإجابة على الأسئلة التالية`) : "الحضور بانتظار الرصد"}</p>${open ? `<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result ? "إعادة المحاولة" : "حل واجب المحاضرة"}</button>` : `<span class="badge">${now < Date.parse(l.opens_at) ? "يفتح في الموعد المحدد" : "انتهت فترة الواجب"}</span>`}${attend && attend.percent < 80 && reflection?.score == null && open ? `<button class="btn-out" style="margin-top:8px" onclick="cwReflection('${l.id}')">${reflection ? "تعديل إجابة التعويض" : "إجابة تعويض الحضور"}</button>` : ""}${l.discussionPrompt ? cwDiscussionCard(l,open) : ""}${reflection?.feedback ? `<p>${cwEscape(reflection.feedback)}</p>` : ""}` : `<span class="badge">${l.status === "published" ? "منشور" : "مسودة"}</span><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">${admin ? `<button class="btn" onclick="cwEditLesson('${subject.key}',${week})">تعديل</button>` : ""}<button class="btn" onclick="cwOpenReport('${l.id}')">الحضور والتسليمات</button></div>`}</article>`;
                   })
                   .join("")}</div></section>`,
             )
@@ -214,8 +214,9 @@ async function cwSubmit(button) {
 function cwReflection(id) {
   const l = cwData.lessons.find((x) => x.id === id),
     answers = l.reflection ? JSON.parse(l.reflection.answers_json) : [];
-  cwHost().innerHTML = `<section class="card"><h3>تعويض حضور ${cwEscape(l.title)}</h3>${cwLink(l.recording_url, "مشاهدة التسجيل")}<p>شاهد اللقاء ثم أجب عن الأسئلة. يراجع المحاضر إجابتك ويعتمد درجة الحضور.</p>${CW_REFLECTION_QUESTIONS.map((q, i) => `<div class="field"><label>${q}</label><textarea id="cwReflection${i}" style="width:100%;min-height:130px;font-family:inherit">${cwEscape(answers[i] || "")}</textarea></div>`).join("")}<button class="btn-primary" onclick="cwSendReflection('${id}',this)">إرسال الإجابة</button><button class="btn-out" onclick="renderAcademicCoursework()">رجوع</button></section>`;
+  cwHost().innerHTML = `<section class="card"><h3>تعويض حضور ${cwEscape(l.title)}</h3>${cwLink(l.recording_url, "مشاهدة التسجيل")}<p>لتعويض درجة الحضور، يرجى مشاهدة المحاضرة بشكل مسجل والإجابة على الأسئلة التالية. يراجع المحاضر إجابتك ويعدّل درجة الحضور.</p>${CW_REFLECTION_QUESTIONS.map((q, i) => `<div class="field"><label>${q}</label><textarea id="cwReflection${i}" style="width:100%;min-height:130px;font-family:inherit">${cwEscape(answers[i] || "")}</textarea></div>`).join("")}<button class="btn-primary" onclick="cwSendReflection('${id}',this)">إرسال الإجابة</button><button class="btn-out" onclick="renderAcademicCoursework()">رجوع</button></section>`;
 }
+function cwAttendancePoints(percent,max){return max===3?(percent>=80?3:percent>=50?2:percent>0?1:0):percent>=80?max:0;}
 async function cwSendReflection(id, button) {
   try {
     button.disabled = true;
@@ -248,7 +249,7 @@ async function cwOpenReport(id) {
                   )
                   .join(
                     "",
-                  )}</div><label>درجة تعويض الحضور من ${cwReport?.lesson?.attendanceMax||cwData.maxAttendance}</label><input id="cwReviewScore${i}" type="number" min="0" max="${cwReport?.lesson?.attendanceMax||cwData.maxAttendance}" value="${s.reflection.score ?? ""}"><textarea id="cwReviewFeedback${i}" placeholder="تعليق المحاضر" style="width:100%;font-family:inherit">${cwEscape(s.reflection.feedback)}</textarea><button class="btn" onclick="cwReview('${s.key}',${i},this)">اعتماد التعويض</button>`
+                  )}</div><label>درجة تعويض الحضور من ${cwReport?.lesson?.attendanceMax||cwData.maxAttendance}</label><input id="cwReviewScore${i}" type="number" step="1" min="0" max="${cwReport?.lesson?.attendanceMax||cwData.maxAttendance}" value="${s.reflection.score ?? ""}"><textarea id="cwReviewFeedback${i}" placeholder="تعليق المحاضر" style="width:100%;font-family:inherit">${cwEscape(s.reflection.feedback)}</textarea><button class="btn" onclick="cwReview('${s.key}',${i},this)">اعتماد التعويض</button>`
               : "<span>لا توجد إجابة تعويض.</span>"
           }</article>`,
       )
