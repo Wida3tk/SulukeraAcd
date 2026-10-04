@@ -132,6 +132,19 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(79.99,3),2);
   assert.equal(attendanceGrade(80,3),3);
 });
+test("coursework home isolates selected batch and exposes four lecture cards with clear actions", () => {
+  const host={innerHTML:''},context={currentUser:{role:'admin'},document:{getElementById:()=>host}};
+  vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+  vm.runInContext(`cwData={subjects:[{key:'one',name:'المقرر الأول',batch:'Q2'},{key:'two',name:'المقرر الثاني',batch:'Q3'}],lessons:[{id:'l1',subject_key:'one',week:1,title:'المحاضرة الأولى',status:'published',opens_at:'2020-01-01T00:00:00Z',closes_at:'2040-01-01T00:00:00Z',attendanceMax:3,homeworkMax:6,discussionMax:6}]};cwSelectedSubject='one';cwRenderCourseworkHome();`,context);
+  assert.ok(host.innerHTML.includes('متابعة الطلاب والحضور'));
+  assert.ok(host.innerHTML.includes('تعديل الإعدادات'));
+  assert.ok(host.innerHTML.includes('الواجب متاح الآن'));
+  assert.equal((host.innerHTML.match(/class="cw-lesson-card /g)||[]).length,4);
+  assert.ok(!host.innerHTML.includes('المقرر الثاني'));
+  vm.runInContext("cwSelectedSubject='';cwHomeBatch='';cwRenderCourseworkHome();",context);
+  assert.ok(host.innerHTML.includes('اختَر الدفعة والمقرر'));
+  assert.equal((host.innerHTML.match(/class="cw-lesson-card /g)||[]).length,0);
+});
 test("lecture cards separate absence, partial attendance and reviewed compensation without treating missing grades as zero", () => {
   const host={innerHTML:''},cards={innerHTML:''},context={currentUser:{role:'lecturer'},document:{getElementById:id=>id==='cwReportCards'?cards:host}};
   vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
