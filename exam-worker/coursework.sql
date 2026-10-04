@@ -30,3 +30,17 @@ CREATE TABLE IF NOT EXISTS homework_templates (
  course_key TEXT NOT NULL, week INTEGER NOT NULL, questions_json TEXT NOT NULL,
  updated_at TEXT NOT NULL, PRIMARY KEY(course_key,week)
 );
+CREATE TABLE IF NOT EXISTS lesson_assessment (
+ lesson_id TEXT PRIMARY KEY, homework_max REAL NOT NULL, attendance_max REAL NOT NULL,
+ discussion_max REAL NOT NULL, discussion_prompt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS academic_discussions (
+ lesson_id TEXT NOT NULL, student_key TEXT NOT NULL, answer TEXT NOT NULL,
+ submitted_at TEXT NOT NULL, score REAL, feedback TEXT NOT NULL DEFAULT '',
+ reviewed_by TEXT, reviewed_at TEXT, PRIMARY KEY(lesson_id,student_key)
+);
+CREATE TABLE IF NOT EXISTS assessment_templates (
+ course_key TEXT NOT NULL, week INTEGER NOT NULL, homework_max REAL NOT NULL,
+ attendance_max REAL NOT NULL, discussion_max REAL NOT NULL, discussion_prompt TEXT NOT NULL,
+ PRIMARY KEY(course_key,week)
+);

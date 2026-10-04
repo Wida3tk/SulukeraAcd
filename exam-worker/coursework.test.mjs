@@ -103,7 +103,7 @@ const fixtures = () => {
     status: "published",
     durationMinutes: 120,
   };
-  return { sql, call, config, records };
+  return { sql, call, config, records, ctx };
 };
 test("current semester excludes unassigned courses and templates survive a new batch", async () => {
   const f = fixtures();
@@ -125,6 +125,43 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(79.99, 5), null);
   assert.equal(attendanceGrade(80, 5), 5);
   assert.equal(attendanceGrade(97, 5), 5);
+});
+test("grade sync preserves other weeks and exam while writing 6/6/3 components", async () => {
+  const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+  f.sql.prepare('INSERT INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'نقاش');
+  f.ctx.firebaseAdminToken=async()=> 'test-token';
+  const original=globalThis.fetch;
+  let grade={exam:20,w2_hw:5},writes=0;
+  globalThis.fetch=async(url,options={})=>{
+    if(String(url).endsWith('/settings.json'))return Response.json({attend:5});
+    if(options.method==='PUT'){grade=JSON.parse(options.body);writes++;return Response.json(grade);}
+    return new Response(JSON.stringify(grade),{headers:{etag:'"test"','Content-Type':'application/json'}});
+  };
+  try{
+    assert.equal((await f.call('student','/submit',{lessonId:id,answers:[1],requestId:'sync'})).data.synced,true);
+    await f.call('student','/discussion',{lessonId:id,answer:'إجابة'});
+    await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:6});
+    await f.call('admin','/attendance',{lessonId:id,sourceHash:'file',rows:[{studentKey:'student',percent:97}]});
+    assert.equal(grade.w1_hw,6);assert.equal(grade.w1_disc,6);assert.equal(grade.w1_attend,3);
+    assert.equal(grade.exam,20);assert.equal(grade.w2_hw,5);assert.equal(writes,3);
+  }finally{globalThis.fetch=original;}
+});
+test("six-point homework and discussion are independent; discussion review is scoped and bounded", async () => {
+  const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+  f.sql.prepare('INSERT INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'سؤال نقاش');
+  const attempt=(await f.call('student','/submit',{lessonId:id,answers:[1],requestId:'six'})).data;
+  assert.equal(attempt.score,6);
+  await f.call('student','/discussion',{lessonId:id,answer:'مشاركة الطالب'});
+  await assert.rejects(f.call('outsider','/discussion-review',{lessonId:id,studentKey:'student',score:6}),/SUBJECT_ACCESS_DENIED/);
+  await assert.rejects(f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:7}),/INVALID_SCORE/);
+  await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:6,feedback:'ممتاز'});
+  const list=(await f.call('student','')).data;
+  assert.equal(list.lessons[0].discussion.score,6);
+  assert.equal(list.lessons[0].attendanceMax,3);
+  assert.equal(list.lessons[0].result.score,6);
+  await assert.rejects(f.call('student','/discussion',{lessonId:id,answer:'تعديل'}),/DISCUSSION_ALREADY_REVIEWED/);
+  f.sql.prepare('UPDATE course_lessons SET closes_at=? WHERE id=?').run('2020-01-01T00:00:00Z',id);
+  await assert.rejects(f.call('student','/discussion',{lessonId:id,answer:'تعديل'}),/DISCUSSION_NOT_OPEN/);
 });
 test("unlimited attempts retain best score, retries are idempotent, sync failure stays pending", async () => {
   const f = fixtures();

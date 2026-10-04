@@ -141,9 +141,12 @@ async function synchronize(env, ctx, l, studentKey, actor) {
         .first(),
     ]);
     const settings = await (await serviceFetch(env, ctx, "settings")).json(),
-      maxAttend = Number(settings?.attend) || 5;
+      assessment = await assessmentFor(env,l,settings),
+      maxAttend = assessment.attendanceMax;
     const fields = {};
     if (best?.score != null) fields[`w${l.week}_hw`] = best.score;
+    const discussion = await env.DB.prepare("SELECT score FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,studentKey).first();
+    if(discussion?.score!=null)fields[`w${l.week}_disc`]=discussion.score;
     const attend = attendance
       ? attendanceGrade(attendance.percent, maxAttend)
       : null;
@@ -206,6 +209,10 @@ async function synchronize(env, ctx, l, studentKey, actor) {
     return false;
   }
 }
+async function assessmentFor(env,l,settings){
+  const a=await env.DB.prepare("SELECT * FROM lesson_assessment WHERE lesson_id=?").bind(l.id).first();
+  return {homeworkMax:a?.homework_max??(Number(settings?.hw)||5),attendanceMax:a?.attendance_max??(Number(settings?.attend)||5),discussionMax:a?.discussion_max??(Number(settings?.disc)||5),discussionPrompt:a?.discussion_prompt||''};
+}
 export async function handleCoursework(request, env, auth, path, ctx) {
   if (!path.startsWith("/coursework")) return null;
   const s = await scope(auth, ctx),
@@ -246,6 +253,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           .all()
       ).results;
     }
+    const assessments = (await env.DB.prepare("SELECT * FROM lesson_assessment").all()).results;
+    const discussions = s.role === "student" ? (await env.DB.prepare("SELECT * FROM academic_discussions WHERE student_key=?").bind(key).all()).results : [];
     return {
       data: {
         subjects: Object.entries(s.subjects)
@@ -257,6 +266,11 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           const qs = JSON.parse(l.questions_json);
           return {
             ...l,
+            homeworkMax:assessments.find(a=>a.lesson_id===l.id)?.homework_max??(Number(s.settings.hw)||5),
+            attendanceMax:assessments.find(a=>a.lesson_id===l.id)?.attendance_max??(Number(s.settings.attend)||5),
+            discussionMax:assessments.find(a=>a.lesson_id===l.id)?.discussion_max??(Number(s.settings.disc)||5),
+            discussionPrompt:assessments.find(a=>a.lesson_id===l.id)?.discussion_prompt||'',
+            discussion:discussions.find(d=>d.lesson_id===l.id)||null,
             questions_json: undefined,
             questions: s.role === "student" ? undefined : qs,
             questionCount: qs.length,
@@ -342,6 +356,10 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       .run();
     const courseKey = s.subjects[b.subjectKey].courseKey;
     if (courseKey) await env.DB.prepare("INSERT INTO homework_templates VALUES (?,?,?,?) ON CONFLICT(course_key,week) DO UPDATE SET questions_json=excluded.questions_json,updated_at=excluded.updated_at").bind(courseKey,b.week,JSON.stringify(qs),new Date().toISOString()).run();
+    if(courseKey){
+      const template=await env.DB.prepare("SELECT * FROM assessment_templates WHERE course_key=? AND week=?").bind(courseKey,b.week).first();
+      if(template)await env.DB.prepare("INSERT INTO lesson_assessment VALUES (?,?,?,?,?) ON CONFLICT(lesson_id) DO NOTHING").bind(id,template.homework_max,template.attendance_max,template.discussion_max,template.discussion_prompt).run();
+    }
     return { data: { saved: true, id } };
   }
   if (path === "/coursework/questions" && request.method === "POST") {
@@ -379,7 +397,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       !String(b.requestId || "").trim()
     )
       reject("INCOMPLETE_ANSWERS");
-    const score = gradeHomework(qs, b.answers, Number(s.settings.hw) || 5);
+    const score = gradeHomework(qs, b.answers, (await assessmentFor(env,l,s.settings)).homeworkMax);
     await env.DB.prepare(
       "INSERT OR IGNORE INTO homework_attempts VALUES (?,?,?,?,?,?,?)",
     )
@@ -461,7 +479,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       b.score == null ||
       !Number.isFinite(score) ||
       score < 0 ||
-      score > (Number(s.settings.attend) || 5)
+      score > (await assessmentFor(env,l,s.settings)).attendanceMax
     )
       reject("INVALID_SCORE");
     const result = await env.DB.prepare(
@@ -531,9 +549,28 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           attendance: attendance.find((v) => v.student_key === key) || null,
           reflection: reflections.find((v) => v.student_key === key) || null,
         })),
-        lesson: l,
+        discussions: (await env.DB.prepare("SELECT * FROM academic_discussions WHERE lesson_id=?").bind(l.id).all()).results,
+        lesson: {...l,...await assessmentFor(env,l,s.settings)},
       },
     };
+  }
+  if(path === "/coursework/discussion" && request.method === "POST"){
+    if(s.role!=="student")reject("FORBIDDEN",403);
+    const b=await json(request),l=await lessonFor(env,b.lessonId,s),a=await assessmentFor(env,l,s.settings);
+    if(!a.discussionPrompt||l.status!=="published"||Date.now()<Date.parse(l.opens_at)||Date.now()>Date.parse(l.closes_at))reject("DISCUSSION_NOT_OPEN",403);
+    if(typeof b.answer!=="string"||!b.answer.trim()||b.answer.length>12000)reject("INVALID_DISCUSSION_ANSWER");
+    const old=await env.DB.prepare("SELECT reviewed_at FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,key).first();
+    if(old?.reviewed_at)reject("DISCUSSION_ALREADY_REVIEWED",409);
+    await env.DB.prepare("INSERT INTO academic_discussions (lesson_id,student_key,answer,submitted_at) VALUES (?,?,?,?) ON CONFLICT(lesson_id,student_key) DO UPDATE SET answer=excluded.answer,submitted_at=excluded.submitted_at").bind(l.id,key,b.answer.trim(),new Date().toISOString()).run();
+    return {data:{saved:true}};
+  }
+  if(path === "/coursework/discussion-review" && request.method === "POST"){
+    if(s.role==="student")reject("FORBIDDEN",403);
+    const b=await json(request),l=await lessonFor(env,b.lessonId,s),a=await assessmentFor(env,l,s.settings),score=Number(b.score);
+    if(b.score==null||b.score===""||!Number.isFinite(score)||score<0||score>a.discussionMax)reject("INVALID_SCORE");
+    const result=await env.DB.prepare("UPDATE academic_discussions SET score=?,feedback=?,reviewed_by=?,reviewed_at=? WHERE lesson_id=? AND student_key=?").bind(score,String(b.feedback||""),auth.uid,new Date().toISOString(),l.id,b.studentKey).run();
+    if(!result.meta.changes)reject("DISCUSSION_NOT_FOUND",404);
+    return {data:{saved:true,synced:await synchronize(env,ctx,l,b.studentKey,auth.uid)}};
   }
   if (path === "/coursework/attendance" && request.method === "POST") {
     if (s.role !== "admin") reject("FORBIDDEN", 403);

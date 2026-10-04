@@ -1,0 +1,6 @@
+exclude:
+  - exam-worker
+  - scripts
+  - templates
+  - database.rules.json
+  - firebase.json

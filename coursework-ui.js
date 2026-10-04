@@ -84,7 +84,7 @@ async function renderAcademicCoursework() {
                         now <= Date.parse(l.closes_at),
                       attend = l.attendance,
                       reflection = l.reflection;
-                    return `<article style="border:1px solid #dbe5ff;border-radius:16px;padding:16px;background:linear-gradient(135deg,#fff,#f2f8ff)"><h4>${cwEscape(l.title)}</h4><div style="display:flex;gap:7px;flex-wrap:wrap">${cwLink(l.zoom_url, "دخول Zoom")}${cwLink(l.pdf_url, "مشاهدة الملف")}${cwLink(l.recording_url, "مشاهدة التسجيل")}</div><p style="font-size:12px;line-height:1.8">فتح الواجب: ${cwDate(l.opens_at)}<br>الإغلاق: ${cwDate(l.closes_at)}<br>المواعيد بتوقيت السعودية</p>${role === "student" ? `<p>واجب المحاضرة: ${l.result ? `${l.result.score}/${cwData.maxHomework} · ${l.result.attempts} محاولات` : "لم يُحل بعد"}</p><p style="font-size:12px">${attend ? (attend.percent >= 80 ? `الحضور المباشر مكتمل · ${cwData.maxAttendance}/${cwData.maxAttendance}` : reflection?.score != null ? `تعويض الحضور: ${reflection.score}/${cwData.maxAttendance}` : reflection ? "تعويض الحضور بانتظار المراجعة" : "بحاجة لتعويض الحضور") : "الحضور بانتظار الرصد"}</p>${open ? `<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result ? "إعادة المحاولة" : "حل واجب المحاضرة"}</button>` : `<span class="badge">${now < Date.parse(l.opens_at) ? "يفتح في الموعد المحدد" : "انتهت فترة الواجب"}</span>`}${attend && attend.percent < 80 && reflection?.score == null && open ? `<button class="btn-out" style="margin-top:8px" onclick="cwReflection('${l.id}')">${reflection ? "تعديل إجابة التعويض" : "إجابة تعويض الحضور"}</button>` : ""}${reflection?.feedback ? `<p>${cwEscape(reflection.feedback)}</p>` : ""}` : `<span class="badge">${l.status === "published" ? "منشور" : "مسودة"}</span><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">${admin ? `<button class="btn" onclick="cwEditLesson('${subject.key}',${week})">تعديل</button>` : ""}<button class="btn" onclick="cwOpenReport('${l.id}')">الحضور والتسليمات</button></div>`}</article>`;
+                    return `<article style="border:1px solid #dbe5ff;border-radius:16px;padding:16px;background:linear-gradient(135deg,#fff,#f2f8ff)"><h4>${cwEscape(l.title)}</h4><div style="display:flex;gap:7px;flex-wrap:wrap">${cwLink(l.zoom_url, "دخول Zoom")}${cwLink(l.pdf_url, "مشاهدة الملف")}${cwLink(l.recording_url, "مشاهدة التسجيل")}</div><p style="font-size:12px;line-height:1.8">فتح الواجب: ${cwDate(l.opens_at)}<br>الإغلاق: ${cwDate(l.closes_at)}<br>المواعيد بتوقيت السعودية</p>${role === "student" ? `<p>واجب المحاضرة: ${l.result ? `${l.result.score}/${l.homeworkMax} · ${l.result.attempts} محاولات` : "لم يُحل بعد"}</p><p style="font-size:12px">${attend ? (attend.percent >= 80 ? `الحضور المباشر مكتمل · ${l.attendanceMax}/${l.attendanceMax}` : reflection?.score != null ? `تعويض الحضور: ${reflection.score}/${l.attendanceMax}` : reflection ? "تعويض الحضور بانتظار المراجعة" : "بحاجة لتعويض الحضور") : "الحضور بانتظار الرصد"}</p>${open ? `<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result ? "إعادة المحاولة" : "حل واجب المحاضرة"}</button>` : `<span class="badge">${now < Date.parse(l.opens_at) ? "يفتح في الموعد المحدد" : "انتهت فترة الواجب"}</span>`}${attend && attend.percent < 80 && reflection?.score == null && open ? `<button class="btn-out" style="margin-top:8px" onclick="cwReflection('${l.id}')">${reflection ? "تعديل إجابة التعويض" : "إجابة تعويض الحضور"}</button>` : ""}${l.discussionPrompt ? cwDiscussionCard(l,open) : ""}${reflection?.feedback ? `<p>${cwEscape(reflection.feedback)}</p>` : ""}` : `<span class="badge">${l.status === "published" ? "منشور" : "مسودة"}</span><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">${admin ? `<button class="btn" onclick="cwEditLesson('${subject.key}',${week})">تعديل</button>` : ""}<button class="btn" onclick="cwOpenReport('${l.id}')">الحضور والتسليمات</button></div>`}</article>`;
                   })
                   .join("")}</div></section>`,
             )
@@ -113,7 +113,7 @@ function cwEditLesson(subjectKey, week) {
     )
     .join(
       "",
-    )}<div class="field"><label>مدة اللقاء الفعلية بالدقائق (لحساب الحضور)</label><input id="cwDuration" type="number" min="1" value="${l.duration_minutes || 120}"></div><div class="field"><label>حالة الواجب</label><select id="cwStatus"><option value="draft">مسودة</option><option value="published" ${l.status === "published" ? "selected" : ""}>منشور</option></select></div><p>درجة الواجب ${cwData.maxHomework}، والمحاولات غير محدودة حتى الإغلاق. لا يمكن تغيير الأسئلة بعد وجود تسليمات.</p><div id="cwQuestions">${qs.map((q, i) => cwQuestionEditor(q, i)).join("")}</div><button class="btn" onclick="cwAddQuestion()">إضافة سؤال</button><button class="btn btn-primary" onclick="cwSaveLesson('${subjectKey}',${week},this)">حفظ المحاضرة والواجب</button><button class="btn" onclick="renderAcademicCoursework()">رجوع</button></section>`;
+    )}<div class="field"><label>مدة اللقاء الفعلية بالدقائق (لحساب الحضور)</label><input id="cwDuration" type="number" min="1" value="${l.duration_minutes || 120}"></div><div class="field"><label>حالة الواجب</label><select id="cwStatus"><option value="draft">مسودة</option><option value="published" ${l.status === "published" ? "selected" : ""}>منشور</option></select></div><p>درجة الواجب ${l.homeworkMax || (cwData.subjects.find(s=>s.key===subjectKey)?.courseKey==='course_07'?6:cwData.maxHomework)}، والمحاولات غير محدودة حتى الإغلاق. لا يمكن تغيير الأسئلة بعد وجود تسليمات.</p><div id="cwQuestions">${qs.map((q, i) => cwQuestionEditor(q, i)).join("")}</div><button class="btn" onclick="cwAddQuestion()">إضافة سؤال</button><button class="btn btn-primary" onclick="cwSaveLesson('${subjectKey}',${week},this)">حفظ المحاضرة والواجب</button><button class="btn" onclick="renderAcademicCoursework()">رجوع</button></section>`;
   cwQuestionCount = qs.length;
 }
 function cwQuestionEditor(q, i) {
@@ -171,6 +171,21 @@ async function cwSolve(id) {
     cwNotify(e.message);
   }
 }
+function cwDiscussionCard(l,open){
+  if(Date.now()<Date.parse(l.opens_at))return '<section style="margin-top:14px"><span class="badge">تتاح مناقشة المحاضرة عند فتح الواجب</span></section>';
+  return `<section style="margin-top:16px;padding:14px;background:#f4f2ff;border-radius:14px"><h4>مناقشة المحاضرة · ${l.discussionMax} درجات</h4><p style="line-height:1.9">${cwEscape(l.discussionPrompt)}</p>${l.discussion?.score!=null?`<p>الدرجة: ${l.discussion.score}/${l.discussionMax}</p><p>${cwEscape(l.discussion.feedback)}</p>`:open?`<textarea id="cwDiscussion_${l.id}" style="width:100%;min-height:150px;box-sizing:border-box;font:inherit;padding:12px;border:1px solid #ccd6f0;border-radius:12px" placeholder="شارك إجابتك بأسلوبك">${cwEscape(l.discussion?.answer||'')}</textarea><button class="btn-primary" onclick="cwSendDiscussion('${l.id}',this)">${l.discussion?'تحديث المشاركة':'إرسال المشاركة'}</button>${l.discussion?'<p>تم حفظ مشاركتك، بانتظار تقييم المحاضر.</p>':''}`:'<p>تتاح المناقشة خلال فترة الواجب.</p>'}</section>`;
+}
+async function cwSendDiscussion(id,button){
+  try{button.disabled=true;await cwApi('/discussion',{lessonId:id,answer:document.getElementById('cwDiscussion_'+id).value});cwNotify('تم حفظ مشاركتك');await renderAcademicCoursework();}catch(e){cwNotify(e.message);button.disabled=false;}
+}
+function cwDiscussionReviewCard(s,i){
+  const d=cwReport.discussions?.find(d=>d.student_key===s.key);
+  if(!d)return '';
+  return `<section style="padding:14px;margin:12px 0;background:#f4f2ff;border-radius:12px"><h4>مناقشة المحاضرة</h4><p>${cwEscape(cwReport.lesson.discussionPrompt)}</p><p style="white-space:pre-wrap;line-height:1.9">${cwEscape(d.answer)}</p><label>التقييم من ${cwReport.lesson.discussionMax}</label><input id="cwDiscScore${i}" type="number" min="0" max="${cwReport.lesson.discussionMax}" value="${d.score??''}"><textarea id="cwDiscFeedback${i}" style="width:100%;font:inherit" placeholder="تعليق المحاضر">${cwEscape(d.feedback)}</textarea><button class="btn" onclick="cwReviewDiscussion('${s.key}',${i},this)">حفظ تقييم المناقشة</button></section>`;
+}
+async function cwReviewDiscussion(key,i,button){
+  try{button.disabled=true;const r=await cwApi('/discussion-review',{lessonId:cwActiveLesson,studentKey:key,score:document.getElementById('cwDiscScore'+i).value,feedback:document.getElementById('cwDiscFeedback'+i).value});cwNotify(r.synced?'تم رصد درجة المناقشة':'تم حفظ التقييم؛ مزامنة الدرجة معلقة');await cwOpenReport(cwActiveLesson);}catch(e){cwNotify(e.message);button.disabled=false;}
+}
 async function cwSubmit(button) {
   const answers = Array.from({ length: cwQuestionCount }, (_, i) => {
     const checked = document.querySelector(`input[name=cwAnswer${i}]:checked`);
@@ -185,7 +200,7 @@ async function cwSubmit(button) {
       requestId: cwRequestId,
     });
     cwNotify(
-      `نتيجتك ${result.score}/${cwData.maxHomework} · المعتمد ${result.bestScore}/${cwData.maxHomework}${result.synced ? "" : " · تم الحفظ والرصد بانتظار المزامنة"}`,
+      `نتيجتك ${result.score}/${(cwData.lessons.find(l=>l.id===cwActiveLesson)?.homeworkMax||cwData.maxHomework)} · المعتمد ${result.bestScore}/${(cwData.lessons.find(l=>l.id===cwActiveLesson)?.homeworkMax||cwData.maxHomework)}${result.synced ? "" : " · تم الحفظ والرصد بانتظار المزامنة"}`,
     );
     if(result.synced){
       try{const snapshot=await firebase.database().ref('grades').orderByChild('studentKey').equalTo(currentUser.fbKey).get();dbData.grades=snapshot.val()||{};}catch(error){console.warn('coursework grades refresh',error);}
@@ -224,7 +239,7 @@ async function cwOpenReport(id) {
     cwHost().innerHTML = `<section class="card"><h3>${cwEscape(cwReport.lesson.title)} — الحضور والواجبات</h3>${currentUser.role === "admin" ? '<div class="field"><label>استيراد سجل Zoom (CSV)</label><input type="file" accept=".csv" onchange="cwPreviewZoom(this.files[0])"></div><div id="cwAttendancePreview"></div>' : ""}<div style="display:grid;gap:12px">${cwReport.students
       .map(
         (s, i) =>
-          `<article style="padding:16px;border:1px solid #dbe5ff;border-radius:14px"><strong>${cwEscape(cwName(s))}</strong><p>الواجب: ${s.result ? `${s.result.score}/${cwData.maxHomework} · ${s.result.attempts} محاولات` : "لم يسلم"} · الحضور: ${s.attendance ? `${s.attendance.percent}%` : "لم يرصد"}</p>${
+          `<article style="padding:16px;border:1px solid #dbe5ff;border-radius:14px"><strong>${cwEscape(cwName(s))}</strong><p>الواجب: ${s.result ? `${s.result.score}/${cwReport.lesson.homeworkMax} · ${s.result.attempts} محاولات` : "لم يسلم"} · الحضور: ${s.attendance ? `${s.attendance.percent}%` : "لم يرصد"}</p>${cwDiscussionReviewCard(s,i)}${
             s.reflection
               ? `<div>${JSON.parse(s.reflection.answers_json)
                   .map(
@@ -233,7 +248,7 @@ async function cwOpenReport(id) {
                   )
                   .join(
                     "",
-                  )}</div><label>درجة تعويض الحضور من ${cwData.maxAttendance}</label><input id="cwReviewScore${i}" type="number" min="0" max="${cwData.maxAttendance}" value="${s.reflection.score ?? ""}"><textarea id="cwReviewFeedback${i}" placeholder="تعليق المحاضر" style="width:100%;font-family:inherit">${cwEscape(s.reflection.feedback)}</textarea><button class="btn" onclick="cwReview('${s.key}',${i},this)">اعتماد التعويض</button>`
+                  )}</div><label>درجة تعويض الحضور من ${cwReport?.lesson?.attendanceMax||cwData.maxAttendance}</label><input id="cwReviewScore${i}" type="number" min="0" max="${cwReport?.lesson?.attendanceMax||cwData.maxAttendance}" value="${s.reflection.score ?? ""}"><textarea id="cwReviewFeedback${i}" placeholder="تعليق المحاضر" style="width:100%;font-family:inherit">${cwEscape(s.reflection.feedback)}</textarea><button class="btn" onclick="cwReview('${s.key}',${i},this)">اعتماد التعويض</button>`
               : "<span>لا توجد إجابة تعويض.</span>"
           }</article>`,
       )
