@@ -1580,6 +1580,7 @@ function isCurrentAcademicScheduleSlot(slot){
   if(semester&&['inactive','completed','finished','archived'].includes(semester.status))return false;
   const start=String(slot.termStartDate||subject?.startDate||semester?.startDate||'').replace(/\//g,'-');
   const end=String(slot.termEndDate||subject?.endDate||semester?.endDate||'').replace(/\//g,'-');
+  if(!start||!end)return false;
   if((start&&start>today)||(end&&end<today))return false;
   const current=getCurrentSemesterForBatch(slot.batch);
   if(current?.status==='project')return false;

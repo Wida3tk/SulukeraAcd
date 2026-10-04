@@ -7006,11 +7006,12 @@ async function renderScheduleAdmin(){
     if(snap.exists()) scheduleData = snap.val();
     else scheduleData = {weekly:{}, units:{}};
   }catch(e){ scheduleData = {weekly:{}, units:{}}; }
+  await repairLegacyAcademicSchedule();
   // Populate subject select
   const subjSel = document.getElementById('schSubject');
   if(subjSel){
     subjSel.innerHTML = '<option value="">-- اختر مقرراً --</option>' +
-      subjects.filter(s=>s._fbKey).map(s=>`<option value="${s._fbKey}">${s.name}${s.batch?' — '+s.batch:''}</option>`).join('');
+      subjects.filter(s=>s._fbKey&&Object.values(semestersData).some(t=>t.status==='active'&&(t.subjects||[]).includes(s._fbKey))).map(s=>`<option value="${s._fbKey}">${s.name}${s.batch?' — '+s.batch:''}</option>`).join('');
   }
   const batchSel = document.getElementById('schBatch');
   if(batchSel){
@@ -7041,6 +7042,32 @@ function switchScheduleTermView(view){
 }
 
 // ── WEEKLY ────────────────────────────────────
+function academicSlotPeriod(slot){
+  const term=semestersData[slot.semesterKey]||{};
+  return {start:slot.termStartDate||term.startDate||'',end:slot.termEndDate||term.endDate||''};
+}
+function isCurrentAdminScheduleSlot(slot){
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'}),period=academicSlotPeriod(slot);
+  return slot.active!==false&&!slot.archivedAt&&!!period.start&&!!period.end&&period.start<=today&&period.end>=today;
+}
+async function repairLegacyAcademicSchedule(){
+  if(currentUser?.role!=='admin')return;
+  const updates={},today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
+  for(const [key,slot] of Object.entries(scheduleData.weekly||{})){
+    const current=Object.entries(semestersData).find(([,t])=>t.status==='active'&&t.startDate==='2026-10-04'&&(t.batches||[]).some(b=>sameBatchName(b,slot.batch)));
+    const old=current&&!(current[1].subjects||[]).includes(slot.subjectKey)&&(!slot.termStartDate||slot.termStartDate<'2026-10-04');
+    const period=academicSlotPeriod(slot);
+    if(old){
+      const archiveKey=`archive_2026_08_${String(slot.batch).replace(/[.#$[\]]/g,'_')}`;
+      if(!semestersData[archiveKey]){const t={name:`${slot.batch} — أغسطس–سبتمبر 2026`,startDate:'2026-08-23',endDate:'2026-09-24',batches:[slot.batch],subjects:[],status:'inactive'};semestersData[archiveKey]=t;updates[`semesters/${archiveKey}`]=t;}
+      Object.assign(slot,{semesterKey:archiveKey,termStartDate:'2026-08-23',termEndDate:'2026-09-24',active:false,archivedAt:slot.archivedAt||new Date().toISOString()});
+      updates[`schedule/weekly/${key}`]=slot;
+    }else if(period.end&&period.end<today&&slot.active!==false){
+      slot.active=false;slot.archivedAt=slot.archivedAt||new Date().toISOString();updates[`schedule/weekly/${key}`]=slot;
+    }
+  }
+  if(Object.keys(updates).length)await fbRef('/').update(updates);
+}
 async function addScheduleSlot(){
   const day    = document.getElementById('schDay').value;
   const start  = document.getElementById('schStart').value;
@@ -7056,6 +7083,7 @@ async function addScheduleSlot(){
   const lecUser = subjectRecord;
   const lecName = lecUser ? getLecturerName(lecUser.lecturerUserId) : '';
   const semesterEntry=Object.entries(semestersData||{}).find(([,semester])=>semester.status==='active'&&(semester.batches||[]).some(item=>sameBatchName(item,batch))&&(semester.subjects||[]).includes(subjectKey));
+  if(!semesterEntry?.[1]?.startDate||!semesterEntry?.[1]?.endDate)return showToast('⚠️ اربط المقرر بفصل وحدد تاريخ بدايته ونهايته أولًا');
   const existingSlot=editingScheduleSlotKey ? scheduleData.weekly?.[editingScheduleSlotKey] : null;
   const colorIdx = Object.keys(scheduleData.weekly||{}).length % SLOT_COLORS.length;
   const key = editingScheduleSlotKey || 'slot_'+Date.now();
@@ -7100,7 +7128,7 @@ function cancelScheduleSlotEdit(){
 function renderWeeklySlots(){
   const el=document.getElementById('weeklySlotsList');
   if(!el) return;
-  const slots=Object.entries(scheduleData.weekly||{}).filter(([,slot])=>slot.active!==false);
+  const slots=Object.entries(scheduleData.weekly||{}).filter(([,slot])=>isCurrentAdminScheduleSlot(slot));
   if(!slots.length){el.innerHTML='<div class="alert alert-warn">لا توجد محاضرات مضافة</div>';return;}
   el.innerHTML=slots.sort(([,a],[,b])=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day)||a.timeStart?.localeCompare(b.timeStart)).map(([key,s])=>`
     <div class="slot-item">
@@ -7129,7 +7157,7 @@ async function deleteSlot(key){
 function renderWeeklyPreview(){
   const el=document.getElementById('weeklyPreview');
   if(!el) return;
-  const slots=Object.values(scheduleData.weekly||{}).filter(slot=>slot.active!==false);
+  const slots=Object.values(scheduleData.weekly||{}).filter(isCurrentAdminScheduleSlot);
   if(!slots.length){el.innerHTML='<div class="alert alert-info">أضف محاضرات لرؤية المعاينة</div>';return;}
   const batches=[...new Set(slots.map(slot=>slot.batch||'جدول عام'))].sort();
   const orderedSlots=[...slots].sort((a,b)=>{
@@ -7164,7 +7192,7 @@ function renderWeeklyPreview(){
 }
 function renderArchivedSchedules(){
   const host=document.getElementById('archivedSchedulesList');if(!host)return;
-  const archived=Object.entries(scheduleData.weekly||{}).filter(([,slot])=>slot.active===false);
+  const archived=Object.entries(scheduleData.weekly||{}).filter(([,slot])=>slot.active===false||(academicSlotPeriod(slot).end&&academicSlotPeriod(slot).end<new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'})));
   if(!archived.length){host.innerHTML='<div class="empty">لا توجد فصول منتهية محفوظة حتى الآن.</div>';return;}
   const groups={};
   archived.forEach(([slotKey,slot])=>{
