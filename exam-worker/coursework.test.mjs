@@ -242,6 +242,27 @@ test("grade sync preserves other weeks and exam while writing 6/6/3 components",
     assert.equal(grade.w1_attend,1);
   }finally{globalThis.fetch=original;}
 });
+test("recorded attendance credit waits for completion of the basic homework without changing live attendance", async () => {
+  const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+  f.ctx.firebaseAdminToken=async()=> 'test-token';
+  const original=globalThis.fetch;let grade={exam:20};
+  globalThis.fetch=async(url,options={})=>{
+    if(String(url).endsWith('/settings.json'))return Response.json({attend:3});
+    if(options.method==='PUT'){grade=JSON.parse(options.body);return Response.json(grade);}
+    return new Response(JSON.stringify(grade),{headers:{etag:'"test"','Content-Type':'application/json'}});
+  };
+  try{
+    await f.call('admin','/attendance',{lessonId:id,sourceHash:'recorded',rows:[{studentKey:'student',percent:0}]});
+    await f.call('student','/reflection',{lessonId:id,answers:['الفكرة','المفهوم','التطبيق']});
+    await f.call('teacher','/review',{lessonId:id,studentKey:'student',score:3});
+    assert.equal(grade.w1_attend,0);
+    await f.call('student','/submit',{lessonId:id,answers:[0],requestId:'completed-with-zero'});
+    assert.equal(grade.w1_hw,0);assert.equal(grade.w1_attend,3);assert.equal(grade.exam,20);
+    const second=(await f.call('admin','/lesson',{...f.config,week:2})).data.id;
+    await f.call('admin','/attendance',{lessonId:second,sourceHash:'live',rows:[{studentKey:'student',percent:90}]});
+    assert.equal(grade.w2_attend,3);
+  }finally{globalThis.fetch=original;}
+});
 test("six-point homework and discussion are independent; discussion review is scoped and bounded", async () => {
   const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
   f.sql.prepare('INSERT OR REPLACE INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'سؤال نقاش');

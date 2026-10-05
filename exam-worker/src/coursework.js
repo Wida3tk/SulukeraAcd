@@ -152,7 +152,7 @@ async function synchronize(env, ctx, l, studentKey, actor) {
       ? attendanceGrade(attendance.percent, maxAttend)
       : null;
     if (attend != null || reflection?.score != null)
-      fields[`w${l.week}_attend`] = reflection?.score ?? attend;
+      fields[`w${l.week}_attend`] = best?.score != null ? (reflection?.score ?? attend) : attend;
     else if (attendance) fields[`w${l.week}_attend`] = null;
     const key = safeKey(`grade_${studentKey}_${l.subject_key}`),
       legacy = safeKey(`${studentKey}_${l.subject_key}`);

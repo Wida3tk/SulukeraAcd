@@ -87,8 +87,8 @@ function cwStudentLessonOpen(l){return l.status==='published'&&Date.now()>=Date.
 function cwStudentLessonCard(l,week){
   if(!l||l.status!=='published')return `<article class="cw-student-lesson cw-student-upcoming"><header><span class="cw-lesson-number">${String(week).padStart(2,'0')}</span><span class="cw-status">قريبًا</span></header><h3>المحاضرة ${week}</h3><p class="cw-muted">ستظهر تفاصيل المحاضرة ومتطلباتها عند إتاحتها.</p></article>`;
   const open=cwStudentLessonOpen(l),upcoming=Date.now()<Date.parse(l.opens_at),attendance=l.attendance,reflection=l.reflection;
-  const attendanceText=!attendance?'الحضور بانتظار الرصد':reflection?.score!=null?`درجة الحضور بعد التعويض: ${reflection.score}/${l.attendanceMax}`:attendance.percent>=80?`الحضور مكتمل · ${l.attendanceMax}/${l.attendanceMax}`:`الحضور: ${cwAttendancePoints(attendance.percent,l.attendanceMax)}/${l.attendanceMax} · ${reflection?'التعويض بانتظار التقييم':'يمكنك تعويض الدرجة بمشاهدة التسجيل'}`;
-  return `<article class="cw-student-lesson ${open?'cw-student-open':'cw-student-upcoming'}"><header><span class="cw-lesson-number">${String(week).padStart(2,'0')}</span><span class="cw-status">${open?'متاح الآن':upcoming?'لم يفتح بعد':'انتهى التسليم'}</span></header><h3>المحاضرة ${week}</h3><div class="cw-lesson-resources">${cwLink(l.zoom_url,'دخول اللقاء')}${cwLink(l.pdf_url,'مشاهدة الملف')}${cwLink(l.recording_url,'مشاهدة التسجيل')}</div><div class="cw-student-deadline"><span>آخر موعد للتسليم</span><strong>${cwDate(l.closes_at)}</strong><small>يفتح الواجب: ${cwDate(l.opens_at)}</small></div><div class="cw-student-result"><span>واجب المحاضرة</span><strong>${l.result?`${l.result.score}/${l.homeworkMax}`:'لم يُحل بعد'}</strong></div><p class="cw-student-attendance">${attendanceText}</p><div class="cw-student-actions">${open?`<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result?'إعادة المحاولة':'حل واجب المحاضرة'} ←</button>`:`<p class="cw-muted">${upcoming?'يُتاح الحل في الموعد الموضح أعلاه.':'انتهت فترة تسليم الواجب.'}</p>`}${attendance&&attendance.percent<80&&reflection?.score==null&&open?`<button class="btn-out" onclick="cwReflection('${l.id}')">${reflection?'تعديل إجابة التعويض':'تعويض درجة الحضور'}</button>`:''}</div>${l.discussionPrompt?cwDiscussionCard(l,open):''}${reflection?.feedback?`<p class="cw-muted">${cwEscape(reflection.feedback)}</p>`:''}</article>`;
+  const attendanceText=!attendance?'الحضور بانتظار الرصد':reflection?.score!=null?(l.result?`درجة الحضور: ${reflection.score}/${l.attendanceMax}`:'تم تقييم واجب الحضور المسجل · أكمل الواجب الأساسي لاحتساب الدرجة'):attendance.percent>=80?`الحضور مكتمل · ${l.attendanceMax}/${l.attendanceMax}`:`الحضور: ${cwAttendancePoints(attendance.percent,l.attendanceMax)}/${l.attendanceMax} · ${reflection?'التعويض بانتظار التقييم':'يمكنك تعويض الدرجة بمشاهدة التسجيل'}`;
+  return `<article class="cw-student-lesson ${open?'cw-student-open':'cw-student-upcoming'}"><header><span class="cw-lesson-number">${String(week).padStart(2,'0')}</span><span class="cw-status">${open?'متاح الآن':upcoming?'لم يفتح بعد':'انتهى التسليم'}</span></header><h3>المحاضرة ${week}</h3><div class="cw-lesson-resources">${cwLink(l.zoom_url,'دخول اللقاء')}${cwLink(l.pdf_url,'مشاهدة الملف')}${cwLink(l.recording_url,'مشاهدة التسجيل')}</div><div class="cw-student-deadline"><span>آخر موعد للتسليم</span><strong>${cwDate(l.closes_at)}</strong><small>يفتح الواجب: ${cwDate(l.opens_at)}</small></div><div class="cw-student-result"><span>واجب المحاضرة</span><strong>${l.result?`${l.result.score}/${l.homeworkMax}`:'لم يُحل بعد'}</strong></div><p class="cw-student-attendance">${attendanceText}</p><div class="cw-student-actions">${open?`<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result?'إعادة المحاولة':'حل واجب المحاضرة'} ←</button>`:`<p class="cw-muted">${upcoming?'يُتاح الحل في الموعد الموضح أعلاه.':'انتهت فترة تسليم الواجب.'}</p>`}${attendance&&attendance.percent<80&&reflection?.score==null&&open?`<button class="btn-out" onclick="cwReflection('${l.id}')">${reflection?'تعديل واجب الحضور المسجل':'واجب الحضور المسجل'}</button>`:''}</div>${l.discussionPrompt?cwDiscussionCard(l,open):''}${reflection?.feedback?`<p class="cw-muted">${cwEscape(reflection.feedback)}</p>`:''}</article>`;
 }
 function cwHomeLessonCard(subject,week){
   const l=cwData.lessons.find(l=>l.subject_key===subject.key&&l.week===week),admin=currentUser.role==='admin',now=Date.now();
@@ -169,10 +169,14 @@ async function cwSolve(id) {
     cwActiveLesson = id;
     cwQuestionCount = data.questions.length;
     cwRequestId = crypto.randomUUID();
-    cwHost().innerHTML = `<section class="card"><h3>واجب المحاضرة</h3><p>يمكنك إعادة المحاولة حتى ${cwDate(data.closesAt)}. تُعتمد أعلى نتيجة.</p>${data.questions.map((q, i) => `<fieldset style="padding:16px;border:1px solid #dbe5ff;border-radius:14px;margin-bottom:14px"><legend>${i + 1}. ${cwEscape(q.prompt)}</legend>${q.choices.map((choice, j) => `<label style="display:flex;gap:8px;padding:9px"><input type="radio" name="cwAnswer${i}" value="${j}">${cwEscape(choice)}</label>`).join("")}</fieldset>`).join("")}<button class="btn-primary" onclick="cwSubmit(this)">تسليم الواجب</button><button class="btn-out" onclick="renderAcademicCoursework()">رجوع</button></section>`;
+    cwHost().innerHTML = `<div class="cw-assignment-page"><header class="cw-assignment-hero"><span>اختبر فهمك وواصل تقدّمك</span><h2>واجب المحاضرة</h2><div class="cw-assignment-meta"><span>${data.questions.length} أسئلة</span><span>محاولات غير محدودة · تُعتمد أعلى نتيجة</span></div><div class="cw-assignment-due">آخر موعد للتسليم <strong>${cwDate(data.closesAt)}</strong><small>بتوقيت السعودية</small></div></header><div class="cw-answer-progress" id="cwAnswerProgress">أجبت عن 0 من ${data.questions.length} أسئلة</div><div class="cw-question-stack">${data.questions.map((q,i)=>`<fieldset class="cw-mcq-card"><legend class="cw-question-tag">السؤال ${String(i+1).padStart(2,'0')}</legend><h3 class="cw-question-title">${cwEscape(q.prompt)}</h3><div class="cw-options">${q.choices.map((choice,j)=>`<label class="cw-option"><input type="radio" name="cwAnswer${i}" value="${j}" onchange="cwUpdateAnswerProgress()"><span class="cw-option-letter">${['A','B','C','D'][j]}</span><span dir="auto">${cwEscape(choice)}</span></label>`).join('')}</div></fieldset>`).join('')}</div><footer class="cw-assignment-footer"><button class="btn-primary" onclick="cwSubmit(this)">تسليم الواجب ←</button><button class="btn-out" onclick="renderAcademicCoursework()">العودة إلى مقرراتي</button></footer></div>`;
   } catch (e) {
     cwNotify(e.message);
   }
+}
+function cwUpdateAnswerProgress(){
+  const count=document.querySelectorAll('.cw-options input:checked').length;
+  document.getElementById('cwAnswerProgress').textContent=`أجبت عن ${count} من ${cwQuestionCount} أسئلة`;
 }
 function cwDiscussionCard(l,open){
   if(Date.now()<Date.parse(l.opens_at))return `<div class="cw-student-discussion"><div class="cw-student-discussion-coming"><strong>مناقشة المحاضرة</strong><span>تُتاح عند فتح الواجب · ${l.discussionMax} درجات</span></div></div>`;
@@ -217,7 +221,7 @@ async function cwSubmit(button) {
 function cwReflection(id) {
   const l = cwData.lessons.find((x) => x.id === id),
     answers = l.reflection ? JSON.parse(l.reflection.answers_json) : [];
-  cwHost().innerHTML = `<section class="card"><h3>تعويض حضور ${cwEscape(l.title)}</h3>${cwLink(l.recording_url, "مشاهدة التسجيل")}<p>لتعويض درجة الحضور، يرجى مشاهدة المحاضرة بشكل مسجل والإجابة على الأسئلة التالية. يراجع المحاضر إجابتك ويعدّل درجة الحضور.</p>${CW_REFLECTION_QUESTIONS.map((q, i) => `<div class="field"><label>${q}</label><textarea id="cwReflection${i}" style="width:100%;min-height:130px;font-family:inherit">${cwEscape(answers[i] || "")}</textarea></div>`).join("")}<button class="btn-primary" onclick="cwSendReflection('${id}',this)">إرسال الإجابة</button><button class="btn-out" onclick="renderAcademicCoursework()">رجوع</button></section>`;
+  cwHost().innerHTML = `<div class="cw-assignment-page"><header class="cw-assignment-hero cw-recorded-hero"><span>شاهد · تأمل · طبّق</span><h2>واجب الحضور المسجل</h2><p>${cwEscape(l.title)}</p>${cwLink(l.recording_url,'مشاهدة التسجيل')}</header><section class="cw-recorded-intro"><p>أثناء الاستماع إلى محاضرة هذا الأسبوع المسجلة، يرجى إكمال الإجابة على الأسئلة أدناه.<br>يمكنك تقديم الواجب بصيغة نقاط أو في مقالة قصيرة، حسب ما تراه مناسبًا.</p><aside class="cw-recorded-notice"><strong>تنويه مهم:</strong><ul><li><strong>في حال كان حضورك للمحاضرة مسجلًا</strong>، فإن تعبئة هذا النموذج <strong>وإكمال الواجب الأساسي شرط أساسي لاحتساب درجة الحضور.</strong></li><li>عدم تسليم الواجب يعني أن الحضور المسجّل <strong>لن يُحتسب</strong> ضمن درجة الحضور.</li></ul></aside><p class="cw-recorded-deadline">آخر موعد للتسليم: <strong>${cwDate(l.closes_at)}</strong> · بتوقيت السعودية</p></section><div class="cw-question-stack">${CW_REFLECTION_QUESTIONS.map((q,i)=>`<section class="cw-written-card"><span class="cw-question-tag">السؤال ${String(i+1).padStart(2,'0')}</span><label class="cw-question-title" for="cwReflection${i}">${q}</label><textarea id="cwReflection${i}" placeholder="اكتب إجابتك هنا، بصيغة نقاط أو فقرة قصيرة…">${cwEscape(answers[i]||'')}</textarea></section>`).join('')}</div><footer class="cw-assignment-footer"><button class="btn-primary" onclick="cwSendReflection('${id}',this)">تسليم واجب الحضور المسجل ←</button><button class="btn-out" onclick="renderAcademicCoursework()">العودة إلى مقرراتي</button></footer></div>`;
 }
 function cwAttendancePoints(percent,max){return max===3?(percent>=80?3:percent>=50?2:percent>0?1:0):percent>=80?max:0;}
 async function cwSendReflection(id, button) {
@@ -229,7 +233,7 @@ async function cwSendReflection(id, button) {
         (i) => document.getElementById(`cwReflection${i}`).value,
       ),
     });
-    cwNotify("تم إرسال تعويض الحضور للمراجعة");
+    cwNotify("تم تسليم واجب الحضور المسجل");
     await renderAcademicCoursework();
   } catch (e) {
     cwNotify(e.message);
@@ -264,7 +268,7 @@ function cwReportDiscussionSummary(){
 }
 function cwReportTotals(s,l,discussion){
   const original=s.attendance?cwAttendancePoints(s.attendance.percent,l.attendanceMax):null;
-  const attendance=s.reflection?.score??original,homework=s.result?.score??null,disc=discussion?.score??null;
+  const attendance=s.result?(s.reflection?.score??original):original,homework=s.result?.score??null,disc=discussion?.score??null;
   return {original,attendance,homework,disc,total:attendance!=null&&homework!=null&&disc!=null?attendance+homework+disc:null};
 }
 function cwReportStudentCard(s,i){
