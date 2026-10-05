@@ -1,0 +1,15 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const ctx={};vm.createContext(ctx);vm.runInContext(fs.readFileSync('academic-policy.js','utf8'),ctx);const policy=ctx.SulukeraAcademicPolicy;
+const student={batch:'Q3-26'},own={key:'own',courseKey:'course_06',batch:'Q3-26'},shared={key:'shared',courseKey:'course_06',batch:'Q2-26'};
+const choose=grades=>policy.canonicalSubjects(student,[shared,own],s=>grades[s.key]);
+let rows=choose({shared:{exam:38,examEntered:true}});
+assert.equal(rows.length,1);assert.equal(rows[0].key,'shared');assert.equal(rows[0]._withinPlan,true);
+rows=choose({own:{exam:38,examEntered:true}});assert.equal(rows[0].key,'own');
+rows=choose({});assert.equal(rows.length,1);assert.equal(rows[0].key,'own');
+rows=choose({shared:{exam:0,examEntered:true}});assert.equal(rows[0].key,'shared');
+rows=choose({shared:{w1_hw:6}});assert.equal(rows[0].key,'shared');
+rows=choose({shared:{exam:38,examEntered:true},own:{exam:65,examEntered:true}});assert.equal(rows.length,2);assert.equal(rows.every(r=>r._duplicateGradeReview),true);
+const unknown={key:'other',batch:'Q2-26',courseKey:'course_99'};
+rows=policy.canonicalSubjects(student,[unknown],()=>null,[own,unknown]);assert.equal(rows[0]._withinPlan,false);
+for(const file of ['index.html','student.html'])for(const match of fs.readFileSync(file,'utf8').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
+console.log('PASS: one plan row per course, grades and explicit zero retained, own ungraded offering preferred, conflicting grades preserved for review.');

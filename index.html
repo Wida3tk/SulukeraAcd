@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="academic-policy.js?v=20261006-canonical-courses"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="vendor/qrcode.js"></script>
 <link rel="stylesheet" href="performance.css?v=20261005-4">
@@ -1893,17 +1894,17 @@ function getAdvisorPriorityLabel(priority){
   return ({low:'منخفضة',normal:'متوسطة',high:'عالية'})[priority] || 'متوسطة';
 }
 function getStudentAverage(stdIdx){
-  const mySubjs = subjects.filter(s=>s.students.includes(stdIdx));
+  const mySubjs = getCanonicalStudentSubjects(stdIdx);
   const totals = mySubjs.map(s=>{
-    const si=subjects.indexOf(s);
+    const si=s.idx;
     return grades[si]?.[stdIdx] ? calcTotal(grades[si][stdIdx]) : 0;
   }).filter(v=>v>0);
   return totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
 }
 function getStudentAdvisorSummary(stdIdx){
   const st=students[stdIdx];
-  const mySubjs=subjects.filter(s=>s.students.includes(stdIdx));
-  const gradeRows=mySubjs.map(s=>grades[subjects.indexOf(s)]?.[stdIdx]).filter(Boolean);
+  const mySubjs=getCanonicalStudentSubjects(stdIdx);
+  const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
   const financial=getStudentFinancialState(st);
   const pendingRequests=studentRequestsData.filter(req=>req.studentKey===st?._fbKey && !['approved','rejected','completed'].includes(req.status)).length;
   const failingCount=gradeRows.filter(isFailingGrade).length;
@@ -4338,7 +4339,12 @@ function openStudentGradesPanel(stdIdx){
   const gradesTab=[...document.querySelectorAll('#page-student-profile .profile-tab')].find(tab=>tab.getAttribute('onclick')?.includes("'grades'"));
   if(gradesTab) switchProfileTab('grades',gradesTab);
 }
+function getCanonicalStudentSubjects(stdIdx){
+  const registered=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
+  return SulukeraAcademicPolicy.canonicalSubjects(students[stdIdx],registered,subject=>grades[subject.idx]?.[stdIdx],subjects);
+}
 function renderStudentAcademicProgressSheet(stdIdx, st, mySubjs){
+  mySubjs=SulukeraAcademicPolicy.canonicalSubjects(st,mySubjs,subject=>grades[subject.idx]?.[stdIdx],subjects);
   const rows=mySubjs.map((subject,order)=>{
     const grade=grades[subject.idx]?.[stdIdx]||null;
     const total=grade?calcTotal(grade):0;
@@ -4379,7 +4385,7 @@ function renderStudentAcademicProgressSheet(stdIdx, st, mySubjs){
               <td><strong style="font-size:16px;color:${row.result.label==='تعثر'?'var(--danger)':'var(--primary-dark)'}">${row.grade&&isExamEntered(row.grade)?row.total:'—'}</strong>${row.grade&&isExamEntered(row.grade)?'<span style="font-size:11px;color:var(--text-muted)"> / 100</span>':''}</td>
               <td><span class="badge ${row.letter==='—'?'badge-student':'badge-'+row.letter}">${row.letter}</span></td>
               <td><span class="badge ${row.result.className}">${row.result.label}</span></td>
-              <td><span class="badge ${row.subject.batch && !sameBatchName(row.subject.batch, st.batch)?'badge-admin':'badge-student'}">${row.subject.batch && !sameBatchName(row.subject.batch, st.batch)?'استثنائي بين الدفعات':'ضمن الخطة'}</span></td>
+              <td><span class="badge ${row.subject._duplicateGradeReview?'badge-warn':row.subject._withinPlan?'badge-student':'badge-admin'}">${row.subject._duplicateGradeReview?'درجات متعددة تحتاج مراجعة':row.subject._withinPlan?'ضمن الخطة':'استثنائي بين الدفعات'}</span></td>
               <td style="display:flex;gap:6px;flex-wrap:wrap;">
                 ${canManageAcademicAdmin()||currentUser?.role==='lecturer'?`<button class="btn btn-sm" onclick="openStudentGradeEditor(${stdIdx},${row.subject.idx})">تعديل الدرجة</button>`:''}
                 <button class="btn btn-sm btn-primary" onclick="openGradeReportModal(${stdIdx})">كشف الدرجات</button>
@@ -4685,9 +4691,9 @@ async function saveStudentGradeFromProfile(){
 }
 function renderStudentProfile(stdIdx) {
   const st=students[stdIdx];
-  const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
+  const mySubjs=getCanonicalStudentSubjects(stdIdx);
   const enrollmentRecords=getStudentEnrollmentRecords(stdIdx);
-  const crossBatchRecords=enrollmentRecords.filter(record=>record.sourceType==='manual_cross_batch' || (record.subject?.batch && !sameBatchName(record.subject.batch, st.batch)));
+  const crossBatchRecords=enrollmentRecords.filter(record=>mySubjs.some(s=>s._fbKey===record.subject?._fbKey&&!s._withinPlan));
   const tots=mySubjs.map(s=>grades[s.idx]?.[stdIdx]?calcTotal(grades[s.idx][stdIdx]):0);
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
   const gradeRows=mySubjs.map(s=>grades[s.idx]?.[stdIdx]).filter(Boolean);
@@ -5888,7 +5894,7 @@ async function loadMyGrades() {
       scheduleData=snap.exists()?snap.val():{weekly:{},units:{}};
     }catch(e){}
   }
-  const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
+  const mySubjs=getCanonicalStudentSubjects(stdIdx);
   const packageName=getStudentPackageDisplayName(st);
   const semester=getActiveSemesterSummaryForStudent(st.batch);
   const notifications=getStudentPortalNotifications(st,stdIdx,mySubjs);
@@ -6199,7 +6205,7 @@ function openGradeReportModal(stdIdx) {
 }
 function buildGradeReportHTML(stdIdx) {
   const st=students[stdIdx];
-  const mySubjs=subjects.map((s,si)=>({...s,idx:si})).filter(s=>s.students.includes(stdIdx));
+  const mySubjs=getCanonicalStudentSubjects(stdIdx);
   const tots=mySubjs.map(s=>grades[s.idx]?.[stdIdx]?calcTotal(grades[s.idx][stdIdx]):0);
   const avg=tots.length?Math.round(tots.reduce((a,b)=>a+b,0)/tots.length):0;
   const today=new Date().toLocaleDateString('ar-SA');

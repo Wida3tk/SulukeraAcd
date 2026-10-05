@@ -31,5 +31,25 @@
       return Number(term.semesterNo)===limit||numbers.includes(limit);
     });
   }
-  root.SulukeraAcademicPolicy={resolvePlan,semesterLimit,subjectSemester,subjectAllowed,projectStage};
+  function hasRecordedGrade(grade){
+    return !!grade&&(grade.examEntered===true||Number(grade.exam??grade.exam_score)>0||['w1','w2','w3','w4'].some(w=>['attend','hw','disc'].some(field=>Number(grade[w]?.[field]??grade[w+'_'+field])>0)));
+  }
+  function canonicalSubjects(student,offerings,gradeFor,catalog=offerings){
+    const ownKeys=new Set(catalog.filter(s=>normalize(s.batch)===normalize(student?.batch)).map(s=>s.courseKey).filter(Boolean));
+    const groups=new Map();
+    for(const subject of offerings){
+      const identity=subject.courseKey||subject.key||subject._fbKey;
+      if(!groups.has(identity))groups.set(identity,[]);
+      groups.get(identity).push(subject);
+    }
+    const result=[];
+    for(const candidates of groups.values()){
+      const graded=candidates.filter(s=>hasRecordedGrade(gradeFor(s)));
+      // Conflicting graded attempts require review; never silently discard a grade.
+      const retained=graded.length>1?graded:[graded[0]||candidates.find(s=>normalize(s.batch)===normalize(student?.batch))||candidates[0]];
+      for(const subject of retained)result.push({...subject,_withinPlan:normalize(subject.batch)===normalize(student?.batch)||!!subject.courseKey&&ownKeys.has(subject.courseKey),_duplicateGradeReview:graded.length>1});
+    }
+    return result;
+  }
+  root.SulukeraAcademicPolicy={resolvePlan,semesterLimit,subjectSemester,subjectAllowed,projectStage,hasRecordedGrade,canonicalSubjects};
 })(globalThis);

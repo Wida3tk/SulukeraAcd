@@ -14,7 +14,7 @@ assert.equal(p.projectStage(qba,terms,{end:{semesterNo:6}},{},'2028-10-04'),true
 assert.equal(p.projectStage(qba,terms,{end:{semesterNo:6}},{},'2028-09-24'),false);
 assert.equal(p.projectStage({...qba,batch:'Q10-28'},terms,{end:{semesterNo:6}},{},'2028-10-04'),false);
 const html=fs.readFileSync('student.html','utf8');
-const fixture={...ctx,dbData:{students:{a:qasp,b:qba},packages:{},subjects:{fifth:{semesterNo:5,eligiblePlans:['QBA']},sixth:{semesterNo:6},seventh:{semesterNo:7},old:{semesterNo:4}},enrollments:{a:{studentKey:'a',subjectKey:'fifth'},b:{studentKey:'a',subjectKey:'old'},c:{studentKey:'b',subjectKey:'sixth'},d:{studentKey:'b',subjectKey:'seventh'}}},currentUser:null};
+const fixture={...ctx,getGrade_data:()=>null,dbData:{students:{a:qasp,b:qba},packages:{},subjects:{fifth:{semesterNo:5,eligiblePlans:['QBA']},sixth:{semesterNo:6},seventh:{semesterNo:7},old:{semesterNo:4}},enrollments:{a:{studentKey:'a',subjectKey:'fifth'},b:{studentKey:'a',subjectKey:'old'},c:{studentKey:'b',subjectKey:'sixth'},d:{studentKey:'b',subjectKey:'seventh'}}},currentUser:null};
 vm.createContext(fixture);vm.runInContext(html.slice(html.indexOf('function normalizeBatchName('),html.indexOf('function activeSubjectKeysForBatch('))+html.slice(html.indexOf('function getStudentSubjects('),html.indexOf('function getGrade_data(')),fixture);
 assert.deepEqual(Array.from(fixture.getStudentSubjects('a'),s=>s.key),['old']);
 assert.deepEqual(Array.from(fixture.getStudentSubjects('b'),s=>s.key),['sixth']);

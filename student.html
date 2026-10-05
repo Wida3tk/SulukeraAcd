@@ -7,7 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="academic-policy.js?v=20261006-track-stage"></script>
+<script src="academic-policy.js?v=20261006-canonical-courses"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root{
@@ -980,7 +980,7 @@ function renderStudentHomeTab(){
   const nextClass = getNextUpcomingSlot(scheduleSlots);
   const pendingRequests = requests.filter(request=>!request.status || request.status==='pending').length;
   const reviewedRequests = requests.filter(request=>request.reviewedAt).length;
-  const crossBatchCourses = mySubjects.filter(subject=>subject.batch && !sameBatchName(subject.batch, st.batch)).length;
+  const crossBatchCourses = mySubjects.filter(subject=>!subject._withinPlan&&subject.batch && !sameBatchName(subject.batch, st.batch)).length;
   const openSubjects=mySubjects.filter(subject=>getStudentSubjectStage(st,subject)==='active');
   const urgentFocus = hasFail ? 'راجع المقرر المتعثر وقدّم طلب مراجعة عند وجود ملاحظة أكاديمية.' : 'ركّز على حضور المحاضرات واستكمال متطلبات المقرر في مواعيدها.';
   const semesterDaysText = semester?.startDate || semester?.endDate
@@ -1492,7 +1492,7 @@ function getStudentSubjects(studentFbKey){
   Object.entries(dbData.subjects||{}).forEach(([subjectKey,subject])=>{
     if(subject.courseKey&&sameBatchName(subject.batch,student?.batch)) addSubject(subjectKey);
   });
-  return result;
+  return SulukeraAcademicPolicy.canonicalSubjects(student,result,subject=>getGrade_data(studentFbKey,subject.key),Object.values(dbData.subjects||{}));
 }
 
 function getGrade_data(studentFbKey, subjectFbKey){
