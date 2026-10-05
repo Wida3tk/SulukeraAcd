@@ -1,0 +1,36 @@
+const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('playwright');
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'msedge'}),page=await browser.newPage({viewport:{width:1366,height:950}});
+ const html=fs.readFileSync('student.html','utf8');
+ await page.setContent('<html dir="rtl"><head><style>'+html.match(/<style>([\s\S]*?)<\/style>/)[1]+'</style></head><body><main id="mainContent" style="padding:22px"></main></body></html>');
+ await page.addStyleTag({path:'coursework.css'});await page.addScriptTag({path:'coursework-ui.js'});
+ await page.evaluate(()=>{
+  window.currentUser={role:'lecturer'};window.showToast=()=>{};window.testWrites=[];
+  cwActiveLesson='lesson';cwData={subjects:[{key:'course',name:'تدخلات تغيير السلوك',batch:'Q2-26'}],lessons:[{id:'lesson',subject_key:'course',title:'المحاضرة الأولى'}]};
+  cwReport={lesson:{id:'lesson',subject_key:'course',title:'المحاضرة الأولى',discussionMax:6,attendanceMax:3,homeworkMax:6,discussionPrompt:'اشرح الفرق بين التقييم غير المباشر والملاحظة المباشرة.\nExplain the difference between indirect assessment and direct observation.'},students:Array.from({length:45},(_,i)=>({key:'s'+i,id:'SUL-'+String(i).padStart(3,'0'),name:'الطالب '+i,batch:'Q2-26'})),discussions:Array.from({length:43},(_,i)=>({student_key:'s'+i,answer:'إجابة الطالب '+i+'\nتطبيق المفهوم في الممارسة المهنية.',submitted_at:'2026-10-05T10:00:00Z',score:i===0?6:null}))};
+  cwApi=async(path,payload)=>{if(path==='/report')return cwReport;if(path==='/discussion-review'){testWrites.push(payload);cwReport.discussions.find(d=>d.student_key===payload.studentKey).score=Number(payload.score);return {synced:true};}throw Error('Unexpected call');};
+  cwReportFilter='discussionPending';cwRenderReport();
+ });
+ assert.equal(await page.locator('.cw-discussion-hub details[open]').count(),0);
+ assert.equal(await page.locator('.cw-discussion-row').count(),20);
+ assert.equal(await page.locator('.cw-discussion-row[open]').count(),0);
+ await page.locator('.cw-queue-pagination').getByRole('button',{name:'التالي'}).click();
+ assert.match(await page.locator('.cw-queue-pagination').innerText(),/صفحة 2 من 3/);
+ await page.locator('#cwReportSearch').fill('SUL-025');
+ assert.equal(await page.locator('.cw-discussion-row').count(),1);
+ await page.locator('.cw-discussion-row>summary').click();
+ await page.locator('#cwDiscScore25').fill('5');await page.locator('#cwDiscFeedback25').fill('إجابة واضحة');
+ await page.screenshot({path:'.tools/lecturer-discussion-desktop.png',fullPage:true});
+ await page.getByRole('button',{name:'حفظ تقييم المناقشة'}).click();
+ assert.deepEqual(await page.evaluate(()=>testWrites[0]),{lessonId:'lesson',studentKey:'s25',score:'5',feedback:'إجابة واضحة'});
+ assert.equal(await page.locator('.cw-discussion-row').count(),0);
+ await page.locator('#cwReportSearch').fill('');
+ await page.getByRole('button',{name:/مناقشات مقيّمة/}).click();
+ assert.equal(await page.locator('.cw-discussion-row').count(),2);
+ await page.getByRole('button',{name:/لم يشاركوا/}).click();
+ assert.equal(await page.locator('.cw-discussion-row').count(),2);
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.screenshot({path:'.tools/lecturer-discussion-mobile.png',fullPage:true});
+ await browser.close();console.log('PASS: lecturer compact discussion folds, pagination, search, graded/missing filters, correct student save after pagination/search, desktop/mobile; mocked writes only.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
