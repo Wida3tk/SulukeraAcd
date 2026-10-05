@@ -1,0 +1,33 @@
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const {chromium}=require('playwright');
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'msedge'});
+ const page=await browser.newPage({viewport:{width:1366,height:950}});
+ await page.setContent('<html dir="rtl"><head><style>body{margin:0;padding:24px;background:#f0f4ff;font-family:Arial,sans-serif}.cw-report-hero{background:linear-gradient(120deg,#091d50,#1648ee);color:white;padding:28px;border-radius:20px}.cw-muted{color:#7185a5;font-size:12px}.cw-lesson-number{font-size:20px;color:#2356b0}.cw-status{font-size:12px}.cw-lesson-resources{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}a{text-decoration:none}button{font-family:inherit}</style></head><body><main id="mainContent"></main></body></html>');
+ await page.addStyleTag({path:'coursework.css'});
+ await page.addScriptTag({path:'coursework-ui.js'});
+ await page.evaluate(()=>{
+  window.currentUser={role:'student'};
+  const now=Date.now();
+  cwData={subjects:[{key:'one',name:'تدخلات تغيير السلوك',batch:'Q2-26'},{key:'two',name:'برمجة اكتساب المهارات',batch:'Q2-26'}],lessons:[{id:'l1',subject_key:'one',week:1,status:'published',opens_at:new Date(now-3600000).toISOString(),closes_at:new Date(now+86400000).toISOString(),attendanceMax:3,homeworkMax:6,discussionMax:6,attendance:{percent:60},discussionPrompt:'اشرح الفرق بين التقييم غير المباشر والملاحظة المباشرة، وكيف يمكن تطبيق المعلومات في الممارسة المهنية؟\nExplain the difference between indirect assessment and direct observation.'},{id:'l2',subject_key:'one',week:2,status:'published',opens_at:new Date(now+86400000).toISOString(),closes_at:new Date(now+604800000).toISOString(),attendanceMax:3,homeworkMax:6,discussionMax:6,discussionPrompt:'السؤال القادم'},{id:'draft',subject_key:'one',week:3,status:'draft',opens_at:new Date(now-3600000).toISOString(),closes_at:new Date(now+86400000).toISOString(),discussionPrompt:'مسودة مخفية'}]};
+  document.getElementById('mainContent').innerHTML=cwStudentCoursesMarkup();
+ });
+ assert.equal(await page.locator('.cw-course-fold').count(),2);
+ assert.equal(await page.locator('.cw-course-fold[open]').count(),0);
+ await page.locator('.cw-course-fold>summary').first().click();
+ assert.equal(await page.locator('.cw-course-fold[open]').count(),1);
+ assert.equal(await page.locator('.cw-student-discussion[open]').count(),0);
+ assert.equal(await page.getByRole('button',{name:'حل واجب المحاضرة ←'}).count(),1);
+ assert.equal(await page.getByText('مسودة مخفية').count(),0);
+ const date=await page.locator('.cw-student-deadline strong').first().innerText();
+ assert.match(date,/\d/);assert.doesNotMatch(date,/[٠-٩]/);
+ await page.locator('.cw-student-discussion>summary').click();
+ await page.locator('#cwDiscussion_l1').fill('مشاركة تجريبية غير مرسلة');
+ assert.equal(await page.getByRole('button',{name:'إرسال المشاركة'}).count(),1);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.screenshot({path:'.tools/student-coursework-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.screenshot({path:'.tools/student-coursework-mobile.png',fullPage:true});
+ await browser.close();console.log('PASS: collapsible courses and discussions, English Gregorian dates, explicit deadline, draft protection, homework/reflection actions, desktop/mobile layout; no live writes.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

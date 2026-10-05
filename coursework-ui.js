@@ -26,7 +26,7 @@ const cwHost = () =>
   document.getElementById("mainContent");
 const cwDate = (v) =>
   v
-    ? new Date(v).toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" })
+    ? new Date(v).toLocaleString("ar-SA-u-ca-gregory-nu-latn", { timeZone: "Asia/Riyadh", year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit' })
     : "لم يحدد";
 const cwLocal = (v) =>
   v ? new Date(Date.parse(v) + 3 * 3600000).toISOString().slice(0, 16) : "";
@@ -65,34 +65,7 @@ async function renderAcademicCoursework() {
     const role = currentUser.role,
       admin = role === "admin";
     if(role!=='student'){cwRenderCourseworkHome();return;}
-    host.innerHTML = `<section class="card" style="background:linear-gradient(135deg,#071b4d,#1244f3);color:white"><h2>${role === "student" ? "مقرراتي ومحاضراتي" : "المحاضرات والواجبات"}</h2><p>${role === "student" ? "تابع محاضرات الفصل، حل واجب كل محاضرة، وراجع نتيجة مشاركتك." : "إعداد الواجبات، متابعة المحاولات، ومراجعة الحضور وتعويضه."}</p></section>${role !== "student" ? '<button class="btn" onclick="cwRetrySync()">إعادة مزامنة الدرجات المعلقة</button>' : ""}${
-      cwData.subjects.length
-        ? cwData.subjects.filter(subject => role === "student" || subject.key === cwSelectedSubject)
-            .map(
-              (subject) =>
-                `<section class="card" style="margin-top:16px"><h3>${cwEscape(subject.name)}</h3><div style="color:#718096;font-size:12px">${cwEscape(subject.batch)}</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:15px">${[
-                  1, 2, 3, 4,
-                ]
-                  .map((week) => {
-                    const l = cwData.lessons.find(
-                      (x) => x.subject_key === subject.key && x.week === week,
-                    );
-                    if (!l)
-                      return `<article style="border:1px solid #dbe5ff;border-radius:16px;padding:16px;background:#f7faff"><h4>المحاضرة ${week}</h4><p>سيتم نشر تفاصيل المحاضرة وواجبها قريبًا.</p>${admin ? `<button class="btn" onclick="cwEditLesson('${subject.key}',${week})">إعداد المحاضرة والواجب</button>` : ""}</article>`;
-                    const now = Date.now(),
-                      open =
-                        now >= Date.parse(l.opens_at) &&
-                        now <= Date.parse(l.closes_at),
-                      attend = l.attendance,
-                      reflection = l.reflection;
-                    return `<article style="border:1px solid #dbe5ff;border-radius:16px;padding:16px;background:linear-gradient(135deg,#fff,#f2f8ff)"><h4>${cwEscape(l.title)}</h4><div style="display:flex;gap:7px;flex-wrap:wrap">${cwLink(l.zoom_url, "دخول Zoom")}${cwLink(l.pdf_url, "مشاهدة الملف")}${cwLink(l.recording_url, "مشاهدة التسجيل")}</div><p style="font-size:12px;line-height:1.8">فتح الواجب: ${cwDate(l.opens_at)}<br>الإغلاق: ${cwDate(l.closes_at)}<br>المواعيد بتوقيت السعودية</p>${role === "student" ? `<p>واجب المحاضرة: ${l.result ? `${l.result.score}/${l.homeworkMax} · ${l.result.attempts} محاولات` : "لم يُحل بعد"}</p><p style="font-size:12px">${attend ? (attend.percent >= 80 ? `الحضور المباشر مكتمل · ${l.attendanceMax}/${l.attendanceMax}` : reflection?.score != null ? `تعويض الحضور: ${reflection.score}/${l.attendanceMax}` : reflection ? `الحضور: ${cwAttendancePoints(attend.percent,l.attendanceMax)}/${l.attendanceMax} · تعويض الحضور بانتظار المراجعة` : `الحضور: ${cwAttendancePoints(attend.percent,l.attendanceMax)}/${l.attendanceMax} · لتعويض درجة الحضور يرجى مشاهدة المحاضرة بشكل مسجل والإجابة على الأسئلة التالية`) : "الحضور بانتظار الرصد"}</p>${open ? `<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result ? "إعادة المحاولة" : "حل واجب المحاضرة"}</button>` : `<span class="badge">${now < Date.parse(l.opens_at) ? "يفتح في الموعد المحدد" : "انتهت فترة الواجب"}</span>`}${attend && attend.percent < 80 && reflection?.score == null && open ? `<button class="btn-out" style="margin-top:8px" onclick="cwReflection('${l.id}')">${reflection ? "تعديل إجابة التعويض" : "إجابة تعويض الحضور"}</button>` : ""}${l.discussionPrompt ? cwDiscussionCard(l,open) : ""}${reflection?.feedback ? `<p>${cwEscape(reflection.feedback)}</p>` : ""}` : `<span class="badge">${l.status === "published" ? "منشور" : "مسودة"}</span><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">${admin ? `<button class="btn" onclick="cwEditLesson('${subject.key}',${week})">تعديل</button>` : ""}<button class="btn" onclick="cwOpenReport('${l.id}')">الحضور والتسليمات</button></div>`}</article>`;
-                  })
-                  .join("")}</div></section>`,
-            )
-            .join("")
-        : '<div class="card"><div class="empty">لا توجد مقررات حالية مرتبطة بالحساب.</div></div>'
-    }`;
-    if (role !== "student") host.firstElementChild.insertAdjacentHTML("afterend", `<section class="card" style="margin-top:16px"><div class="field"><label>اختر المقرر المتاح هذا الفصل</label><select onchange="cwSelectedSubject=this.value;renderAcademicCoursework()"><option value="">— اختر المقرر —</option>${cwData.subjects.map(s=>`<option value="${cwEscape(s.key)}" ${s.key===cwSelectedSubject?'selected':''}>${cwEscape(s.name)} · ${cwEscape(s.batch)}</option>`).join('')}</select></div><p>تظهر مقررات الفصل الحالي المعتمدة فقط. اختر مقررًا لعرض محاضراته وواجباته.</p></section>`);
+    host.innerHTML = cwStudentCoursesMarkup();
   } catch (e) {
     host.innerHTML = `<div class="card"><div class="alert alert-warn">تعذر تحميل الواجبات. ${cwEscape(e.message)}</div><button class="btn" onclick="renderAcademicCoursework()">إعادة المحاولة</button></div>`;
   }
@@ -103,6 +76,19 @@ function cwRenderCourseworkHome(){
   if(selected)cwHomeBatch=selected.batch;
   const batches=[...new Set(cwData.subjects.map(s=>s.batch))],options=cwData.subjects.filter(s=>s.batch===cwHomeBatch),lessons=selected?cwData.lessons.filter(l=>l.subject_key===selected.key):[],now=Date.now(),open=lessons.filter(l=>l.status==='published'&&Date.parse(l.opens_at)<=now&&Date.parse(l.closes_at)>=now).length;
   cwHost().innerHTML=`<div class="cw-report-shell cw-home-shell"><section class="cw-report-hero"><span class="cw-eyebrow">إدارة التعلّم · الفصل الحالي</span><h2>المحاضرات والواجبات</h2><p>من إعداد المحاضرة إلى متابعة الحضور والتقييم، كل خطوة في مكانها.</p><div class="cw-report-selectors cw-home-selectors"><label>اختر الدفعة<select onchange="cwHomeBatch=this.value;cwSelectedSubject='';cwRenderCourseworkHome()"><option value="">— اختر الدفعة —</option>${batches.map(b=>`<option value="${cwEscape(b)}" ${b===cwHomeBatch?'selected':''}>${cwEscape(b)}</option>`).join('')}</select></label><label>اختر مقرر الفصل الحالي<select ${!cwHomeBatch?'disabled':''} onchange="cwSelectedSubject=this.value;cwRenderCourseworkHome()"><option value="">— اختر المقرر —</option>${options.map(s=>`<option value="${cwEscape(s.key)}" ${s.key===cwSelectedSubject?'selected':''}>${cwEscape(s.name)}</option>`).join('')}</select></label></div></section>${selected?`<div class="cw-report-kpis cw-home-kpis">${[[4,'محاضرات المقرر'],[lessons.length,'محاضرات معدّة'],[open,'واجبات متاحة الآن'],[lessons.filter(l=>l.status==='published'&&Date.parse(l.opens_at)>now).length,'واجبات قادمة']].map(([n,label])=>`<div><strong>${n}</strong><span>${label}</span></div>`).join('')}</div><section class="card"><div class="cw-home-heading"><div><span class="cw-eyebrow">${cwEscape(selected.batch)}</span><h3>${cwEscape(selected.name)}</h3><p class="cw-muted">اختَر المحاضرة لعرض بطاقات الطلاب والحضور والمناقشات والتعويضات.</p></div><span class="cw-home-tag">المواعيد بتوقيت السعودية</span></div><div class="cw-lesson-grid">${[1,2,3,4].map(week=>cwHomeLessonCard(selected,week)).join('')}</div></section>`:`<section class="cw-home-empty"><div class="cw-home-empty-icon">▦</div><h3>${cwHomeBatch?'اختَر المقرر لنبدأ':'اختَر الدفعة والمقرر'}</h3><p>${cwData.subjects.length?'ستظهر هنا محاضرات المقرر وأدوات الإعداد والمتابعة، دون فتح جميع المقررات معًا.':'لا توجد مقررات حالية مرتبطة بحسابك.'}</p></section>`}<footer class="cw-home-footer"><span>المزامنة تعيد رصد النتائج المحفوظة فقط، ولا تغيّر إجابات الطلاب.</span><button class="btn-out" onclick="cwRetrySync()">مزامنة الدرجات المعلقة</button></footer></div>`;
+}
+function cwStudentCoursesMarkup(){
+  return `<div class="cw-student-courses"><section class="cw-report-hero"><span class="cw-eyebrow">خطوتك التالية نحو الإنجاز</span><h2>مقرراتي ومحاضراتي</h2><p>محاضراتك، واجباتك ومناقشاتك في مكان واحد.</p><span class="cw-student-timezone">جميع المواعيد بتوقيت السعودية</span></section>${cwData.subjects.length?cwData.subjects.map(subject=>{
+    const lessons=cwData.lessons.filter(l=>l.subject_key===subject.key),openCount=lessons.filter(cwStudentLessonOpen).length;
+    return `<details class="cw-course-fold"><summary><span class="cw-course-icon">▤</span><span class="cw-course-title"><strong>${cwEscape(subject.name)}</strong><small>${cwEscape(subject.batch)} · الفصل الحالي</small></span><span class="cw-course-badge">${openCount?`${openCount} واجب متاح`:'متابعة المحاضرات'}</span><span class="cw-fold-arrow">⌄</span></summary><div class="cw-course-body"><div class="cw-student-lesson-grid">${[1,2,3,4].map(week=>cwStudentLessonCard(lessons.find(l=>l.week===week),week)).join('')}</div></div></details>`;
+  }).join(''):'<div class="cw-home-empty">لا توجد مقررات حالية مرتبطة بالحساب.</div>'}</div>`;
+}
+function cwStudentLessonOpen(l){return l.status==='published'&&Date.now()>=Date.parse(l.opens_at)&&Date.now()<=Date.parse(l.closes_at);}
+function cwStudentLessonCard(l,week){
+  if(!l||l.status!=='published')return `<article class="cw-student-lesson cw-student-upcoming"><header><span class="cw-lesson-number">${String(week).padStart(2,'0')}</span><span class="cw-status">قريبًا</span></header><h3>المحاضرة ${week}</h3><p class="cw-muted">ستظهر تفاصيل المحاضرة ومتطلباتها عند إتاحتها.</p></article>`;
+  const open=cwStudentLessonOpen(l),upcoming=Date.now()<Date.parse(l.opens_at),attendance=l.attendance,reflection=l.reflection;
+  const attendanceText=!attendance?'الحضور بانتظار الرصد':reflection?.score!=null?`درجة الحضور بعد التعويض: ${reflection.score}/${l.attendanceMax}`:attendance.percent>=80?`الحضور مكتمل · ${l.attendanceMax}/${l.attendanceMax}`:`الحضور: ${cwAttendancePoints(attendance.percent,l.attendanceMax)}/${l.attendanceMax} · ${reflection?'التعويض بانتظار التقييم':'يمكنك تعويض الدرجة بمشاهدة التسجيل'}`;
+  return `<article class="cw-student-lesson ${open?'cw-student-open':'cw-student-upcoming'}"><header><span class="cw-lesson-number">${String(week).padStart(2,'0')}</span><span class="cw-status">${open?'متاح الآن':upcoming?'لم يفتح بعد':'انتهى التسليم'}</span></header><h3>المحاضرة ${week}</h3><div class="cw-lesson-resources">${cwLink(l.zoom_url,'دخول اللقاء')}${cwLink(l.pdf_url,'مشاهدة الملف')}${cwLink(l.recording_url,'مشاهدة التسجيل')}</div><div class="cw-student-deadline"><span>آخر موعد للتسليم</span><strong>${cwDate(l.closes_at)}</strong><small>يفتح الواجب: ${cwDate(l.opens_at)}</small></div><div class="cw-student-result"><span>واجب المحاضرة</span><strong>${l.result?`${l.result.score}/${l.homeworkMax}`:'لم يُحل بعد'}</strong></div><p class="cw-student-attendance">${attendanceText}</p><div class="cw-student-actions">${open?`<button class="btn-primary" onclick="cwSolve('${l.id}')">${l.result?'إعادة المحاولة':'حل واجب المحاضرة'} ←</button>`:`<p class="cw-muted">${upcoming?'يُتاح الحل في الموعد الموضح أعلاه.':'انتهت فترة تسليم الواجب.'}</p>`}${attendance&&attendance.percent<80&&reflection?.score==null&&open?`<button class="btn-out" onclick="cwReflection('${l.id}')">${reflection?'تعديل إجابة التعويض':'تعويض درجة الحضور'}</button>`:''}</div>${l.discussionPrompt?cwDiscussionCard(l,open):''}${reflection?.feedback?`<p class="cw-muted">${cwEscape(reflection.feedback)}</p>`:''}</article>`;
 }
 function cwHomeLessonCard(subject,week){
   const l=cwData.lessons.find(l=>l.subject_key===subject.key&&l.week===week),admin=currentUser.role==='admin',now=Date.now();
@@ -189,8 +175,8 @@ async function cwSolve(id) {
   }
 }
 function cwDiscussionCard(l,open){
-  if(Date.now()<Date.parse(l.opens_at))return '<section style="margin-top:14px"><span class="badge">تتاح مناقشة المحاضرة عند فتح الواجب</span></section>';
-  return `<section style="margin-top:16px;padding:14px;background:#f4f2ff;border-radius:14px"><h4>مناقشة المحاضرة · ${l.discussionMax} درجات</h4><p style="line-height:1.9">${cwEscape(l.discussionPrompt)}</p>${l.discussion?.score!=null?`<p>الدرجة: ${l.discussion.score}/${l.discussionMax}</p><p>${cwEscape(l.discussion.feedback)}</p>`:open?`<textarea id="cwDiscussion_${l.id}" style="width:100%;min-height:150px;box-sizing:border-box;font:inherit;padding:12px;border:1px solid #ccd6f0;border-radius:12px" placeholder="شارك إجابتك بأسلوبك">${cwEscape(l.discussion?.answer||'')}</textarea><button class="btn-primary" onclick="cwSendDiscussion('${l.id}',this)">${l.discussion?'تحديث المشاركة':'إرسال المشاركة'}</button>${l.discussion?'<p>تم حفظ مشاركتك، بانتظار تقييم المحاضر.</p>':''}`:'<p>تتاح المناقشة خلال فترة الواجب.</p>'}</section>`;
+  if(Date.now()<Date.parse(l.opens_at))return `<div class="cw-student-discussion"><div class="cw-student-discussion-coming"><strong>مناقشة المحاضرة</strong><span>تُتاح عند فتح الواجب · ${l.discussionMax} درجات</span></div></div>`;
+  return `<details class="cw-student-discussion"><summary><span>مناقشة المحاضرة</span><span class="cw-discussion-label">${l.discussion?.score!=null?`${l.discussion.score}/${l.discussionMax}`:l.discussion?'تمت المشاركة':`${l.discussionMax} درجات`}</span><span class="cw-fold-arrow">⌄</span></summary><div class="cw-student-discussion-body"><div class="cw-discussion-question"><strong>سؤال المناقشة</strong><p>${cwEscape(l.discussionPrompt)}</p></div>${l.discussion?.score!=null?`<p>درجتك: ${l.discussion.score}/${l.discussionMax}</p><p class="cw-saved-answer">${cwEscape(l.discussion.answer)}</p><p>${cwEscape(l.discussion.feedback)}</p>`:open?`<label for="cwDiscussion_${l.id}">مشاركتك</label><textarea id="cwDiscussion_${l.id}" placeholder="اكتب إجابتك بأسلوبك، مع مثال يوضح فكرتك…">${cwEscape(l.discussion?.answer||'')}</textarea><button class="btn-primary" onclick="cwSendDiscussion('${l.id}',this)">${l.discussion?'تحديث المشاركة':'إرسال المشاركة'}</button>${l.discussion?'<p class="cw-muted">تم حفظ مشاركتك، بانتظار التقييم.</p>':''}`:`${l.discussion?`<p class="cw-saved-answer">${cwEscape(l.discussion.answer)}</p><p class="cw-muted">تم حفظ مشاركتك، بانتظار التقييم.</p>`:'<p class="cw-muted">انتهت فترة إرسال المناقشة.</p>'}`}</div></details>`;
 }
 async function cwSendDiscussion(id,button){
   try{button.disabled=true;await cwApi('/discussion',{lessonId:id,answer:document.getElementById('cwDiscussion_'+id).value});cwNotify('تم حفظ مشاركتك');await renderAcademicCoursework();}catch(e){cwNotify(e.message);button.disabled=false;}
