@@ -522,8 +522,9 @@ async function cwApproveAttendance(button) {
       rows,
       confirmedAbsentKeys,
     });
+    if(r.productivity?.recorded&&typeof applyImportedProductivity==='function')applyImportedProductivity(r.productivity);
     cwNotify(
-      `تم اعتماد ${r.count} سجل${r.pending ? ` · ${r.pending} درجات بانتظار المزامنة` : ""}`,
+      `تم اعتماد ${r.count} سجل${r.productivity?.recorded?' · احتُسبت مدة الاجتماع ضمن إنتاجية المحاضر':r.productivity?.reason==='LECTURER_NOT_ASSIGNED'?' · لم تُحتسب الإنتاجية: اربطي المحاضر بالمقرر ثم أعيدي الاعتماد':''}${r.pending ? ` · ${r.pending} درجات بانتظار المزامنة` : ""}`,
     );
     cwPreview = null;
     await cwOpenReport(cwActiveLesson);

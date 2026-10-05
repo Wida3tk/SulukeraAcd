@@ -1,3 +1,4 @@
+import '../../productivity-ledger.js';
 const reject = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -622,6 +623,16 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       await env.DB.prepare("INSERT INTO attendance_meeting_imports VALUES (?,?,?,?,?,?,?) ON CONFLICT(lesson_id,source_hash) DO UPDATE SET starts_at=excluded.starts_at,ends_at=excluded.ends_at,duration_minutes=excluded.duration_minutes,approved_by=excluded.approved_by,approved_at=excluded.approved_at").bind(l.id,b.sourceHash,b.meeting.start,b.meeting.end,b.meeting.durationMinutes,auth.uid,new Date().toISOString()).run();
       await env.DB.prepare("UPDATE course_lessons SET duration_minutes=? WHERE id=?").bind(b.meeting.durationMinutes,l.id).run();
     }
+    let productivity=null;
+    if(b.meeting){
+      const lecturer=s.subjects[l.subject_key]?.lecturerUserId;
+      if(lecturer){
+        const item=globalThis.SulukeraProductivity.meetingRecord(lecturer,b.meeting,{subjectKey:l.subject_key,lessonId:l.id,sourceHash:b.sourceHash,approvedBy:auth.uid,approvedAt:new Date().toISOString()});
+        try{await serviceFetch(env,ctx,item.path,{method:'PUT',body:JSON.stringify(item.record)});}
+        catch{reject('PRODUCTIVITY_SYNC_UNAVAILABLE',503);}
+        productivity={recorded:true,...item};
+      }else productivity={recorded:false,reason:'LECTURER_NOT_ASSIGNED'};
+    }
     let pending = 0;
     for (const row of b.rows) {
       await env.DB.prepare(
@@ -639,7 +650,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       if (!(await synchronize(env, ctx, l, row.studentKey, auth.uid)))
         pending++;
     }
-    return { data: { saved: true, count: b.rows.length, pending } };
+    return { data: { saved: true, count: b.rows.length, pending,productivity } };
   }
   if (path === "/coursework/sync" && request.method === "POST") {
     if (s.role === "student") reject("FORBIDDEN", 403);

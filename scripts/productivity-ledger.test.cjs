@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+require('../productivity-ledger.js');
+const {meetingRecord,automaticHours}=globalThis.SulukeraProductivity;
+const meeting={start:'2026-10-04T15:00:00Z',end:'2026-10-04T17:12:00Z',source:'zoom_meeting_summary'};
+const a=meetingRecord('Aalmubaddal',meeting,{batch:'Q2'}),b=meetingRecord('Aalmubaddal',meeting,{batch:'Q3',sourceHash:'different'});
+assert.equal(a.path,b.path);assert.equal(a.record.durationMinutes,132);
+const ledger={productiveHours:5,officeHours:2,meetings:{[a.key]:a.record}};
+ledger.meetings[b.key]=b.record;assert.equal(automaticHours(ledger),2.2);assert.equal(Object.keys(ledger.meetings).length,1);assert.equal(ledger.productiveHours,5);
+const corrected=meetingRecord('Aalmubaddal',{...meeting,end:'2026-10-04T17:45:00Z'});ledger.meetings[corrected.key]=corrected.record;assert.equal(automaticHours(ledger),2.75);
+const other=meetingRecord('Aalmubaddal',{...meeting,start:'2026-10-11T15:00:00Z',end:'2026-10-11T17:00:00Z'});ledger.meetings[other.key]=other.record;assert.equal(automaticHours(ledger),4.75);
+assert.notEqual(a.path,meetingRecord('another',meeting).path);
+assert.equal(meetingRecord('L',{...meeting,start:'2026-09-30T22:00:00Z',end:'2026-09-30T23:00:00Z'}).period,'2026-10');
+assert.throws(()=>meetingRecord('L',{...meeting,source:'participant_duration'}));assert.throws(()=>meetingRecord('L',{...meeting,end:meeting.start}));
+console.log('PASS full meeting duration, shared-batch/reupload deduplication, corrected duration, lecturer/month isolation, manual hours preserved, invalid summaries rejected');

@@ -204,6 +204,26 @@ test("shared Zoom file is approved independently per batch without zeroing unmat
   const groups=context.cwAttendanceReviewGroups([{studentKey:'student'},{studentKey:'',name:'unresolved'},{studentKey:'',excluded:true}],[{key:'student'},{key:'missing'}]);
   assert.equal(groups.linked.length,1);assert.equal(groups.review.length,1);assert.equal(groups.excluded.length,1);assert.equal(groups.missing[0].key,'missing');
 });
+test("whole meeting productivity is idempotent across shared batches and retries", async () => {
+  const f=fixtures(),saved=new Map(),originalFetch=globalThis.fetch;
+  f.records.subjects.second={...f.records.subjects.course,batch:'Q3-26'};
+  f.records.students.other={id:'SUL-2',batch:'Q3-26',planType:'QBA',accountStatus:'active'};
+  f.records.enrollments.two={studentKey:'other',subjectKey:'second'};
+  f.ctx.firebaseAdminToken=async()=> 'test-only';
+  globalThis.fetch=async(url,options={})=>{if(options.method==='PUT')saved.set(String(url),JSON.parse(options.body));return new Response('{}',{status:200});};
+  try{
+    const one=(await f.call('admin','/lesson',f.config)).data.id,two=(await f.call('admin','/lesson',{...f.config,subjectKey:'second'})).data.id;
+    const meeting={start:'2026-10-04T15:00:00Z',end:'2026-10-04T17:15:00Z',durationMinutes:135,source:'zoom_meeting_summary'};
+    const approve=(id,key,hash)=>f.call('admin','/attendance',{lessonId:id,sourceHash:hash,meeting,rows:[{studentKey:key,percent:90}],confirmedAbsentKeys:[]});
+    assert.equal((await approve(one,'student','file-one')).data.productivity.recorded,true);
+    await approve(two,'other','file-two');await approve(one,'student','retry');
+    const entries=[...saved].filter(([path])=>path.includes('/lecturerProductivity/'));
+    assert.equal(entries.length,1);assert.equal(entries[0][1].durationMinutes,135);assert.match(entries[0][0],/2026-10\/teacher\/meetings\/meeting_/);
+    assert.equal(f.sql.prepare('SELECT COUNT(*) count FROM course_attendance').get().count,2);
+    globalThis.fetch=async()=>new Response('{}',{status:503});
+    await assert.rejects(approve(one,'student','offline'),/SYNC_UNAVAILABLE/);
+  }finally{globalThis.fetch=originalFetch;}
+});
 test("Zoom meeting duration is automatic; participant-only duration is not meeting duration", () => {
   const context={Date};vm.createContext(context);
   vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
