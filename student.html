@@ -933,7 +933,7 @@ function showStudentView(){
   const hasProfessionalProgram=professionalEnrollmentActive||professionalProfile;
   const hasAcademicEnrollment=Object.values(dbData.enrollments||{}).some(enrollment=>enrollment?.studentKey===currentUser.fbKey);
   const professionalOnly=professionalProfile||(hasProfessionalProgram&&!hasAcademicEnrollment);
-  const hasGraduationProject=String(currentUser.data?.batch||'').trim().toUpperCase().startsWith('Q1')&&getStudentPlanType(currentUser.data)==='QASP-S';
+  const hasGraduationProject=isGraduationProjectStageStudent(currentUser.data);
   document.getElementById('topbarRole').textContent=professionalOnly?'🎓 متدرب':'👩‍🎓 طالب';
   document.title=professionalOnly?'بوابة المتدرب | سلوكيرا':'Student Information System (SIS) | نظام معلومات الطالب';
   configureAppTabs(professionalOnly?[
@@ -961,8 +961,17 @@ function showStudentView(){
 	  refreshSecureExamGrades();
 }
 
+function isGraduationProjectStageStudent(student=currentUser?.data){
+  return /^Q1(?:-|$)/i.test(String(student?.batch||'').trim())&&getStudentPlanType(student)==='QASP-S';
+}
+function getStudentWelcomeMessage(student){
+  return isGraduationProjectStageStudent(student)
+    ? {title:'وصلتم إلى مرحلة تتويج رحلتكم 🎓',body:'أهلًا بكم في مرحلة مشروع التخرج. حان الوقت لتحويل ما تعلمتموه إلى مشروع يعكس معرفتكم ومهاراتكم المهنية. نرافقكم في هذه الخطوة، ونتطلع إلى أفكاركم وإنجازاتكم.'}
+    : {title:'أهلًا بكم وعودًا حميدًا 🌿',body:'سعداء بعودتكم إلى سلوكيرا وبداية فصل جديد معكم. نكمل معًا رحلة التعلّم والإنجاز، ونتمنى لكم فصلًا مليئًا بالتقدم والتوفيق.'};
+}
 function renderStudentHomeTab(){
   const { st, fullName, mySubjects, avg, gradeRows, hasFail } = getCurrentStudentAcademicData();
+  const welcome=getStudentWelcomeMessage(st);
   const semester = getCurrentSemesterForBatch(st.batch);
   const requests = getStudentRequests();
   const motivation = STUDENT_MOTIVATIONS[new Date().getDate() % STUDENT_MOTIVATIONS.length];
@@ -1000,9 +1009,10 @@ function renderStudentHomeTab(){
     <div class="student-header">
       <div class="student-avatar">${(st.firstName||'؟')[0]}</div>
       <div style="flex:1">
-        <div style="font-size:22px;font-weight:800">أهلًا بكم وعودًا حميدًا 🌿</div>
+        <div style="font-size:22px;font-weight:800">${escapeHtml(welcome.title)}</div>
         <div style="margin-top:8px;font-size:14px">أهلًا ${escapeHtml(fullName)}</div>
-        <div style="margin-top:10px;font-size:13px;line-height:1.9;max-width:760px">سعداء بعودتكم إلى سلوكيرا وبداية فصل جديد معكم. نكمل معًا رحلة التعلّم والإنجاز، ونتمنى لكم فصلًا مليئًا بالتقدم والتوفيق.</div>
+        <div style="margin-top:10px;font-size:13px;line-height:1.9;max-width:760px">${escapeHtml(welcome.body)}</div>
+        ${isGraduationProjectStageStudent(st)?'<button class="btn-out" style="margin-top:12px" onclick="switchAppTab(\'graduation-project\',getAppTabButtonById(\'graduation-project\'))">🎓 الانتقال إلى مشروع التخرج</button>':''}
         <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:3px">${st.id} · ${st.batch||'—'} · ${st.planType||'—'}</div>
         <div style="margin-top:8px;font-size:13px;color:var(--neon)">${motivation}</div>
       </div>
@@ -1548,7 +1558,7 @@ function getPortalBatchProfile(batch){
   return PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()] || null;
 }
 function getCurrentSemesterForBatch(batch){
-  if(sameBatchName(batch,currentUser?.data?.batch)&&/^Q1(?:-|$)/i.test(String(batch||'').trim())&&getStudentPlanType(currentUser?.data)==='QASP-S')return {name:'مرحلة مشروع التخرج',semesterNo:4,startDate:'',endDate:'',batches:[batch],status:'project'};
+  if(sameBatchName(batch,currentUser?.data?.batch)&&isGraduationProjectStageStudent(currentUser?.data))return {name:'مرحلة مشروع التخرج',semesterNo:4,startDate:'',endDate:'',batches:[batch],status:'project'};
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
   const liveSemester = Object.values(dbData.semesters||{}).filter(semester=>
     (semester.status==='active' || semester.status==='current') &&
