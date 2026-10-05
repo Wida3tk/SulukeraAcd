@@ -1,5 +1,5 @@
 /* Meeting view; only explicit manual-hour saves write to the existing productivity collection. */
-const performanceState={period:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Karachi',year:'numeric',month:'2-digit'}).format(new Date()),groups:[],evaluationState:'idle',updatedAt:null,hourDrafts:{},semester:''};
+const performanceState={period:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Riyadh',year:'numeric',month:'2-digit'}).format(new Date()),groups:[],evaluationState:'idle',updatedAt:null,hourDrafts:{},semester:''};
 function performanceStatus(s){return s.accountStatus||'active';}
 function performanceStatusLabel(s){return ({active:'فعال',withdrawn:'منسحب',frozen:'مجمد',suspended:'موقوف'})[s]||s;}
 function performanceProgramKey(value){
