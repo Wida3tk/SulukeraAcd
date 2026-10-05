@@ -2,7 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const html=fs.readFileSync('student.html','utf8');
 const source=html.slice(html.indexOf('function isGraduationProjectStageStudent('),html.indexOf('function renderStudentHomeTab('));
 const plan=html.slice(html.indexOf('function getStudentPlanType('),html.indexOf('function isStudentEligibleForSubject('));
-const ctx={currentUser:null,dbData:{packages:{}}};vm.createContext(ctx);vm.runInContext(plan+source,ctx);
+const ctx={currentUser:null,dbData:{packages:{},semesters:{old:{batches:['Q1-26'],endDate:'2026-09-24',subjects:['last']}},subjects:{last:{semesterNo:4}}}};vm.createContext(ctx);vm.runInContext(fs.readFileSync('academic-policy.js','utf8')+plan+source,ctx);
 for(const student of [{batch:'Q1-26',planType:'QASP-S'},{batch:' q1-26 ',planType:'QASP-S'},{batch:'Q1-26',pkg:'QASP-S'}]){
  assert.equal(ctx.isGraduationProjectStageStudent(student),true);
  assert.match(ctx.getStudentWelcomeMessage(student).body,/مشروع التخرج/);

@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="academic-policy.js?v=20261006-track-stage"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root{
@@ -962,7 +963,7 @@ function showStudentView(){
 }
 
 function isGraduationProjectStageStudent(student=currentUser?.data){
-  return /^Q1(?:-|$)/i.test(String(student?.batch||'').trim())&&getStudentPlanType(student)==='QASP-S';
+  return SulukeraAcademicPolicy.projectStage(student,dbData.semesters||{},dbData.subjects||{},dbData.packages||{});
 }
 function getStudentWelcomeMessage(student){
   return isGraduationProjectStageStudent(student)
@@ -1479,6 +1480,7 @@ function getStudentSubjects(studentFbKey){
   const addSubject=(subjectKey, allowExplicitEnrollment=false)=>{
     const s=dbData.subjects?.[subjectKey];
     if(s?.excludedStudents?.[studentFbKey]) return;
+    if(!SulukeraAcademicPolicy.subjectAllowed(student,s,dbData.packages||{}))return;
     if(s&&(allowExplicitEnrollment||isStudentEligibleForSubject(student,s))&&!result.find(r=>r.key===subjectKey))
       result.push({key:subjectKey,...s});
   };
@@ -1558,7 +1560,7 @@ function getPortalBatchProfile(batch){
   return PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()] || null;
 }
 function getCurrentSemesterForBatch(batch){
-  if(sameBatchName(batch,currentUser?.data?.batch)&&isGraduationProjectStageStudent(currentUser?.data))return {name:'مرحلة مشروع التخرج',semesterNo:4,startDate:'',endDate:'',batches:[batch],status:'project'};
+  if(sameBatchName(batch,currentUser?.data?.batch)&&isGraduationProjectStageStudent(currentUser?.data))return {name:'مرحلة مشروع التخرج',semesterNo:SulukeraAcademicPolicy.semesterLimit(getStudentPlanType(currentUser?.data)),startDate:'',endDate:'',batches:[batch],status:'project'};
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
   const liveSemester = Object.values(dbData.semesters||{}).filter(semester=>
     (semester.status==='active' || semester.status==='current') &&
@@ -1602,7 +1604,7 @@ function isCurrentAcademicScheduleSlot(slot){
 function getStudentScheduleSlots(student=currentUser?.data){
   if(!student) return [];
   const weekly = Object.values(dbData.schedule?.weekly||{}).filter(isCurrentAcademicScheduleSlot);
-  const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch));
+  const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch)&&SulukeraAcademicPolicy.subjectAllowed(student,dbData.subjects?.[slot.subjectKey]||{},dbData.packages||{}));
   if(matched.length) return sortScheduleSlots(matched);
   return [];
 }

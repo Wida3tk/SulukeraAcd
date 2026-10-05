@@ -1,4 +1,5 @@
 import { handleGraduationProject } from "./graduation-projects.js";
+import "../../academic-policy.js";
 import { handleCoursework } from "./coursework.js";
 const PROJECT_ID = "sulukeraacd";
 const FIREBASE_DB = "https://sulukeraacd-default-rtdb.firebaseio.com";
@@ -791,8 +792,9 @@ async function studentContext(auth) {
   if (professional?.status === "active")
     subjectKeys.add("professional_organizational_behavior_final");
   const academicSubjects = await firebaseRead("subjects", auth.token);
-  if(String(student.planType || "").toUpperCase() !== "QBA") for(const subjectKey of subjectKeys) {
-    if(Number(academicSubjects?.[subjectKey]?.semesterNo)>=5) subjectKeys.delete(subjectKey);
+  const academicPackages = await firebaseRead("packages", auth.token);
+  for(const subjectKey of subjectKeys) {
+    if(!globalThis.SulukeraAcademicPolicy.subjectAllowed(student,academicSubjects?.[subjectKey],academicPackages||{})) subjectKeys.delete(subjectKey);
   }
   return { studentKey: auth.profile.studentKey, student, subjectKeys };
  

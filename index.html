@@ -6628,7 +6628,18 @@ async function secureAdminExamRequest(path,options={}){
 let graduationProjectsAdminData=[];
 function graduationSaudiIso(value){return value?`${String(value).slice(0,16)}:00+03:00`:'';}
 function graduationStudentName(key){const student=students.find(item=>item._fbKey===key);return student?getStudentFullName(student):key;}
-function graduationEligibilityMeta(studentKey){const studentIndex=students.findIndex(item=>item._fbKey===studentKey),student=students[studentIndex];if(studentIndex<0)return {status:'review',label:'مؤهل ويحتاج مراجعة',detail:'تعذر ربط السجل الأكاديمي'};const requiredKeys=new Set(FIXED_COURSES.slice(0,12).map(course=>course.key)),relevant=subjects.filter(subject=>sameBatchName(subject.batch,student.batch)&&Number(subject.semesterNo)<=4&&Number(subject.semesterNo)>0&&isStudentExplicitlyEligibleForOffering(student,subject)&&(requiredKeys.has(subject.courseKey)||!subject.courseKey)),byCourse=new Map();relevant.forEach(subject=>{const key=subject.courseKey||subject._fbKey;if(!byCourse.has(key))byCourse.set(key,subject)});let passed=0,failed=0,missing=0;for(const course of FIXED_COURSES.slice(0,12)){const subject=byCourse.get(course.key),si=subject?subjects.indexOf(subject):-1,grade=si>=0?grades[si]?.[studentIndex]:null;if(!subject||!isExamEntered(grade))missing++;else if(calcTotal(grade)>=settings.gradeFail)passed++;else failed++;}if(passed===12)return {status:'eligible',label:'مؤهل للمشروع',detail:'أتم واجتاز مقررات الفصول الأربعة',passed,failed,missing};const parts=[];if(failed)parts.push(`${failed} مقرر غير مجتاز`);if(missing)parts.push(`${missing} مقرر/درجة تحتاج استكمال`);return {status:'review',label:'مؤهل ويحتاج مراجعة',detail:parts.join(' · ')||'يحتاج مراجعة السجل',passed,failed,missing};}
+function graduationEligibilityMeta(studentKey){
+  const studentIndex=students.findIndex(item=>item._fbKey===studentKey),student=students[studentIndex];
+  if(studentIndex<0)return {status:'review',label:'مؤهل ويحتاج مراجعة',detail:'تعذر ربط السجل الأكاديمي'};
+  const limit=getExplicitStudentPlan(student)==='QBA'?6:4,requiredCourses=FIXED_COURSES.slice(0,limit*3),requiredKeys=new Set(requiredCourses.map(course=>course.key));
+  const relevant=subjects.filter(subject=>sameBatchName(subject.batch,student.batch)&&Number(subject.semesterNo)<=limit&&Number(subject.semesterNo)>0&&isStudentExplicitlyEligibleForOffering(student,subject)&&(requiredKeys.has(subject.courseKey)||!subject.courseKey)),byCourse=new Map();
+  relevant.forEach(subject=>{const key=subject.courseKey||subject._fbKey;if(!byCourse.has(key))byCourse.set(key,subject)});
+  let passed=0,failed=0,missing=0;
+  for(const course of requiredCourses){const subject=byCourse.get(course.key),si=subject?subjects.indexOf(subject):-1,grade=si>=0?grades[si]?.[studentIndex]:null;if(!subject||!isExamEntered(grade))missing++;else if(calcTotal(grade)>=settings.gradeFail)passed++;else failed++;}
+  if(passed===requiredCourses.length)return {status:'eligible',label:'مؤهل للمشروع',detail:`أتم واجتاز مقررات ${limit} فصول`,passed,failed,missing};
+  const parts=[];if(failed)parts.push(`${failed} مقرر غير مجتاز`);if(missing)parts.push(`${missing} مقرر/درجة تحتاج استكمال`);
+  return {status:'review',label:'مؤهل ويحتاج مراجعة',detail:parts.join(' · ')||'يحتاج مراجعة السجل',passed,failed,missing};
+}
 async function renderGraduationProjectsAdmin(){
   const host=document.getElementById('graduationProjectsAdminContent');if(!host)return;
   host.innerHTML='<div class="card"><div class="empty">جاري تجهيز مشروع Q1 لمسار QASP-S...</div></div>';
