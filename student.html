@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261006-canonical-courses"></script>
+<script src="student-account-policy.js?v=20261006-status"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root{
@@ -729,7 +730,9 @@ async function doLogin(){
       const studentSnap=await fbRef('students/'+studentKey).get();
       const found=studentSnap.exists()?{...studentSnap.val(),_fbKey:studentKey}:null;
       if(!found){ await firebase.auth().signOut(); fail(); return; }
-      if(found.accountStatus==='withdrawn' || authUser?.accountStatus==='withdrawn'){
+      const enrollmentSnap=await fbRef('professionalEnrollments/'+studentKey).get();
+      if(SulukeraStudentAccount.resolve(found,enrollmentSnap.val()||{},[authUser])!=='active'){
+        await firebase.auth().signOut();
         showErr('الحساب موقوف حاليًا. يرجى التواصل مع الإدارة الأكاديمية.');
         btn.textContent=loginLabel; btn.disabled=false;
         return;
@@ -801,6 +804,7 @@ async function changeMyPassword(){
 }
 
 async function doLogout(){
+  stopStudentAccountLiveUpdates();
   stopExamSchedulesLiveUpdates();
   stopProfessionalLiveUpdates();
   try{ await firebase.auth().signOut(); }catch(error){ console.warn('Firebase sign-out error',error); }
@@ -921,6 +925,8 @@ function stopProfessionalLiveUpdates(){
 //  STUDENT VIEW
 // ══════════════════════════════════════════════
 function showStudentView(){
+  if(!SulukeraStudentAccount.isActive(currentUser?.data)){disableInactiveStudent();return;}
+  startStudentAccountLiveUpdates();
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
   document.getElementById('appTabs').style.display='block';
@@ -2189,7 +2195,7 @@ function getSubjectStudents(subjectFbKey){
   const addStudent=(studentKey)=>{
     const student=dbData.students?.[studentKey];
     if(subject?.excludedStudents?.[studentKey]) return;
-    if(student && student.accountStatus!=='withdrawn' && !result.find(r=>r.fbKey===studentKey))
+    if(student && SulukeraStudentAccount.isActive(student) && !result.find(r=>r.fbKey===studentKey))
       result.push({fbKey:studentKey,...student});
   };
 
@@ -2223,7 +2229,7 @@ function getSubjectStudents(subjectFbKey){
   });
   if(subjectBatches.size){
     Object.entries(dbData.students).forEach(([studentKey,student])=>{
-      if(student.accountStatus!=='withdrawn'&&subjectBatches.has(normalizeBatchName(student.batch))&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
+      if(SulukeraStudentAccount.isActive(student)&&subjectBatches.has(normalizeBatchName(student.batch))&&isStudentEligibleForSubject(student,subject)) addStudent(studentKey);
     });
   }
   return result;
@@ -3036,5 +3042,6 @@ window.addEventListener('load', initFB);
 
 </script>
 <script src="coursework-ui.js?v=20261006-meetings"></script>
+<script src="student-account-live.js?v=20261006-status"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import { handleGraduationProject } from "./graduation-projects.js";
 import "../../academic-policy.js";
+import "../../student-account-policy.js";
 import { handleCoursework } from "./coursework.js";
 const PROJECT_ID = "sulukeraacd";
 const FIREBASE_DB = "https://sulukeraacd-default-rtdb.firebaseio.com";
@@ -129,7 +130,7 @@ async function eligibleStudentKeys(subjectKey, batch, token) {
         student = students?.[studentKey];
       if (
         enrollment?.status === "active" &&
-        student?.accountStatus !== "withdrawn"
+        student && SulukeraStudentAccount.isActive(student)
       )
         keys.add(studentKey);
     }
@@ -144,7 +145,7 @@ async function eligibleStudentKeys(subjectKey, batch, token) {
     if (enrollment?.subjectKey !== subjectKey || !enrollment.studentKey)
       continue;
     const student = students?.[enrollment.studentKey];
-    if (!student || student.accountStatus === "withdrawn") continue;
+    if (!student || !SulukeraStudentAccount.isActive(student)) continue;
     if (
       batch &&
       String(student.batch || "")
@@ -163,6 +164,11 @@ async function authenticate(request) {
   const jwt = await verifyFirebaseToken(token);
   const profile = await firebaseRead(`users/${jwt.sub}`, token);
   if (!profile?.role) fail("ACCOUNT_NOT_REGISTERED", 403);
+  if(profile.role==='student'){
+    if(!profile.studentKey)fail('STUDENT_LINK_MISSING',403);
+    const [student,professional]=await Promise.all([firebaseRead(`students/${profile.studentKey}`,token),firebaseProfessionalEnrollment(profile.studentKey,token)]);
+    if(!student||SulukeraStudentAccount.resolve(student,{professional},[profile])!=='active')fail('ACCOUNT_INACTIVE',403);
+  }
   return { uid: jwt.sub, token, profile };
 }
 function requireRole(auth, ...roles) {
@@ -780,6 +786,7 @@ async function studentContext(auth) {
     auth.token,
   );
   if (!student) fail("STUDENT_NOT_FOUND", 404);
+  if(!SulukeraStudentAccount.isActive(student))fail('ACCOUNT_INACTIVE',403);
   const [enrollments, professional] = await Promise.all([
       firebaseStudentEnrollments(auth.profile.studentKey, auth.token),
       firebaseProfessionalEnrollment(auth.profile.studentKey, auth.token),

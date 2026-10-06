@@ -1,4 +1,5 @@
 .tools/
+firebase-debug.log
 .firebase-cli/
 node-portable.zip
 node_modules/

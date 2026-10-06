@@ -24,7 +24,7 @@
       ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'student' && query.orderByChild === 'studentKey' && query.equalTo === root.child('users').child(auth.uid).child('studentKey').val()",
       ".indexOn": ["studentKey"],
       "$requestId": {
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || (root.child('users').child(auth.uid).child('role').val() === 'student' && newData.child('studentKey').val() === root.child('users').child(auth.uid).child('studentKey').val()))"
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || (root.child('users').child(auth.uid).child('role').val() === 'student' && (!root.child('users').child(auth.uid).child('accountStatus').exists() || root.child('users').child(auth.uid).child('accountStatus').val() === 'active') && (!root.child('students').child(root.child('users').child(auth.uid).child('studentKey').val()).child('accountStatus').exists() || root.child('students').child(root.child('users').child(auth.uid).child('studentKey').val()).child('accountStatus').val() === 'active') && newData.child('studentKey').val() === root.child('users').child(auth.uid).child('studentKey').val()))"
       }
     },
     "studentExamExceptions": {
@@ -50,13 +50,13 @@
     "professionalProgress": {
       "$studentKey": {
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)",
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)"
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || ((!root.child('users').child(auth.uid).child('accountStatus').exists() || root.child('users').child(auth.uid).child('accountStatus').val() === 'active') && (!root.child('students').child(root.child('users').child(auth.uid).child('studentKey').val()).child('accountStatus').exists() || root.child('students').child(root.child('users').child(auth.uid).child('studentKey').val()).child('accountStatus').val() === 'active') && root.child('users').child(auth.uid).child('studentKey').val() === $studentKey))"
       }
     },
     "professionalDiscussions": {
       "$studentKey": {
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)",
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('studentKey').val() === $studentKey)"
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || ((!root.child('users').child(auth.uid).child('accountStatus').exists() || root.child('users').child(auth.uid).child('accountStatus').val() === 'active') && (!root.child('students').child(root.child('users').child(auth.uid).child('studentKey').val()).child('accountStatus').exists() || root.child('students').child(root.child('users').child(auth.uid).child('studentKey').val()).child('accountStatus').val() === 'active') && root.child('users').child(auth.uid).child('studentKey').val() === $studentKey))"
       }
     },
     "professionalDiscussionReviews": {

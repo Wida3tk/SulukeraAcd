@@ -1,4 +1,5 @@
 import '../../productivity-ledger.js';
+import '../../student-account-policy.js';
 const reject = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -62,11 +63,7 @@ async function scope(auth, ctx) {
     if (!auth.profile.studentKey) reject("STUDENT_LINK_MISSING", 403);
     const context = await ctx.studentContext(auth);
     if (isProfessional(context.student)) reject("ACADEMIC_ONLY", 403);
-    if (
-      ["withdrawn", "paused", "suspended"].includes(
-        context.student.accountStatus,
-      )
-    )
+    if (!SulukeraStudentAccount.isActive(context.student)||!SulukeraStudentAccount.isActive(auth.profile))
       reject("ACCOUNT_INACTIVE", 403);
     allowed = [...context.subjectKeys];
     students = { [context.studentKey]: context.student };
@@ -531,7 +528,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
               (e) =>
                 e.subjectKey === l.subject_key &&
                 s.students[e.studentKey] &&
-                s.students[e.studentKey].accountStatus !== "withdrawn",
+                SulukeraStudentAccount.isActive(s.students[e.studentKey]),
             )
             .map((e) => e.studentKey),
         ),

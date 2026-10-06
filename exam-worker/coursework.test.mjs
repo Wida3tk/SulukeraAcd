@@ -224,6 +224,17 @@ test("whole meeting productivity is idempotent across shared batches and retries
     await assert.rejects(approve(one,'student','offline'),/SYNC_UNAVAILABLE/);
   }finally{globalThis.fetch=originalFetch;}
 });
+test("every inactive account state blocks coursework without removing academic records", async () => {
+  for(const status of ['suspended','frozen','withdrawn','paused']){
+    const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+    f.records.students.student.accountStatus=status;
+    await assert.rejects(f.call('student','/subjects'),/ACCOUNT_INACTIVE/);
+    await assert.rejects(f.call('student','/attempt',{lessonId:id,answers:[1]}),/ACCOUNT_INACTIVE/);
+    assert.equal(f.sql.prepare('SELECT COUNT(*) count FROM homework_attempts').get().count,0);
+    const report=(await f.call('admin','/report',{lessonId:id})).data;
+    assert.equal(report.students.length,0);assert.ok(f.records.enrollments.one);
+  }
+});
 test("Zoom meeting duration is automatic; participant-only duration is not meeting duration", () => {
   const context={Date};vm.createContext(context);
   vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);

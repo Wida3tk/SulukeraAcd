@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261006-canonical-courses"></script>
+<script src="student-account-policy.js?v=20261006-status"></script>
 <script src="productivity-ledger.js?v=20261006-meetings"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="vendor/qrcode.js"></script>
@@ -194,6 +195,7 @@ tr:hover td{background:#f8faff;}
 .alert-success{background:var(--success-light);color:var(--success);border:1px solid #b8ddc8;}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(2,7,22,0.5);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
 .modal-overlay.open{display:flex;}
+select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:12px;background:white;color:var(--primary-dark);min-width:155px;max-width:100%;}
 .modal{background:white;border-radius:16px;padding:1.8rem;width:640px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;}
 .modal h3{font-size:16px;font-weight:700;margin-bottom:1.3rem;color:var(--text);padding-bottom:10px;border-bottom:2px solid var(--bg);display:flex;align-items:center;gap:8px;}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -397,6 +399,7 @@ tr:hover td{background:#f8faff;}
           <select id="gradeBatchSelect" onchange="onGradeBatchChange()" style="padding:7px 12px;border-radius:var(--radius);border:1.5px solid var(--border);font-size:13px;background:white;min-width:170px;font-family:inherit;"></select>
           <label style="font-size:12px;color:var(--text-muted);font-weight:600">المادة:</label>
           <select id="gradeSubjectSelect" onchange="onGradeSubjectChange()" style="padding:7px 12px;border-radius:var(--radius);border:1.5px solid var(--border);font-size:13px;background:white;min-width:220px;font-family:inherit;"></select>
+          <select id="gradeStatusFilter" aria-label="حالة حساب الطالب في الدرجات" onchange="loadGradesTable()"><option value="active">النشطون</option><option value="inactive">كل الحسابات غير النشطة</option><option value="suspended">الموقوفون</option><option value="frozen">المجمّدون</option><option value="withdrawn">المنسحبون</option><option value="all">جميع الحالات</option></select>
           <button class="btn btn-primary" onclick="openLegacyGradeImportModal()" style="margin-right:auto">📊 استيراد الدرجات من Excel</button>
         </div>
         <div class="week-tabs">
@@ -456,6 +459,7 @@ tr:hover td{background:#f8faff;}
               <option value="">كل التصنيفات</option><option value="ABA">طلاب ABA فقط</option><option value="QBA">QBA</option><option value="QASP-S">QASP-S</option><option value="PROFESSIONAL">البرنامج المهني</option>
             </select>
             <button class="btn btn-sm" onclick="clearStudentFilters()">مسح الفلاتر</button>
+            <select id="studentStatusFilter" aria-label="حالة حساب الطالب" onchange="filterStudents()"><option value="active">النشطون</option><option value="inactive">كل الحسابات غير النشطة</option><option value="suspended">الموقوفون</option><option value="frozen">المجمّدون</option><option value="withdrawn">المنسحبون</option><option value="all">جميع الحالات</option></select>
             <button class="btn btn-sm" onclick="exportStudentsExcel()">📊 تصدير Excel</button>
           </div>
           <div id="studentsCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
@@ -476,6 +480,7 @@ tr:hover td{background:#f8faff;}
       <div class="page" id="page-cards">
         <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;" id="cardsProgramTabs"></div>
         <div id="cardsTrackFilter"></div>
+        <select id="cardStatusFilter" aria-label="حالة الحساب في البطاقات" onchange="renderCards(currentCardProgram)" style="padding:10px;margin-bottom:12px"><option value="active">النشطون</option><option value="inactive">الحسابات غير النشطة</option><option value="suspended">الموقوفون</option><option value="frozen">المجمّدون</option><option value="withdrawn">المنسحبون</option><option value="all">جميع الحالات</option></select>
         <div id="cardsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;"></div>
       </div>
 
@@ -1370,6 +1375,7 @@ async function loadAllFromFirebase(){
         financeSnapshot:normalizeFinanceSnapshot(s.financeSnapshot),
         installments:normalizeInstallmentsList(s.installments ? Object.values(s.installments) : []),
         accountStatus:s.accountStatus||'active',
+        statusReason:s.statusReason||'',statusUpdatedAt:s.statusUpdatedAt||'',statusUpdatedBy:s.statusUpdatedBy||'',
         withdrawnAt:s.withdrawnAt||'',
         withdrawnBy:s.withdrawnBy||''
       }));
@@ -1399,6 +1405,7 @@ async function loadAllFromFirebase(){
     examExceptionsData = root.studentExamExceptions || {};
     professionalProgramsData = root.professionalPrograms || {};
     professionalEnrollmentsData = root.professionalEnrollments || {};
+    students.forEach(student=>{student.accountStatus=SulukeraStudentAccount.resolve(student,professionalEnrollmentsData[student._fbKey],Object.entries(root.users||{}).filter(([,u])=>SulukeraStudentAccount.linked(u,student,student._fbKey)).map(([,u])=>u),Object.values(root.studentAdminSheets||{}).filter(sheet=>sheet.studentKey===student._fbKey));});
     professionalProgressData = root.professionalProgress || {};
     professionalDiscussionsData = root.professionalDiscussions || {};
     professionalDiscussionReviewsData = root.professionalDiscussionReviews || {};
@@ -1416,7 +1423,7 @@ async function loadAllFromFirebase(){
     enrollmentsData.forEach(enrollment=>{
       const si=subjects.findIndex(s=>s._fbKey===enrollment.subjectKey);
       const stdIdx=students.findIndex(s=>s._fbKey===enrollment.studentKey);
-      if(si>=0 && stdIdx>=0 && (Number(subjects[si].semesterNo)<5||getExplicitStudentPlan(students[stdIdx])==='QBA'||!subjects[si].semesterNo) && students[stdIdx].accountStatus!=='withdrawn' && !subjects[si].students.includes(stdIdx)){
+      if(si>=0 && stdIdx>=0 && (Number(subjects[si].semesterNo)<5||getExplicitStudentPlan(students[stdIdx])==='QBA'||!subjects[si].semesterNo) && !subjects[si].students.includes(stdIdx)){
         subjects[si].students.push(stdIdx);
       }
     });
@@ -1480,7 +1487,7 @@ async function ensureOctober2026AcademicFoundation(root){
       semesterSubjectKeys.push(offeringKey);
       if(JSON.stringify(oldOffering)!==JSON.stringify(offering))updates[`subjects/${offeringKey}`]=offering;
       Object.entries(liveStudents).forEach(([studentKey,student])=>{
-        if(student.accountStatus==='withdrawn'||!sameBatchName(student.batch,batch)||!course.eligiblePlans.includes(getExplicitStudentPlan(student))||existingPairs.has(`${studentKey}|${offeringKey}`))return;
+        if(!SulukeraStudentAccount.isActive(student)||!sameBatchName(student.batch,batch)||!course.eligiblePlans.includes(getExplicitStudentPlan(student))||existingPairs.has(`${studentKey}|${offeringKey}`))return;
         const enrollmentKey=(`enr_${studentKey}_${offeringKey}`).replace(/[.#$[\]]/g,'_');
         updates[`enrollments/${enrollmentKey}`]={studentKey,subjectKey:offeringKey,sourceType:'october_2026_foundation',status:'active'};
         existingPairs.add(`${studentKey}|${offeringKey}`);
@@ -1555,6 +1562,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     program:st.program||'', track:st.track||'', batch:st.batch||'',
     id:st.id, pkg:st.pkg||'', planType:isProfessionalStudentRecord(st)?'PROFESSIONAL':(getExplicitStudentPlan(st)||inferPlanType(st.pkg)),
     accountStatus:st.accountStatus||'active',
+    statusReason:st.statusReason||'',statusUpdatedAt:st.statusUpdatedAt||'',statusUpdatedBy:st.statusUpdatedBy||'',
     withdrawnAt:st.withdrawnAt||'',
     withdrawnBy:st.withdrawnBy||'',
     financeMode:st.financeMode||inferFinanceMode(st),
@@ -1582,7 +1590,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     reusedAuth=authResult.reused;
   }
   const updates={['students/'+fbKey]:stdData};
-  if(authUid) updates['users/'+authUid]={name:getStudentFullName(st),username:st.id,role:'student',studentKey:fbKey,authProvider:'firebase',createdAt:new Date().toISOString()};
+  if(authUid) updates['users/'+authUid]={name:getStudentFullName(st),username:st.id,role:'student',studentKey:fbKey,accountStatus:SulukeraStudentAccount.status(st),authProvider:'firebase',createdAt:new Date().toISOString()};
   await firebase.database().ref('/').update(updates);
   return {authUid,reusedAuth};
 }
@@ -1624,7 +1632,17 @@ async function saveStudentAdminSheetToFirebase(record){
     updatedAt:record.updatedAt||new Date().toISOString(),
     updatedBy:record.updatedBy||currentUser?.username||currentUser?.name||'system'
   };
-  await fbRef('studentAdminSheets/'+sheetKey).set(payload);
+  const student=students.find(s=>s._fbKey===studentKey),next=SulukeraStudentAccount.sheetStatus(payload.traineeStatus);
+  payload.traineeStatus=next;
+  const updates={['studentAdminSheets/'+sheetKey]:payload};
+  if(student&&next!==SulukeraStudentAccount.status(student)){
+    if(!canManageAcademicAdmin())throw Error('FORBIDDEN');
+    const [accounts,enrollments,sheets]=await Promise.all([fbRef('users').get(),fbRef('professionalEnrollments/'+studentKey).get(),fbRef('studentAdminSheets').get()]);
+    const otherSheets=Object.fromEntries(Object.entries(sheets.val()||{}).filter(([key])=>key!==sheetKey));
+    Object.assign(updates,SulukeraStudentAccount.updates(studentKey,student,next,accounts.val()||{},enrollments.val()||{},{by:payload.updatedBy,reason:payload.traineeStatusNotes,sheets:otherSheets}));
+  }
+  await fbRef().update(updates);
+  if(student)student.accountStatus=next;
   const existingIdx=studentAdminSheetsData.findIndex(item=>item.studentKey===studentKey);
   const saved={_fbKey:sheetKey,...payload};
   if(existingIdx>=0) studentAdminSheetsData[existingIdx]=saved;
@@ -2432,9 +2450,9 @@ function renderLecturerQuickActions(){
     <button class="btn" onclick="navTo('lecturerfinished',null)">المقررات المكتملة</button>
   </div>`;
 }
-function getSubjectStudentIdxs(subj){
+function getSubjectStudentIdxs(subj,includeInactive=false){
   const result=new Set(subj?.students||[]);
-  return [...result].filter(idx=>students[idx]&&students[idx].accountStatus!=='withdrawn');
+  return [...result].filter(idx=>students[idx]&&(includeInactive||SulukeraStudentAccount.isActive(students[idx])));
 }
 function getStudentEnrollmentRecords(stdIdx){
   const student = students[stdIdx];
@@ -2472,7 +2490,7 @@ async function syncMissingSemesterEnrollments(studentIdx=null){
     students.forEach((st,idx)=>{
       if(studentIdx!==null && idx!==studentIdx) return;
       if(!st?._fbKey) return;
-      if(st.accountStatus==='withdrawn') return;
+      if(!SulukeraStudentAccount.isActive(st)) return;
       if(!semBatches.some(b=>sameBatchName(b,st.batch))) return;
       semSubjectKeys.forEach(subjKey=>{
         const si=subjects.findIndex(s=>s._fbKey===subjKey);
@@ -2541,6 +2559,7 @@ async function doLogin(){
           return;
         }
         currentUser.studentIdx=stdIdx;
+        if(!SulukeraStudentAccount.isActive(SulukeraStudentAccount.resolve(students[stdIdx],professionalEnrollmentsData[students[stdIdx]._fbKey],[user]))){await firebase.auth().signOut();currentUser=null;showToast('الحساب غير نشط. يرجى التواصل مع الإدارة.');if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}return;}
       }
       await _finishLogin();
       if(btn){btn.textContent='تسجيل الدخول ←';btn.disabled=false;}
@@ -2942,7 +2961,7 @@ function renderAdminDashboard(){
     return !Number.isNaN(opensAt.getTime())&&!Number.isNaN(closesAt.getTime())&&now>=opensAt&&now<=closesAt;
   });
   const activity=getRecentActivityLogs(6);
-  const activeStudents=students.filter(student=>student.accountStatus!=='withdrawn');
+  const activeStudents=students.filter(student=>SulukeraStudentAccount.isActive(student));
   const activeBatches=batches.filter(item=>item.studentCount>0);
   const assignedSections=subjects.filter(subject=>subject.lecturerUserId).length;
   const attentionCount=actions.reduce((sum,item)=>sum+Number(item.count||0),0);
@@ -3812,7 +3831,7 @@ function openLegacyGradeImportModal(){
   const input=document.getElementById('legacyGradeImportFiles');
   const confirmButton=document.getElementById('legacyGradeImportConfirm');
   const studentSelect=document.getElementById('legacyGradeImportStudent');
-  if(studentSelect){studentSelect.innerHTML='<option value="">مطابقة تلقائية من الملف</option>'+students.map((student,stdIdx)=>({student,stdIdx})).filter(({student})=>student.accountStatus!=='withdrawn').sort((a,b)=>getStudentFullName(a.student).localeCompare(getStudentFullName(b.student),'ar')).map(({student,stdIdx})=>`<option value="${stdIdx}">${escapeHtml(getStudentFullName(student))} — ${escapeHtml(student.id||'')} — ${escapeHtml(student.batch||'')}</option>`).join('');}
+  if(studentSelect){studentSelect.innerHTML='<option value="">مطابقة تلقائية من الملف</option>'+students.map((student,stdIdx)=>({student,stdIdx})).filter(({student})=>SulukeraStudentAccount.isActive(student)).sort((a,b)=>getStudentFullName(a.student).localeCompare(getStudentFullName(b.student),'ar')).map(({student,stdIdx})=>`<option value="${stdIdx}">${escapeHtml(getStudentFullName(student))} — ${escapeHtml(student.id||'')} — ${escapeHtml(student.batch||'')}</option>`).join('');}
   if(summary){ summary.className='alert alert-warn'; summary.textContent='ارفعي ملفات الطلاب وسيظهر ما يمكن استيراده قبل الحفظ.'; }
   if(preview) preview.innerHTML='';
   if(input) input.value='';
@@ -3830,7 +3849,7 @@ function parseLegacyGradeWorkbook(workbook,fileName,selectedStudentIdx=null){
   const selectedStudent=Number.isInteger(selectedStudentIdx)?students[selectedStudentIdx]:null;
   const foundStudent=selectedStudent?{student:selectedStudent,stdIdx:selectedStudentIdx}:findLegacyStudent(sourceName);
   if(!foundStudent) return {rows:[],issues:[`${fileName}: لم تتم مطابقة الطالب "${sourceName||'غير محدد'}" بحساب واحد في النظام. اختاري الحساب الصحيح من قائمة حساب الطالب عند رفع ملف واحد، ثم راجعي المعاينة.`]};
-  if(foundStudent.student.accountStatus==='withdrawn') return {rows:[],issues:[`${fileName}: حساب ${sourceName} منسحب؛ لم تُستورد درجاته.`]};
+  if(!SulukeraStudentAccount.isActive(foundStudent.student)) return {rows:[],issues:[`${fileName}: حساب ${sourceName} ${SulukeraStudentAccount.label(foundStudent.student)}؛ لم تُستورد درجاته.`]};
 
   const completionStatus={};
   mainRows.forEach(row=>{
@@ -4336,7 +4355,7 @@ function openStudentProfile(stdIdx) {
     <button class="btn btn-primary btn-sm" onclick="openGradeReportModal(${stdIdx})">📄 كشف الدرجات</button>`;
   document.getElementById('topbarActions').innerHTML=`
     ${canEditStudentRecord()?`<button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">${isFinanceRole()?'💰 تحديث المالية':'✏️ تعديل'}</button>`:''}
-    ${canManageAcademicAdmin()?`<button class="btn btn-sm" onclick="changeStudentPassword(${stdIdx})">🔐 كلمة المرور</button>`:''}
+    ${canManageAcademicAdmin()?`<button class="btn btn-sm" onclick="changeStudentPassword(${stdIdx})">🔐 كلمة المرور</button><button class="btn btn-sm" onclick="openStudentStatusModal(${stdIdx})">حالة الحساب</button>`:''}
     ${canManageAcademicAdmin()?`<button class="btn btn-success btn-sm" onclick="openStudentGradesPanel(${stdIdx})">📊 تعديل الدرجات</button>`:''}
     <button class="btn btn-primary btn-sm" onclick="openGradeReportModal(${stdIdx})">📄 كشف الدرجات</button>`;
   renderStudentProfile(stdIdx);
@@ -4440,7 +4459,7 @@ function renderStudentAdminSheetLegacy(stdIdx, st){
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:8px">متابعة داخلية مختصرة لحالة المتدرب والإنجاز والشهادة بدل الرجوع إلى ملف خارجي.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px;">
-        ${statusField('studentSheet_traineeStatus','حالة المتدرب',sheet.traineeStatus||'active',traineeStatusOptions,sheet.traineeStatusNotes,'ملاحظات حالة المتدرب')}
+        ${statusField('studentSheet_traineeStatus','حالة المتدرب',SulukeraStudentAccount.status(st),Object.entries(SulukeraStudentAccount.labels).map(([value,label])=>({value,label})),sheet.traineeStatusNotes,'ملاحظات حالة المتدرب')}
         ${statusField('studentSheet_completionStatus','حالة الإنجاز',sheet.completionStatus||'in_progress',completionStatusOptions,sheet.completionStatusNotes,'ملاحظات الإنجاز')}
         ${statusField('studentSheet_certificateStatus','حالة الشهادة',sheet.certificateStatus||'not_eligible',certificateStatusOptions,sheet.certificateStatusNotes,'ملاحظات الشهادة')}
         <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:14px;">
@@ -4502,7 +4521,7 @@ function renderStudentAdminSheet(stdIdx, st){
         <button class="btn btn-primary" onclick="saveStudentAdminSheetFromProfile(${stdIdx})">حفظ البطاقة</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;">
-        ${statusField('studentSheet_traineeStatus','حالة المتدرب',sheet.traineeStatus||'active',traineeStatusOptions,sheet.traineeStatusNotes,'ملاحظات حالة المتدرب')}
+        ${statusField('studentSheet_traineeStatus','حالة المتدرب',SulukeraStudentAccount.status(st),Object.entries(SulukeraStudentAccount.labels).map(([value,label])=>({value,label})),sheet.traineeStatusNotes,'ملاحظات حالة المتدرب')}
         ${statusField('studentSheet_completionStatus','حالة الإنجاز',sheet.completionStatus||'in_progress',completionStatusOptions,sheet.completionStatusNotes,'ملاحظات الإنجاز')}
         ${statusField('studentSheet_certificateStatus','حالة الشهادة',sheet.certificateStatus||'not_eligible',certificateStatusOptions,sheet.certificateStatusNotes,'ملاحظات الشهادة')}
       </div>
@@ -4596,7 +4615,8 @@ async function saveStudentAdminSheetFromProfile(stdIdx){
       studentKey:st._fbKey,
       details:`تم حفظ البطاقة الإدارية${exceptionPayload?` · استثناء الاختبارات: ${exceptionPayload.active?'نشط':'غير نشط'}`:''}`
     });
-    showToast('تم حفظ البطاقة الإدارية');
+    await loadAllFromFirebase();
+    showToast('تم حفظ البطاقة الإدارية وتوحيد حالة الحساب');
     return true;
   }catch(e){
     console.error('saveStudentAdminSheetFromProfile error:',e);
@@ -4718,6 +4738,7 @@ function renderStudentProfile(stdIdx) {
         <div style="font-size:20px;font-weight:800">${getStudentFullName(st)}</div>
         <div style="font-size:12px;color:var(--neon);margin-top:3px">${st.id} · ${st.program||'—'} · ${st.batch||'—'}</div>
         <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">
+          ${studentAccountBadge(st)}
           <span class="badge ${hasFail?'badge-fail':'badge-pass'}">${hasFail?'⚠️ تعثر أكاديمي':'✓ وضع أكاديمي جيد'}</span>
           ${packageName?`<span class="badge badge-student">${packageName}</span>`:''}
           ${remaining>0?`<span class="badge badge-warn">💰 متبقي: ${remaining.toLocaleString()} ر.س</span>`:'<span class="badge badge-pass">✓ مسدد بالكامل</span>'}
@@ -5102,7 +5123,8 @@ function loadGradesTable() {
   if (isExam) thead.innerHTML=`<tr><th>#</th><th>الطالب</th><th>الدفعة</th><th>الاختبار (/${settings.exam})</th><th>المجموع</th><th>تصنيف</th><th>حالة</th></tr>`;
   else thead.innerHTML=`<tr><th>#</th><th>الطالب</th><th>الدفعة</th><th>حضور(/${settings.attend})</th><th>واجبات(/${settings.hw})</th><th>مناقشة(/${settings.disc})</th><th>مجموع الأسبوع</th><th>الكلي</th></tr>`;
   const wkMax=settings.attend+settings.hw+settings.disc;
-  const visibleStudentIdxs=getSubjectStudentIdxs(subj).filter(stdIdx=>currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter));
+  const accountFilter=document.getElementById('gradeStatusFilter')?.value||'active';
+  const visibleStudentIdxs=getSubjectStudentIdxs(subj,true).filter(stdIdx=>SulukeraStudentAccount.matches(students[stdIdx],accountFilter)&&(currentGradeBatchFilter==='all'||sameBatchName(students[stdIdx]?.batch,currentGradeBatchFilter)));
   if(!visibleStudentIdxs.length){
     document.getElementById('gradesTableBody').innerHTML='<tr><td colspan="'+(isExam?7:8)+'" style="text-align:center;padding:2rem;color:var(--text-muted)">لا يوجد طلاب في هذه الدفعة لهذا المقرر</td></tr>';
     const lecturerPanelEmpty=document.getElementById('lecturerFollowUpPanel'); if(lecturerPanelEmpty) lecturerPanelEmpty.innerHTML='';
@@ -5114,12 +5136,12 @@ function loadGradesTable() {
     const st=students[stdIdx]; const wg=isExam?null:g[wKey];
     const wt=isExam?(g.exam||0):((wg?.attend||0)+(wg?.hw||0)+(wg?.disc||0));
     const total=calcTotal(g); const display=getGradeDisplay(g); const gr=display.letter; const status=display.status;
-    if (isExam) return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong></td>
+    if (isExam) return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong> ${studentAccountBadge(st)}</td>
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.exam}" value="${g.exam??''}" onchange="updateGrade(${si},${stdIdx},'exam',null,this.value)"></td>
       <td><strong>${isExamEntered(g)?total:'—'}</strong>${isExamEntered(g)?'/100':''}</td><td><span class="badge badge-${display.className==='pending'?'warn':display.className}">${gr}</span></td>
       <td><span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td></tr>`;
-    return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong></td>
+    return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong> ${studentAccountBadge(st)}</td>
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.attend}" value="${wg?.attend??''}" onchange="updateGrade(${si},${stdIdx},'${wKey}','attend',this.value)"></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.hw}" value="${wg?.hw??''}" onchange="updateGrade(${si},${stdIdx},'${wKey}','hw',this.value)"></td>
@@ -5472,7 +5494,7 @@ function generateReport() {
   const packageName=getStudentPackageDisplayName(st);
 
   let html=`<div class="card card-accent">
-    <div class="card-title">📋 كشف درجات — ${getStudentFullName(st)}</div>
+    <div class="card-title">📋 كشف درجات — ${getStudentFullName(st)} ${studentAccountBadge(st)}</div>
     <div class="report-summary">
       <div class="report-summary-section">
         <div class="report-summary-name">${getStudentFullName(st)}</div>
@@ -6040,6 +6062,7 @@ function filterByTrack(track, el) {
 function renderCards(program) {
   const grid=document.getElementById('cardsGrid');
   let filtered=students.map((st,idx)=>({...st,idx}));
+  filtered=filtered.filter(st=>SulukeraStudentAccount.matches(st,document.getElementById('cardStatusFilter')?.value||'active'));
   if (program&&program!=='all') filtered=filtered.filter(st=>st.program===program);
   if (currentCardTrack&&currentCardTrack!=='all') filtered=filtered.filter(st=>st.track===currentCardTrack);
   if (!filtered.length) { grid.innerHTML='<div class="alert alert-warn" style="grid-column:1/-1">لا يوجد طلاب</div>'; return; }
@@ -6069,6 +6092,7 @@ function renderCards(program) {
           <div style="color:var(--text-muted)">📞</div><div style="font-weight:700;text-align:left;direction:ltr">${st.phone||'—'}</div>
         </div>
         <div style="margin-top:7px;display:flex;gap:3px;flex-wrap:wrap;">
+          ${studentAccountBadge(st)}
           ${hasFail?'<span class="badge badge-fail" style="font-size:9px">⚠️ تعثر</span>':'<span class="badge badge-pass" style="font-size:9px">✓ جيد</span>'}
           ${hasOverdue?'<span class="badge badge-warn" style="font-size:9px">💰 قسط</span>':''}
         </div>
@@ -6341,14 +6365,15 @@ function professionalAdminSessions(unit){
   return [1,2,3,4,5].map(number=>{const key=`session_${number}`,existing=unit?.sessions?.[key]||{};return [key,{order:number,title:existing.title||`اللقاء ${number}`,scheduledAt:existing.scheduledAt||(number===1?unit?.zoomAt||'':''),zoomUrl:existing.zoomUrl||(number===1?unit?.zoomUrl||'':''),recordingUrl:existing.recordingUrl||(number===1?unit?.recordingUrl||'':''),pdfUrl:existing.pdfUrl||'',durationMinutes:Number(existing.durationMinutes)||120}];});
 }
 function professionalEnrollmentRows(){
-  return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]).map(([studentKey,programs])=>({studentKey,...programs[PROFESSIONAL_PROGRAM_ID]}));
+  return Object.entries(professionalEnrollmentsData||{}).filter(([,programs])=>programs?.[PROFESSIONAL_PROGRAM_ID]).map(([studentKey,programs])=>{const enrollment=programs[PROFESSIONAL_PROGRAM_ID],student=students.find(s=>s._fbKey===studentKey),accountStatus=SulukeraStudentAccount.resolve(student,programs);return {studentKey,...enrollment,accountStatus,status:accountStatus==='active'?enrollment.status:'paused'};});
 }
 function professionalStudentRequestCount(studentKey){return studentRequestsData.filter(request=>request.studentKey===studentKey&&!['approved','rejected','completed'].includes(request.status)).length;}
 let professionalEnrollmentRepairRunning=false;
+let professionalStudentStatusFilter='active';
 function isProfessionalStudentRecord(student){return student?.planType==='PROFESSIONAL'||String(student?.batch||'').startsWith('PRO-')||isProfessionalProgramName(student?.program);}
 async function repairProfessionalStudentEnrollments(){
   if(professionalEnrollmentRepairRunning)return false;
-  const missing=students.filter(student=>student._fbKey&&student.accountStatus!=='withdrawn'&&isProfessionalStudentRecord(student)&&!professionalEnrollmentsData?.[student._fbKey]?.[PROFESSIONAL_PROGRAM_ID]);
+  const missing=students.filter(student=>student._fbKey&&SulukeraStudentAccount.isActive(student)&&isProfessionalStudentRecord(student)&&!professionalEnrollmentsData?.[student._fbKey]?.[PROFESSIONAL_PROGRAM_ID]);
   if(!missing.length)return false;
   professionalEnrollmentRepairRunning=true;
   try{
@@ -6360,18 +6385,15 @@ async function repairProfessionalStudentEnrollments(){
 }
 function renderProfessionalStudentsAdmin(){
   const host=document.getElementById('professionalStudentsAdminContent');if(!host)return;
-  const missing=students.filter(student=>student._fbKey&&student.accountStatus!=='withdrawn'&&isProfessionalStudentRecord(student)&&!professionalEnrollmentsData?.[student._fbKey]?.[PROFESSIONAL_PROGRAM_ID]);
+  const missing=students.filter(student=>student._fbKey&&SulukeraStudentAccount.isActive(student)&&isProfessionalStudentRecord(student)&&!professionalEnrollmentsData?.[student._fbKey]?.[PROFESSIONAL_PROGRAM_ID]);
   if(missing.length&&!professionalEnrollmentRepairRunning){host.innerHTML=`<div class="card card-accent"><div class="alert alert-info">جاري توحيد قائمة المتدربين وربط ${missing.length} حساب مهني غير ظاهر...</div></div>`;repairProfessionalStudentEnrollments().then(changed=>{if(changed)renderProfessionalStudentsAdmin();});return;}
-  const rows=professionalEnrollmentRows().map(row=>({...row,student:students.find(item=>item._fbKey===row.studentKey)})).sort((a,b)=>getStudentFullName(a.student||{}).localeCompare(getStudentFullName(b.student||{}),'ar'));
+  let rows=professionalEnrollmentRows().map(row=>({...row,student:students.find(item=>item._fbKey===row.studentKey)})).sort((a,b)=>getStudentFullName(a.student||{}).localeCompare(getStudentFullName(b.student||{}),'ar'));
   const active=rows.filter(row=>row.status==='active').length,paused=rows.filter(row=>row.status==='paused').length,pending=rows.reduce((sum,row)=>sum+professionalStudentRequestCount(row.studentKey),0);
-  host.innerHTML=`<div class="card card-accent" style="background:linear-gradient(135deg,#fff,#f3f7ff)"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title">👥 طلاب البرنامج المهني</div><div style="font-size:12px;color:var(--text-muted)">إدارة التسجيل والمسارات والطلبات وحالة الوصول من قائمة مستقلة.</div></div><button class="btn btn-primary" onclick="openStudentModal()">➕ إضافة طالب مهني</button></div><div class="stats-grid" style="margin-top:14px"><div class="stat-card"><div class="stat-num">${rows.length}</div><div class="stat-label">إجمالي الطلاب</div></div><div class="stat-card"><div class="stat-num" style="color:var(--success)">${active}</div><div class="stat-label">حساب نشط</div></div><div class="stat-card"><div class="stat-num" style="color:var(--warning)">${paused}</div><div class="stat-label">حساب موقوف</div></div><div class="stat-card"><div class="stat-num">${pending}</div><div class="stat-label">طلبات مفتوحة</div></div></div></div>
-  <div class="card card-accent"><div class="table-wrap"><table><thead><tr><th>المتدرب</th><th>الرقم</th><th>المسارات</th><th>التقدم</th><th>الطلبات</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${rows.length?rows.map(row=>{const student=row.student,index=students.findIndex(item=>item._fbKey===row.studentKey),selected=row.selectedTracks||{track_1:true},unitRecords=professionalProgressData?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units||{},completed=Object.values(unitRecords).filter(unit=>unit.completed).length,total=Math.max(3,Object.values(selected).filter(Boolean).length*3),requests=professionalStudentRequestCount(row.studentKey),isPaused=row.status==='paused';return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.studentKey)}</strong><div style="font-size:10px;color:var(--text-muted)">${escapeHtml(student?.email||student?.phone||'')}</div></td><td class="mono">${escapeHtml(student?.id||'—')}</td><td><span class="badge badge-info">OBM-P</span>${selected.track_2?' <span class="badge badge-info">OBM-E</span>':''}${selected.track_3?' <span class="badge badge-info">OBM-C</span>':''}</td><td><strong>${completed}/${total}</strong></td><td>${requests?`<span class="nav-count-badge" style="position:static;display:inline-flex">${requests}</span>`:'—'}</td><td><span class="badge ${isPaused?'badge-fail':'badge-pass'}">${isPaused?'موقوف':'نشط'}</span></td><td><div style="display:flex;gap:6px;flex-wrap:wrap">${index>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${index})">ملف المتدرب</button>`:''}<button class="btn btn-sm" onclick="navTo('alerts',null)">الطلبات</button><button class="btn btn-sm ${isPaused?'btn-success':'btn-warning'}" onclick="toggleProfessionalStudentStatus('${escapeHtml(row.studentKey)}')">${isPaused?'إعادة التفعيل':'إيقاف'}</button></div></td></tr>`;}).join(''):'<tr><td colspan="7"><div class="empty">لا يوجد متدربون مسجلون بعد.</div></td></tr>'}</tbody></table></div></div>`;
+  rows=rows.filter(row=>SulukeraStudentAccount.matches(row.accountStatus,professionalStudentStatusFilter));
+  host.innerHTML=`<div class="card card-accent" style="background:linear-gradient(135deg,#fff,#f3f7ff)"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title">👥 طلاب البرنامج المهني</div><div style="font-size:12px;color:var(--text-muted)">إدارة التسجيل والمسارات والطلبات وحالة الوصول من قائمة مستقلة.</div></div><button class="btn btn-primary" onclick="openStudentModal()">➕ إضافة طالب مهني</button></div><div class="stats-grid" style="margin-top:14px"><div class="stat-card"><div class="stat-num">${active+paused}</div><div class="stat-label">إجمالي الطلاب</div></div><div class="stat-card"><div class="stat-num" style="color:var(--success)">${active}</div><div class="stat-label">حساب نشط</div></div><div class="stat-card"><div class="stat-num" style="color:var(--warning)">${paused}</div><div class="stat-label">حساب غير نشط</div></div><div class="stat-card"><div class="stat-num">${pending}</div><div class="stat-label">طلبات مفتوحة</div></div></div></div>
+  <div class="card card-accent"><label for="professionalStudentStatusFilter">حالة حساب المتدرب</label><select id="professionalStudentStatusFilter" style="margin:10px;padding:10px" onchange="professionalStudentStatusFilter=this.value;renderProfessionalStudentsAdmin()">${studentStatusOptions(professionalStudentStatusFilter)}</select><div class="table-wrap"><table><thead><tr><th>المتدرب</th><th>الرقم</th><th>المسارات</th><th>التقدم</th><th>الطلبات</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${rows.length?rows.map(row=>{const student=row.student,index=students.findIndex(item=>item._fbKey===row.studentKey),selected=row.selectedTracks||{track_1:true},unitRecords=professionalProgressData?.[row.studentKey]?.[PROFESSIONAL_PROGRAM_ID]?.units||{},completed=Object.values(unitRecords).filter(unit=>unit.completed).length,total=Math.max(3,Object.values(selected).filter(Boolean).length*3),requests=professionalStudentRequestCount(row.studentKey),isPaused=row.status==='paused';return `<tr><td><strong>${escapeHtml(student?getStudentFullName(student):row.studentKey)}</strong><div style="font-size:10px;color:var(--text-muted)">${escapeHtml(student?.email||student?.phone||'')}</div></td><td class="mono">${escapeHtml(student?.id||'—')}</td><td><span class="badge badge-info">OBM-P</span>${selected.track_2?' <span class="badge badge-info">OBM-E</span>':''}${selected.track_3?' <span class="badge badge-info">OBM-C</span>':''}</td><td><strong>${completed}/${total}</strong></td><td>${requests?`<span class="nav-count-badge" style="position:static;display:inline-flex">${requests}</span>`:'—'}</td><td>${studentAccountBadge(row.accountStatus)}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">${index>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${index})">ملف المتدرب</button>`:''}<button class="btn btn-sm" onclick="navTo('alerts',null)">الطلبات</button><button class="btn btn-sm ${isPaused?'btn-success':'btn-warning'}" onclick="toggleProfessionalStudentStatus('${escapeHtml(row.studentKey)}')">حالة الحساب</button></div></td></tr>`;}).join(''):'<tr><td colspan="7"><div class="empty">لا يوجد متدربون مسجلون بعد.</div></td></tr>'}</tbody></table></div></div>`;
 }
-async function toggleProfessionalStudentStatus(studentKey){
-  const current=professionalEnrollmentsData?.[studentKey]?.[PROFESSIONAL_PROGRAM_ID];if(!current)return showToast('تعذر العثور على التسجيل');
-  const nextStatus=current.status==='paused'?'active':'paused',message=nextStatus==='paused'?'إيقاف وصول الطالب إلى البرنامج المهني؟ يمكن إعادة تفعيله لاحقًا.':'إعادة تفعيل وصول الطالب؟';if(!confirm(message))return;
-  const update={status:nextStatus,updatedAt:new Date().toISOString(),updatedBy:currentUser.username||'admin'};await fbRef(`professionalEnrollments/${studentKey}/${PROFESSIONAL_PROGRAM_ID}`).update(update);Object.assign(current,update);showToast(nextStatus==='active'?'✅ تم تفعيل الحساب':'تم إيقاف الحساب المهني');renderProfessionalStudentsAdmin();
-}
+function toggleProfessionalStudentStatus(studentKey){const index=students.findIndex(s=>s._fbKey===studentKey);if(index>=0)openStudentStatusModal(index);}
 function professionalLecturerUnits(){
   const program=getProfessionalProgram(),normalize=value=>String(value||'').trim().toLowerCase(),identities=new Set([...getLecturerIdentityValues(currentUser),currentUser?.authUid].map(normalize).filter(Boolean)),items=[];
   const linkedUser=users.find(user=>[user.username,user.id,user._fbKey,user.fbKey].map(normalize).some(value=>identities.has(value)));
@@ -6597,7 +6619,7 @@ async function buildCompatibleExamDashboard(examId){
   examAdminResultsData=resultRows;
   const subject=subjects.find(item=>item._fbKey===exam.subject_key);
   let eligibleStudents=subject?getSubjectStudentIdxs(subject).map(index=>students[index]).filter(Boolean):students.filter(student=>sameBatchName(student.batch,exam.batch));
-  eligibleStudents=eligibleStudents.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,exam.batch));
+  eligibleStudents=eligibleStudents.filter(student=>SulukeraStudentAccount.isActive(student)&&sameBatchName(student.batch,exam.batch));
   const resultMap=new Map(resultRows.filter(row=>row.exam_id===examId).map(row=>[row.student_key,row]));
   const studentRows=eligibleStudents.map(student=>{const row=resultMap.get(student._fbKey),best=row?.best_score===null||row?.best_score===undefined?null:Number(row.best_score),submitted=best!==null||Boolean(row?.last_submitted_at);const exception=examExceptionsData?.[student._fbKey];return {studentKey:student._fbKey,attemptCount:Number(row?.attempt_count)||0,submittedCount:submitted?1:0,activeCount:0,bestScore:Number.isFinite(best)?best:null,lastSubmittedAt:row?.last_submitted_at||null,hasException:Boolean(exception?.active&&(!exception.subjectKey||exception.subjectKey===exam.subject_key))};});
   const submitted=studentRows.filter(row=>row.submittedCount),passed=submitted.filter(row=>row.bestScore>=16),bands=[{label:'18–20',min:18,max:20,count:0},{label:'16–<18',min:16,max:18,count:0},{label:'12–<16',min:12,max:16,count:0},{label:'أقل من 12',min:0,max:12,count:0}];
@@ -6718,7 +6740,7 @@ async function loadExamEvaluationAnalytics(){
   const host=document.getElementById('examEvaluationAnalytics');if(!host||currentUser?.role!=='admin')return;
   host.innerHTML='<div class="empty">جاري تحليل التقييمات...</div>';
   try{
-    examEvaluationGroups=((await secureAdminExamRequest('/admin/evaluations')).evaluations||[]).map(group=>{const subject=subjects.find(item=>item._fbKey===group.subjectKey),eligible=subject?getSubjectStudentIdxs(subject).map(index=>students[index]).filter(student=>student&&student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,group.batch)).length:students.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,group.batch)).length;return {...group,eligibleCount:group.eligibleCount??eligible,responseRate:group.responseRate??(eligible?Math.round(Number(group.responseCount||0)/eligible*1000)/10:0)};});
+    examEvaluationGroups=((await secureAdminExamRequest('/admin/evaluations')).evaluations||[]).map(group=>{const subject=subjects.find(item=>item._fbKey===group.subjectKey),eligible=subject?getSubjectStudentIdxs(subject).map(index=>students[index]).filter(student=>student&&SulukeraStudentAccount.isActive(student)&&sameBatchName(student.batch,group.batch)).length:students.filter(student=>SulukeraStudentAccount.isActive(student)&&sameBatchName(student.batch,group.batch)).length;return {...group,eligibleCount:group.eligibleCount??eligible,responseRate:group.responseRate??(eligible?Math.round(Number(group.responseCount||0)/eligible*1000)/10:0)};});
     if(!examEvaluationGroups.length){host.innerHTML='<div class="empty">لم تصل تقييمات للمقررات بعد.</div>';return;}
     populateEvaluationCourseOptions();
   }catch(error){console.error('load evaluation analytics error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل تحليل التقييمات الآن.</div>';}
@@ -7546,7 +7568,7 @@ async function enrollSemesterStudents(key){
   if(!stdSnap.exists()) return showToast('⚠️ لا يوجد طلاب في النظام');
 
   const allDbStudents = Object.entries(stdSnap.val());
-  const targetDbStudents = allDbStudents.filter(([,st])=> st.accountStatus!=='withdrawn' && semBatches.some(b=>sameBatchName(b,st.batch)));
+  const targetDbStudents = allDbStudents.filter(([,st])=> SulukeraStudentAccount.isActive(st) && semBatches.some(b=>sameBatchName(b,st.batch)));
 
   if(!targetDbStudents.length){
     const existing=[...new Set(allDbStudents.map(([,s])=>s.batch).filter(Boolean))];
@@ -7642,7 +7664,7 @@ function renderSelectedBatchPlan(){
   const template=effectiveCurriculumTemplate();
   const lecturers=users.filter(u=>u.role==='lecturer');
   const offerings=subjects.filter(s=>s.courseKey&&sameBatchName(s.batch,batch));
-  const batchStudents=students.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,batch));
+  const batchStudents=students.filter(student=>SulukeraStudentAccount.isActive(student)&&sameBatchName(student.batch,batch));
   const studentsWithoutPlan=batchStudents.filter(student=>!getExplicitStudentPlan(student));
   const studentsWithPlan=batchStudents.filter(student=>getExplicitStudentPlan(student));
   const enrolledPairs=new Set(enrollmentsData.map(item=>`${item.studentKey}|${item.subjectKey}`));
@@ -7713,7 +7735,7 @@ async function generateSelectedBatchPlan(){
 async function assignSelectedBatchStudents(){
   const batch=document.getElementById('batchPlanSelect')?.value;
   if(!batch) return showToast('⚠️ اختاري الدفعة أولاً');
-  const batchStudents=students.filter(student=>student.accountStatus!=='withdrawn'&&sameBatchName(student.batch,batch));
+  const batchStudents=students.filter(student=>SulukeraStudentAccount.isActive(student)&&sameBatchName(student.batch,batch));
   const offerings=subjects.filter(subject=>subject.courseKey&&sameBatchName(subject.batch,batch));
   if(!batchStudents.length) return showToast('⚠️ لا يوجد طلاب مسجلون في هذه الدفعة');
   if(!offerings.length) return showToast('⚠️ أنشئي مقررات الدفعة أولاً');
@@ -8042,6 +8064,7 @@ function filterStudents(){
   const planFilter = document.getElementById('studentPlanFilter')?.value||'';
   
   let filtered = students.map((st,idx)=>({...st,idx}));
+  filtered=filtered.filter(st=>SulukeraStudentAccount.matches(st,document.getElementById('studentStatusFilter')?.value||'active'));
   if(query){
     filtered = filtered.filter(st=>
       getStudentFullName(st).toLowerCase().includes(query) ||
@@ -8079,6 +8102,7 @@ function clearStudentFilters(){
   if(program) program.value='';
   if(batch) batch.value='';
   if(plan) plan.value='';
+  const status=document.getElementById('studentStatusFilter');if(status)status.value='active';
   filterStudents();
 }
 
@@ -8098,7 +8122,7 @@ function renderStudentsTableFiltered(filtered){
     const hasFail = gradeRows.some(isFailingGrade);
     const financialState = getStudentFinancialState(st);
     const hasOverdue = (financialState.installments||[]).some(i=>i.status==='overdue');
-    const withdrawn=st.accountStatus==='withdrawn';
+    const withdrawn=!SulukeraStudentAccount.isActive(st);
     const canEdit = canEditStudentRecord();
     const canDelete = canManageAcademicAdmin();
     const classification=getStudentListClassification(st),groupKey=`${normalizeBatchName(st.batch)||'بدون دفعة'}|${classification}`,classificationLabel=classification==='PROFESSIONAL'?'مهني':classification==='UNCLASSIFIED'?'بحاجة تحديد':classification,groupHeader=groupKey!==previousGroup?`<tr><td colspan="10" style="padding:10px 14px;background:linear-gradient(90deg,#edf3ff,#f8faff);color:var(--primary-dark);font-weight:900;border-top:2px solid #cbdcff">دفعة ${escapeHtml(st.batch||'غير محددة')} · ${escapeHtml(classificationLabel)}</td></tr>`:'';previousGroup=groupKey;
@@ -8111,12 +8135,12 @@ function renderStudentsTableFiltered(filtered){
       <td><span class="badge badge-student">${st.batch||'—'}</span></td>
       <td><span class="badge ${classification==='QBA'?'badge-admin':classification==='QASP-S'?'badge-info':classification==='PROFESSIONAL'?'badge-pass':'badge-warn'}">${escapeHtml(classificationLabel)}</span></td>
       <td>${withdrawn?'—':avg>0?avg+'/100':'—'}</td>
-      <td>${withdrawn?'<span class="badge badge-fail">منسحب</span>':`<span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'⚠️ تعثر':'✓ جيد'}</span>${hasOverdue?'<span class="badge badge-fail" style="margin-right:3px">💰 متأخر</span>':''}`}</td>
+      <td>${studentAccountBadge(st)}${!withdrawn?` <span class="badge ${hasFail?'badge-warn':'badge-pass'}">${hasFail?'تعثر':'جيد'}</span>${hasOverdue?'<span class="badge badge-fail">متأخر ماليًا</span>':''}`:''}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn btn-sm btn-primary" onclick="openStudentProfile(${stdIdx})">👁️</button>
         ${canManageAcademicAdmin()?`<button class="btn btn-success btn-sm" onclick="openStudentGradesPanel(${stdIdx})" title="تعديل الدرجات">📊</button>`:''}
         ${canEdit?`<button class="btn btn-sm" onclick="openStudentModal(${stdIdx})">${isFinanceRole()?'💰':'✏️'}</button>`:''}
-        ${canDelete?`<button class="btn btn-sm ${withdrawn?'btn-success':'btn-warning'}" onclick="toggleStudentWithdrawal(${stdIdx})" title="${withdrawn?'إعادة تفعيل الحساب':'تجميد حساب الطالب'}">${withdrawn?'تفعيل':'إيقاف'}</button>`:''}
+        ${canDelete?`<button class="btn btn-sm ${withdrawn?'btn-success':'btn-warning'}" onclick="openStudentStatusModal(${stdIdx})">حالة الحساب</button>`:''}
         ${canDelete?`<button class="btn btn-danger btn-sm" onclick="deleteStudent(${stdIdx})">🗑️</button>`:''}
       </td>
     </tr>`;
@@ -8146,44 +8170,7 @@ function populateBatchFilterDropdown(){
   sel.onchange = filterStudents;
 }
 
-async function toggleStudentWithdrawal(stdIdx){
-  const student=students[stdIdx];
-  if(!student?._fbKey) return showToast('⚠️ تعذر تحديد سجل الطالب');
-  if(!canManageAcademicAdmin()) return showToast('⚠️ لا تملكين صلاحية تغيير حالة الحساب');
-  const withdrawing=student.accountStatus!=='withdrawn';
-  const action=withdrawing?'تجميد حساب الطالب وتحويل حالته إلى منسحب':'إعادة تفعيل حساب الطالب';
-  if(!confirm(`${action} للطالب ${getStudentFullName(student)}؟\nستبقى البيانات والدرجات والتسجيلات محفوظة.`)) return;
-  try{
-    const now=new Date().toISOString();
-    const updates={
-      [`students/${student._fbKey}/accountStatus`]:withdrawing?'withdrawn':'active',
-      [`students/${student._fbKey}/withdrawnAt`]:withdrawing?now:'',
-      [`students/${student._fbKey}/withdrawnBy`]:withdrawing?(currentUser?.username||currentUser?.name||'admin'):''
-    };
-    const usersSnap=await fbRef('users').get();
-    if(usersSnap.exists()) Object.entries(usersSnap.val()).forEach(([key,user])=>{
-      if(user.role==='student'&&user.username===student.id){
-        updates[`users/${key}/accountStatus`]=withdrawing?'withdrawn':'active';
-      }
-    });
-    await firebase.database().ref('/').update(updates);
-    student.accountStatus=withdrawing?'withdrawn':'active';
-    student.withdrawnAt=withdrawing?now:'';
-    student.withdrawnBy=withdrawing?(currentUser?.username||currentUser?.name||'admin'):'';
-    await saveActivityLog({
-      action:withdrawing?'تجميد حساب طالب':'إعادة تفعيل حساب طالب',
-      targetType:'student_account', targetKey:student._fbKey,
-      targetLabel:getStudentFullName(student), studentKey:student._fbKey,
-      details:withdrawing?'الحالة: منسحب. البيانات والسجل الأكاديمي محفوظان.':'الحالة: نشط.'
-    });
-    await loadAllFromFirebase();
-    renderStudentsTable();
-    showToast(withdrawing?'✅ تم تجميد الحساب وحفظ السجل':'✅ تم إعادة تفعيل الحساب');
-  }catch(error){
-    console.error('toggleStudentWithdrawal',error);
-    showToast('⚠️ تعذر تحديث حالة الحساب');
-  }
-}
+function toggleStudentWithdrawal(stdIdx){openStudentStatusModal(stdIdx);}
 
 // ══════════════════════════════════════════════
 //  📊 EXPORT EXCEL
@@ -8192,7 +8179,7 @@ function exportStudentsExcel(){
   if(!students.length){ showToast('⚠️ لا يوجد طلاب للتصدير'); return; }
   
   let csv = '\uFEFF'; // BOM for Arabic
-  csv += 'الرقم الطلابي,الاسم الكامل,البريد الإلكتروني,الجوال,البرنامج,المسار,الدفعة,نوع التسجيل,المبلغ الإجمالي,المدفوع,المتبقي,حالة الأقساط,المتوسط الأكاديمي,الحالة الأكاديمية\n';
+  csv += 'الرقم الطلابي,الاسم الكامل,البريد الإلكتروني,الجوال,البرنامج,المسار,الدفعة,نوع التسجيل,المبلغ الإجمالي,المدفوع,المتبقي,حالة الأقساط,المتوسط الأكاديمي,الحالة الأكاديمية,حالة الحساب\n';
   
   students.forEach((st,idx)=>{
     const mySubjs = subjects.filter(s=>s.students.includes(idx));
@@ -8209,7 +8196,7 @@ function exportStudentsExcel(){
       st.program||'', st.track||'', st.batch||'',
       getStudentPackageDisplayName(st), st.totalAmount||0, paidTotal, remaining,
       hasOverdue?'متأخر':'منتظم',
-      avg>0?avg:'—', hasFail?'تعثر':'جيد'
+      avg>0?avg:'—', hasFail?'تعثر':'جيد',SulukeraStudentAccount.label(st)
     ].map(v=>`"${v}"`).join(',');
     csv += row + '\n';
   });
@@ -8688,6 +8675,7 @@ async function cleanDuplicateStudents(){
 
 </script>
 <script src="coursework-ui.js?v=20261006-meetings"></script>
+<script src="student-status-ui.js?v=20261006-status"></script>
 <script src="performance.js?v=20261006-meetings"></script>
 </body>
 </html>
