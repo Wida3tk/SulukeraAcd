@@ -32,5 +32,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.screenshot({path:'.tools/lecturer-discussion-mobile.png',fullPage:true});
- await browser.close();console.log('PASS: lecturer compact discussion folds, pagination, search, graded/missing filters, correct student save after pagination/search, desktop/mobile; mocked writes only.');
+ await page.evaluate(async()=>{cwReportFilter='discussionPending';cwReportOnlyActions=true;cwReportSearch='nonexistent';cwActiveLesson='old';await cwOpenReport('lesson');});
+ assert.equal(await page.locator('.cw-student-card').count(),45);
+ assert.deepEqual(await page.evaluate(()=>({filter:cwReportFilter,only:cwReportOnlyActions,search:cwReportSearch})),{filter:'all',only:false,search:''});
+ await browser.close();console.log('PASS: lecturer compact discussion folds, pagination, search, graded/missing filters, correct student save after pagination/search, report filters reset on lesson change, desktop/mobile; mocked writes only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

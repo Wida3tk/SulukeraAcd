@@ -244,7 +244,7 @@ let cwReportFilter='all',cwReportOnlyActions=false,cwReportSearch='',cwDiscussio
 async function cwOpenReport(id) {
   try {
     cwReport = await cwApi("/report", { lessonId: id });
-    if(cwActiveLesson!==id){cwReportSearch='';cwDiscussionPage=1;}
+    if(cwActiveLesson!==id){cwReportSearch='';cwDiscussionPage=1;cwReportFilter='all';cwReportOnlyActions=false;}
     cwActiveLesson = id;
     cwRenderReport();
   } catch(e) {cwNotify(e.message);}
