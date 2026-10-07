@@ -1,7 +1,7 @@
 import { handleGraduationProject } from "./graduation-projects.js";
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
-import { handleCoursework } from "./coursework.js";
+import { handleCoursework, retryPendingCoursework } from "./coursework.js";
 const PROJECT_ID = "sulukeraacd";
 const FIREBASE_DB = "https://sulukeraacd-default-rtdb.firebaseio.com";
 const ALLOWED_ORIGINS = new Set([
@@ -1071,6 +1071,9 @@ async function submitEvaluation(request, env, auth, examId) {
 }
 
 export default {
+  scheduled(event,env,ctx){
+    ctx.waitUntil(retryPendingCoursework(env,{firebaseAdminToken}).then(result=>{if(result.attempted)console.log("coursework_sync_retry",result);}));
+  },
   async fetch(request, env) {
     if (request.method === "OPTIONS")
       return new Response(null, { status: 204, headers: corsHeaders(request) });

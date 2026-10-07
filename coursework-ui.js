@@ -61,7 +61,7 @@ async function renderAcademicCoursework() {
   host.innerHTML =
     '<div class="card"><div class="empty">جاري تحميل المحاضرات والواجبات...</div></div>';
   try {
-    if(currentUser.role==='student') await cwApi("/sync",{});
+    if(currentUser.role==='student'){try{await cwApi("/sync",{});}catch(error){console.error("coursework sync retry unavailable",error);}}
     cwData = await cwApi("");
     const role = currentUser.role,
       admin = role === "admin";

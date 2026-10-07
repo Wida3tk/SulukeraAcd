@@ -165,15 +165,16 @@ async function synchronize(env, ctx, l, studentKey, actor) {
       assessment = await assessmentFor(env,l,settings),
       maxAttend = assessment.attendanceMax;
     const fields = {};
-    if (best?.score != null) fields[`w${l.week}_hw`] = best.score;
+    if (best?.score != null){fields[`w${l.week}_hw`] = best.score;fields[`w${l.week}_hwEntered`]=true;}
     const discussion = await env.DB.prepare("SELECT score FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,studentKey).first();
-    if(discussion?.score!=null)fields[`w${l.week}_disc`]=discussion.score;
+    if(discussion?.score!=null){fields[`w${l.week}_disc`]=discussion.score;fields[`w${l.week}_discEntered`]=true;fields[`w${l.week}_discApproved`]=true;}
     const attend = attendance
       ? attendanceGrade(attendance.percent, maxAttend)
       : null;
     if (best?.score != null && reflection?.score != null) fields[`w${l.week}_attend`]=reflection.score;
     else if (attend != null) fields[`w${l.week}_attend`]=attend;
     else if (attendance) fields[`w${l.week}_attend`] = null;
+    if(fields[`w${l.week}_attend`]!=null)fields[`w${l.week}_attendEntered`]=true;
     const key = safeKey(`grade_${studentKey}_${l.subject_key}`),
       legacy = safeKey(`${studentKey}_${l.subject_key}`);
     // Preserve all existing components, including older grade-key formats. Use ETags to avoid clobbering parallel grading.
@@ -213,9 +214,9 @@ async function synchronize(env, ctx, l, studentKey, actor) {
     }
     if (!written) reject("GRADE_SYNC_CONFLICT", 503);
     await env.DB.prepare(
-      "UPDATE coursework_sync SET state='synced',error=NULL,updated_at=? WHERE lesson_id=? AND student_key=?",
+      "UPDATE coursework_sync SET state='synced',error=NULL,updated_at=? WHERE lesson_id=? AND student_key=? AND updated_at=?",
     )
-      .bind(now, l.id, studentKey)
+      .bind(now, l.id, studentKey,now)
       .run();
     return true;
   } catch (error) {
@@ -700,4 +701,14 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     return { data: { synced } };
   }
   reject("NOT_FOUND", 404);
+}
+
+export async function retryPendingCoursework(env,ctx){
+ const rows=(await env.DB.prepare("SELECT c.* FROM coursework_sync c JOIN course_lessons l ON l.id=c.lesson_id WHERE c.state='pending' ORDER BY c.updated_at,c.lesson_id,c.student_key LIMIT 5").all()).results;
+ let synced=0;
+ for(const row of rows){
+  const lesson=await env.DB.prepare("SELECT * FROM course_lessons WHERE id=?").bind(row.lesson_id).first();
+  if(lesson&&await synchronize(env,ctx,lesson,row.student_key,'automatic-coursework-sync'))synced++;
+ }
+ return {attempted:rows.length,synced};
 }

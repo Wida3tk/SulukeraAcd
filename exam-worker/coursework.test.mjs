@@ -12,6 +12,7 @@ import vm from "node:vm";
 const fixtures = () => {
   const sql = new DatabaseSync(":memory:");
   sql.exec(readFileSync(new URL("./coursework.sql", import.meta.url), "utf8"));
+  sql.exec(readFileSync(new URL("./coursework_sync_triggers.sql", import.meta.url), "utf8"));
   const DB = {
     prepare(query) {
       const stmt = sql.prepare(query);
@@ -105,7 +106,7 @@ const fixtures = () => {
     status: "published",
     durationMinutes: 120,
   };
-  return { sql, call, config, records, ctx };
+  return { sql, DB, call, config, records, ctx };
 };
 test("current semester excludes unassigned courses and templates survive a new batch", async () => {
   const f = fixtures();
@@ -521,4 +522,19 @@ test('student retry cannot synchronize another student and ledger display retain
  vm.runInContext("cwData={lessons:[{subject_key:'course',week:1,attendanceMax:3,result:{score:6},attendance:{score:2},discussion:{score:null},recordedGrades:{disc:null}}]}",context);
  const original={exam:20,w1_hw:0,w1_disc:6,w2_hw:4};
  const merged=context.cwMergeStudentGrade(original,'course');assert.equal(merged.w1_hw,6);assert.equal(merged.w1_attend,2);assert.equal(merged.w1_disc,null);assert.equal(merged.exam,20);assert.equal(merged.w2_hw,4);assert.equal(original.w1_hw,0);assert.equal(context.cwMergeStudentGrade(original,'other'),original);
+});
+test('automatic retry recovers pending grades without a student session and preserves unrelated components',async()=>{
+ const {retryPendingCoursework}=await import('./src/coursework.js');const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+ await f.call('student','/submit',{lessonId:id,answers:[1],requestId:'retry-automatic'});
+ assert.equal((await retryPendingCoursework({DB:f.DB},{firebaseAdminToken:async()=>{throw Error('offline')}})).synced,0);
+ const previousFetch=globalThis.fetch;let saved=null;
+ globalThis.fetch=async(url,options={})=>{if(url.endsWith('/settings.json'))return new Response(JSON.stringify(f.records.settings));if(options.method==='PUT'){saved=JSON.parse(options.body);return new Response('{}');}return new Response(JSON.stringify({exam:35,examEntered:true,w2_attend:3,w1_disc:4}),{headers:{etag:'test-etag'}})};
+ try{const result=await retryPendingCoursework({DB:f.DB},{firebaseAdminToken:async()=>'test-service'});assert.equal(result.synced,1);assert.equal(saved.w1_hw,5);assert.equal(saved.w1_hwEntered,true);assert.equal(saved.exam,35);assert.equal(saved.w2_attend,3);assert.equal(saved.w1_disc,4);assert.equal(f.sql.prepare('SELECT state FROM coursework_sync').get().state,'synced');assert.equal((await retryPendingCoursework({DB:f.DB},{firebaseAdminToken:async()=>'test-service'})).attempted,0);}finally{globalThis.fetch=previousFetch;}
+});
+
+
+test('saved homework is atomically queued even when the request stops before synchronization',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+ f.sql.prepare('INSERT INTO homework_attempts VALUES (?,?,?,?,?,?,?)').run('crashed-request',id,'student','crashed-request','[1]',5,new Date().toISOString());
+ assert.equal(f.sql.prepare('SELECT state FROM coursework_sync WHERE lesson_id=? AND student_key=?').get(id,'student').state,'pending');
 });
