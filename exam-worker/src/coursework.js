@@ -133,7 +133,7 @@ async function serviceFetch(env, ctx, path, options = {}) {
         ...(options.headers || {}),
       },
     });
-  if (!response.ok) reject("GRADE_SYNC_UNAVAILABLE", 503);
+  if (!response.ok) reject(`GRADE_SYNC_READ_${response.status}`, 503);
   return response;
 }
 async function synchronize(env, ctx, l, studentKey, actor) {
@@ -207,7 +207,7 @@ async function synchronize(env, ctx, l, studentKey, actor) {
           body: JSON.stringify(payload),
         });
       if (write.status === 412) continue;
-      if (!write.ok) reject("GRADE_SYNC_UNAVAILABLE", 503);
+      if (!write.ok) reject(`GRADE_SYNC_WRITE_${write.status}`, 503);
       written = true;
       break;
     }
@@ -679,7 +679,6 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     return { data: { saved: true, count: b.rows.length, pending,productivity } };
   }
   if (path === "/coursework/sync" && request.method === "POST") {
-    if (s.role === "student") reject("FORBIDDEN", 403);
     const rows = (
       await env.DB.prepare(
         "SELECT * FROM coursework_sync WHERE state='pending'",
@@ -687,6 +686,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     ).results;
     let synced = 0;
     for (const row of rows) {
+      if(s.role === "student" && row.student_key !== key) continue;
       const l = await env.DB.prepare("SELECT * FROM course_lessons WHERE id=?")
         .bind(row.lesson_id)
         .first();

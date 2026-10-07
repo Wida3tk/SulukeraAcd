@@ -511,3 +511,14 @@ test('student sees attendance and homework immediately but reviewed components w
  lesson=(await f.call('student','')).data.lessons[0];assert.equal(lesson.discussion.score,0);assert.equal(lesson.reflection.score,0);assert.equal(lesson.discussion.feedback,'معتمد');assert.equal(lesson.result,null);
  assert.match(context.cwStudentLessonCard(lesson,1),/أكمل الواجب الأساسي/);
 });
+test('student retry cannot synchronize another student and ledger display retains actual coursework scores',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+ f.sql.prepare("INSERT INTO coursework_sync VALUES (?,?,'pending',NULL,?)").run(id,'student','now');
+ f.sql.prepare("INSERT INTO coursework_sync VALUES (?,?,'pending',NULL,?)").run(id,'other','unchanged');
+ await f.call('student','/sync',{});
+ assert.equal(f.sql.prepare('SELECT updated_at FROM coursework_sync WHERE student_key=?').get('other').updated_at,'unchanged');
+ const context={currentUser:{role:'student'}};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+ vm.runInContext("cwData={lessons:[{subject_key:'course',week:1,attendanceMax:3,result:{score:6},attendance:{score:2},discussion:{score:null},recordedGrades:{disc:null}}]}",context);
+ const original={exam:20,w1_hw:0,w1_disc:6,w2_hw:4};
+ const merged=context.cwMergeStudentGrade(original,'course');assert.equal(merged.w1_hw,6);assert.equal(merged.w1_attend,2);assert.equal(merged.w1_disc,null);assert.equal(merged.exam,20);assert.equal(merged.w2_hw,4);assert.equal(original.w1_hw,0);assert.equal(context.cwMergeStudentGrade(original,'other'),original);
+});

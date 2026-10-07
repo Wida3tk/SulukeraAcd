@@ -1376,7 +1376,8 @@ async function submitStudentRequest(){
   renderStudentRequestsTab();
 }
 
-function renderStudentGradesTab(){
+async function renderStudentGradesTab(){
+  try{cwData=await cwApi('');}catch(error){console.error('coursework grades unavailable',error);}
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
   document.getElementById('appTabs').style.display='block';
@@ -1507,16 +1508,16 @@ function getGrade_data(studentFbKey, subjectFbKey){
   // ابحث بالمفتاح المباشر مع الفصل أولاً
   if(semKey){
     const keyWithSem = ('grade_'+studentFbKey+'_'+subjectFbKey+'_'+semKey).replace(/[.#$[\]]/g,'_');
-    if(dbData.grades[keyWithSem]) return dbData.grades[keyWithSem];
+    if(dbData.grades[keyWithSem]) return cwMergeStudentGrade(dbData.grades[keyWithSem],subjectFbKey);
   }
   // ثم بدون الفصل
   const directKey = ('grade_'+studentFbKey+'_'+subjectFbKey).replace(/[.#$[\]]/g,'_');
-  if(dbData.grades[directKey]) return dbData.grades[directKey];
+  if(dbData.grades[directKey]) return cwMergeStudentGrade(dbData.grades[directKey],subjectFbKey);
   // أخيراً: ابحث في كل القيم
-  return Object.values(dbData.grades).find(g=>
+  return cwMergeStudentGrade(Object.values(dbData.grades).find(g=>
     g.studentKey===studentFbKey && g.subjectKey===subjectFbKey &&
     (!semKey || !g.semesterKey || g.semesterKey===semKey)
-  ) || null;
+  ) || null,subjectFbKey);
 }
 
 function getLecturerName(uid){
@@ -1575,7 +1576,10 @@ function getCurrentSemesterForBatch(batch){
     (!semester.endDate||String(semester.endDate).replace(/\//g,'-')>=today) &&
     (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
   ).sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0];
-  if(liveSemester) return liveSemester;
+  if(liveSemester){
+    if(sameBatchName(batch,'Q3-26')&&liveSemester.startDate==='2026-10-04'&&Number(liveSemester.semesterNo)===3) return {...liveSemester,semesterNo:2,name:String(liveSemester.name||'الفصل الثاني').replace(/الفصل\s*(?:3|الثالث)/,'الفصل الثاني')};
+    return liveSemester;
+  }
   const fallback = PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()];
   return fallback ? {
     name: fallback.name,
@@ -3043,7 +3047,7 @@ window.addEventListener('load', initFB);
 
 
 </script>
-<script src="coursework-ui.js?v=20261007-grade-review"></script>
+<script src="coursework-ui.js?v=20261007-student-sync"></script>
 <script src="student-account-live.js?v=20261006-status"></script>
 </body>
 </html>

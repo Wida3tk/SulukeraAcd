@@ -61,6 +61,7 @@ async function renderAcademicCoursework() {
   host.innerHTML =
     '<div class="card"><div class="empty">جاري تحميل المحاضرات والواجبات...</div></div>';
   try {
+    if(currentUser.role==='student') await cwApi("/sync",{});
     cwData = await cwApi("");
     const role = currentUser.role,
       admin = role === "admin";
@@ -539,4 +540,20 @@ function cwHomeworkAnswers(student,lesson){
  const attempts=student.homeworkAttempts||[];if(!attempts.length)return '';
  let questions=[];try{questions=JSON.parse(lesson.questions_json||'[]');}catch{}
  return `<details class="cw-review-detail cw-homework-answers"><summary>إجابات الواجب — ${attempts.length} محاولات</summary><div class="cw-review-body">${attempts.map((attempt,index)=>{let answers=[];try{answers=JSON.parse(attempt.answers_json||'[]');}catch{}return `<section class="cw-answer"><strong>المحاولة ${index+1} · ${attempt.score}/${lesson.homeworkMax}</strong><p class="cw-muted">${cwDate(attempt.submitted_at)}</p>${questions.map((question,i)=>`<div><strong>${cwEscape(question.prompt||'السؤال '+(i+1))}</strong><p>إجابة الطالب: ${cwEscape(Number.isInteger(answers[i])?question.choices?.[answers[i]]??'إجابة غير متوفرة':'لم يُجب')} · ${answers[i]===question.correct?'صحيحة':'غير صحيحة'}</p></div>`).join('')}</section>`;}).join('')}</div></details>`;
+}
+
+// Display authoritative coursework results even while the grade ledger sync is pending.
+function cwMergeStudentGrade(grade,subjectKey){
+ if(typeof currentUser==='undefined'||currentUser?.role!=='student'||!cwData)return grade;
+ const rows=cwData.lessons.filter(l=>l.subject_key===subjectKey);
+ if(!rows.length)return grade;
+ const merged={...grade};
+ for(const l of rows){
+  const week=`w${l.week}`,hw=l.result?.score??l.recordedGrades?.hw;
+  if(hw!=null)merged[`${week}_hw`]=hw;
+  if(l.attendance){const a=l.attendance;const score=a.score??(l.attendanceMax===3?(a.percent>=80?3:a.percent>=50?2:a.percent>0?1:0):a.percent>=80?l.attendanceMax:null);if(score!=null)merged[`${week}_attend`]=score;}
+  if(l.reflection?.score!=null&&hw!=null)merged[`${week}_attend`]=l.reflection.score;
+  merged[`${week}_disc`]=l.discussion?.score??l.recordedGrades?.disc??null;
+ }
+ return merged;
 }
