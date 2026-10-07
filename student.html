@@ -1577,7 +1577,7 @@ function getCurrentSemesterForBatch(batch){
     (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
   ).sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0];
   if(liveSemester){
-    if(sameBatchName(batch,'Q3-26')&&liveSemester.startDate==='2026-10-04'&&Number(liveSemester.semesterNo)===3) return {...liveSemester,semesterNo:2,name:String(liveSemester.name||'الفصل الثاني').replace(/الفصل\s*(?:3|الثالث)/,'الفصل الثاني')};
+    if(sameBatchName(batch,'Q3-26')&&liveSemester.startDate==='2026-10-04'&&(Number(liveSemester.semesterNo)===3||/الفصل\s*(?:3|الثالث)/.test(liveSemester.name||''))) return {...liveSemester,semesterNo:2,name:String(liveSemester.name||'الفصل الثاني').replace(/الفصل\s*(?:3|الثالث)/,'الفصل الثاني')};
     return liveSemester;
   }
   const fallback = PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()];

@@ -13,3 +13,7 @@ assert.equal(context.getPortalBatchProfile('Q3-26').startDate,'2020-01-01');
 context.dbData.semesters.current={...context.dbData.semesters.current,name:'الفصل المعتمد',semesterNo:4};
 assert.equal(context.getPortalBatchProfile('Q3-26').name,'الفصل المعتمد');
 console.log('PASS: Q3 second semester fallback, future semester excluded, schedule and overview use same current semester.');
+
+context.dbData.semesters.current={name:'Q3-26 — الفصل 3 — أكتوبر 2026',batches:['Q3-26'],status:'active',startDate:'2026-10-04',endDate:'2090-01-01'};
+assert.equal(context.getCurrentSemesterForBatch('Q3-26').semesterNo,2);
+assert.match(context.getPortalBatchProfile('Q3-26').name,/الفصل الثاني/);
