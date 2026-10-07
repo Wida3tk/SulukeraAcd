@@ -1,0 +1,13 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const context={document:{addEventListener(){}},Intl,console};vm.createContext(context);vm.runInContext(fs.readFileSync('revenue-ui.js','utf8'),context);
+const segment=(family,baseCategory,product)=>context.rvSegment({family,baseCategory,product});
+assert.equal(segment('إدارة السلوك التنظيمي OBM','OBM مسجل - تحصيل','OBM-E Rec'),'المتقدم E/C');
+assert.equal(segment('إدارة السلوك التنظيمي OBM','OBM - مقاعد','OBM-P Courses'),'الممارس P');
+assert.equal(segment('إدارة السلوك التنظيمي OBM','OBM مسجل','OBM Rec'),'مسار غير محدد في المصدر');
+assert.equal(segment('إدارة السلوك التنظيمي OBM','OBM-P مباشر','OBM-C'),'مسار يحتاج مراجعة');
+assert.equal(segment('الإشراف والاستشارات','تقييم الكفاءة','اختبار'),'تقييم كفاءة');
+assert.equal(segment('الإشراف والاستشارات','إشراف - مقاعد','حجز'),'مقاعد');
+assert.equal(segment('الدورات والتعليم المستمر','الدورات المباشرة','دورة هندسة السلوك'),'هندسة السلوك');
+assert.ok(segment('الدورات والتعليم المستمر','الدورات المسجلة','دورة أولى\nدورة ثانية').startsWith('حزمة دورات'));
+assert.equal(context.rvVisible({family:'التأهيل والعلاج بالمنزل'}),false);
+console.log('PASS: license separation, conflicting/unknown licenses, services, courses, bundles, display exclusions');
