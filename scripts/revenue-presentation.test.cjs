@@ -1,0 +1,35 @@
+const assert=require('node:assert/strict');const{chromium}=require('playwright');
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'msedge'}),page=await browser.newPage({viewport:{width:1366,height:950}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setContent('<html dir="rtl"><head><style>body{background:#f3f6ff;padding:24px;font-family:Arial,sans-serif;margin:0}</style></head><body><main id="page-revenue"><div id="revenueContent"></div></main></body></html>');
+ await page.addStyleTag({path:'revenue.css'});await page.addScriptTag({path:'revenue-model.js'});
+ await page.evaluate(()=>{
+  window.currentUser={role:'admin'};window.toasts=[];window.showToast=t=>toasts.push(t);window.writes=[];
+  const row=(id,category,net)=>({id,date:'2026-10-04',category,baseCategory:SulukeraRevenue.base(category),family:SulukeraRevenue.family(category),product:'منتج <script>',net,state:'included',kind:category.includes('تحصيل')?'collection':'sale',reference:id,sourceSheet:'fixture',sourceRow:17,week:'الأسبوع الأول'});
+  window.fixture={periods:[{month:'2026-10',asOf:'2026-10-07',rows:[row('a','OBM-P - مباشر',10000),row('b','OBM-P - مباشر - تحصيل',2500),row('c','OBM-P مسجل',3000),row('d','OBM-P مسجل - تحصيل',500),row('e','OBM - مقاعد',100),row('f','OBM خدمة غير مصنفة',700),row('g','OBM-E مسجل',-100),row('h','شهادة تحليل السلوك التطبيقي - مباشر',2000)]}],goals:{'2026-10|':{sales:20000,collections:5000}},quarterTargets:[{period:'2026-Q4',category:'OBM-P - مباشر',kind:'sale',amount:20000},{period:'2026-Q4',category:'OBM-P مسجل',kind:'sale',amount:8000}],imports:[]};
+  window.original=JSON.stringify(fixture);window.secureAdminExamRequest=async(path,options)=>{if(options){writes.push(path);return {saved:true};}return fixture;};
+ });
+ await page.addScriptTag({path:'revenue-ui.js'});await page.evaluate(()=>renderRevenue());
+ assert.equal(await page.locator('[data-rv-family]').count(),3);assert.equal(await page.locator('[data-rv-table]').count(),4);assert.equal(await page.locator('.rv-column-amount').count()>10,true);
+ await page.locator('[data-rv-family="إدارة السلوك التنظيمي OBM"]').click();
+ assert.equal(await page.evaluate(()=>SulukeraRevenue.summarize(rvRows(rvMonths())).total),16700);
+ assert.equal(await page.evaluate(()=>rvGoal().sales),null,'global target must not leak into a program');
+ assert.equal(await page.locator('[data-rv-table=live] .rv-section-total strong').innerText(),'12,500.00 ر.س');
+ assert.equal(await page.locator('[data-rv-table=recorded] .rv-section-total strong').innerText(),'3,400.00 ر.س');
+ assert.equal(await page.locator('[data-rv-table=seats] .rv-section-total strong').innerText(),'100.00 ر.س');
+ assert.equal(await page.locator('[data-rv-table=other] .rv-section-total strong').innerText(),'700.00 ر.س');
+ assert.equal(await page.locator('.rv-column-amount[data-amount="-100"]').count(),1);
+ assert.match(await page.locator('.rv-chart').first().innerText(),/13,700\.00/);
+ await page.locator('[data-rv-channel=recorded]').click();
+ assert.equal(await page.locator('[data-rv-table]').count(),1);assert.equal(await page.evaluate(()=>SulukeraRevenue.summarize(rvRows(rvMonths())).total),3400);
+ assert.equal(await page.locator('[data-rv-family][aria-selected=true]').count(),1);assert.equal(await page.locator('[data-rv-channel][aria-selected=true]').count(),1);
+ await page.evaluate(()=>rvFilter('mode','quarter'));assert.equal(await page.evaluate(()=>rvGoal().sales),8000);
+ await page.locator('[data-rv-channel=live]').click();assert.equal(await page.evaluate(()=>rvGoal().sales),20000);
+ await page.evaluate(()=>rvFilter('mode','month'));await page.getByRole('button',{name:'ضبط الهدف',exact:true}).click();assert.equal(await page.evaluate(()=>writes.length),0);assert.equal(await page.locator('#rvOverlay').count(),0);
+ await page.getByRole('button',{name:'وضع الاجتماع ⛶',exact:true}).click();assert.equal(await page.locator('.rv-presenting').count(),1);await page.getByRole('button',{name:'إنهاء العرض',exact:true}).click();await page.waitForFunction(()=>!revenueState.presentation);
+ await page.locator('[data-rv-family="إدارة السلوك التنظيمي OBM"]').click();await page.keyboard.press('ArrowLeft');assert.equal(await page.evaluate(()=>revenueState.family),'برامج تحليل السلوك ABA');assert.equal(await page.evaluate(()=>revenueState.channel),'');
+ await page.locator('[data-rv-family="إدارة السلوك التنظيمي OBM"]').click();await page.screenshot({path:'.tools/revenue-program-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'.tools/revenue-program-mobile.png',fullPage:true});
+ assert.equal(await page.evaluate(()=>JSON.stringify(fixture)===original),true);assert.equal(await page.evaluate(()=>writes.length),0);assert.deepEqual(errors,[]);await browser.close();
+ console.log('PASS: program tabs, live/recorded partition, visible amounts, negative adjustments, target isolation, fullscreen, keyboard tabs, mobile, no data writes');
+})().catch(e=>{console.error(e);process.exit(1);});
