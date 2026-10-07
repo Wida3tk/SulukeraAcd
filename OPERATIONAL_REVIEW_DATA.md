@@ -1,6 +1,6 @@
 # Operational review data contract
 
-Read-only frontend redesign. No API, schema, snapshots, authorization, existing grading or productivity-save behavior changes. `performance-review.js` renders the page using existing helpers and GET endpoints.
+Frontend redesign with no API, schema, snapshots, authorization or grading changes. `performance-review.js` renders the page using existing helpers and GET endpoints. The subsequently requested manual productivity ratios are saved only to the existing lecturer productivity record as described below.
 
 ## Monthly comparisons
 
@@ -21,6 +21,12 @@ Completed ABA semesters ending before the end of the review month are available.
 Evaluation API exposes aggregates by exam/subject without response dates. Grouping by subject semester is possible; historical as-of/monthly satisfaction is not. One trainee may answer multiple exam surveys. Student ratings of lecturers are not lecturer satisfaction.
 
 Zoom hours use distinct meeting keys per lecturer with `startsAt` within the semester, deduplicated across monthly buckets. Manual productive/office hours remain in the existing monthly store and are not silently attributed to a cross-month semester. Review never writes hours; existing editor stays accessible.
+
+### Requested lecturer attainment
+
+Required workload is 2.5 hours per lecture. Regular lecturers have one weekly lecture; Afnan and Nouf use deduplicated schedule sessions or a manually specified weekly lecture count. Shared day/time slots are counted once. The scheduled-weekly helper now follows this explicit policy instead of summing cohort rows.
+
+Automatic monthly attainment divides productive hours (Zoom plus existing manual productive hours) by 2.5 times scheduled lectures due through today within dated schedule boundaries. Missing historical schedules do not generate invented targets. Office hours are excluded. Manual historical percentages take precedence, saved under `lecturerProductivity/<month>/<lecturer>/reviewProductivity` with weekly lecture count and audit metadata. Existing hour and meeting fields are preserved. The chart is the unweighted mean of available lecturer percentages, with coverage, since historical percentages alone lack hour weights. Success charts group completed-semester outcomes by semester end month, not exam submission date.
 
 ## Future requirements, not implemented
 
