@@ -7,7 +7,10 @@ assert.equal(segment('إدارة السلوك التنظيمي OBM','OBM مسج�
 assert.equal(segment('إدارة السلوك التنظيمي OBM','OBM-P مباشر','OBM-C'),'مسار يحتاج مراجعة');
 assert.equal(segment('الإشراف والاستشارات','تقييم الكفاءة','اختبار'),'تقييم كفاءة');
 assert.equal(segment('الإشراف والاستشارات','إشراف - مقاعد','حجز'),'مقاعد');
-assert.equal(segment('الدورات والتعليم المستمر','الدورات المباشرة','دورة هندسة السلوك'),'هندسة السلوك');
-assert.ok(segment('الدورات والتعليم المستمر','الدورات المسجلة','دورة أولى\nدورة ثانية').startsWith('حزمة دورات'));
+assert.equal(segment('الدورات والتعليم المستمر','التعليم المستمر','دورة هندسة السلوك'),'');
+assert.equal(segment('الدورات والتعليم المستمر','التعليم المستمر','دورة أولى\nدورة ثانية'),'');
 assert.equal(context.rvVisible({family:'التأهيل والعلاج بالمنزل'}),false);
+vm.runInContext("revenueState.family='الدورات والتعليم المستمر'; revenueState.data={periods:[{rows:[{state:'included',family:revenueState.family,baseCategory:'التعليم المستمر'},{state:'included',family:revenueState.family,baseCategory:'برنامج الاقتصاد السلوكي'}]}]}",context);
+assert.equal(context.rvType('التعليم المستمر'),'التعليم المستمر');
+assert.deepEqual(Array.from(context.rvTypes(),x=>Array.from(x)),[['التعليم المستمر','التعليم المستمر'],['برنامج الاقتصاد السلوكي','برنامج الاقتصاد السلوكي']]);
 console.log('PASS: license separation, conflicting/unknown licenses, services, courses, bundles, display exclusions');
