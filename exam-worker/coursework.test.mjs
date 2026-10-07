@@ -476,7 +476,7 @@ test('manual homework and discussion grades display without fabricating electron
  const context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
  const totals=context.cwReportTotals({recordedGrades:{hw:4,disc:3},attendance:{score:2,percent:66.67}},report.lesson,null);
  assert.equal(totals.total,9);
- const rendered=context.cwStudentLessonCard({...lesson,discussionPrompt:'discussion prompt'},1);assert.match(rendered,/رصد يدوي/);assert.equal(rendered.includes('درجة المناقشة المرصودة يدويًا'),false);
+ const rendered=context.cwStudentLessonCard({...lesson,discussionPrompt:'discussion prompt'},1);assert.match(rendered,/مرصودة يدويًا/);assert.equal(rendered.includes('درجة المناقشة المرصودة يدويًا'),false);
  f.records.grades.g={studentKey:'student',subjectKey:'course',w1_hw:0,w1_disc:0};
  assert.deepEqual((await f.call('student','')).data.lessons[0].recordedGrades,{hw:null,disc:null});
  f.records.grades.g.w1_hwEntered=true;f.records.grades.g.w1_discEntered=true;
@@ -507,7 +507,7 @@ test('student sees attendance and homework immediately but reviewed components w
  f.sql.prepare('UPDATE academic_discussions SET score=5,feedback=? WHERE lesson_id=?').run('غير معتمد',id);
  f.sql.prepare('UPDATE attendance_reflections SET score=3,feedback=? WHERE lesson_id=?').run('غير معتمد',id);
  let lesson=(await f.call('student','')).data.lessons[0];assert.equal(lesson.attendance.score,2);assert.equal(lesson.recordedGrades.hw,4);assert.equal(lesson.recordedGrades.disc,null);assert.equal(lesson.discussion.score,null);assert.equal(lesson.reflection.score,null);assert.equal(lesson.reflection.feedback,'');
- const context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);const card=context.cwStudentLessonCard(lesson,1);assert.match(card,/4\/5/);assert.match(card,/الحضور: 2\/3/);assert.match(card,/قيد المراجعة/);assert.equal(card.includes('غير معتمد'),false);
+ const context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);const card=context.cwStudentLessonCard(lesson,1);assert.match(card,/4\/5/);assert.match(card,/<span>درجة الحضور<\/span><strong>2\/3<\/strong>/);assert.match(card,/قيد المراجعة/);assert.equal(card.includes('غير معتمد'),false);
  await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:0,feedback:'معتمد'});await f.call('teacher','/review',{lessonId:id,studentKey:'student',score:0,feedback:'معتمد'});
  lesson=(await f.call('student','')).data.lessons[0];assert.equal(lesson.discussion.score,0);assert.equal(lesson.reflection.score,0);assert.equal(lesson.discussion.feedback,'معتمد');assert.equal(lesson.result,null);
  assert.match(context.cwStudentLessonCard(lesson,1),/أكمل الواجب الأساسي/);
