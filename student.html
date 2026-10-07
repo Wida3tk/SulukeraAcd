@@ -554,8 +554,8 @@ const PORTAL_BATCH_SEMESTERS = {
   'Q3-26': {
     code: 'Q3-26',
     batchLabel: 'الدفعة الثانية عشرة',
-    name: 'الفصل الثالث',
-    semesterNo: 3,
+    name: 'الفصل الثاني',
+    semesterNo: 2,
     startDate: '2026-10-04',
     endDate: '2026-11-05'
   }
@@ -1563,18 +1563,20 @@ function getStudentRequestStatusMeta(status){
   return {label:'قيد مراجعة الإدارة',className:'badge-warn'};
 }
 function getPortalBatchProfile(batch){
-  return PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()] || null;
+  const code=String(batch||'').trim().toUpperCase(),fallback=PORTAL_BATCH_SEMESTERS[code],current=getCurrentSemesterForBatch(batch);
+  return current ? {...fallback,...current,code,batchLabel:fallback?.batchLabel||batch} : null;
 }
 function getCurrentSemesterForBatch(batch){
   if(sameBatchName(batch,currentUser?.data?.batch)&&isGraduationProjectStageStudent(currentUser?.data))return {name:'مرحلة مشروع التخرج',semesterNo:SulukeraAcademicPolicy.semesterLimit(getStudentPlanType(currentUser?.data)),startDate:'',endDate:'',batches:[batch],status:'project'};
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
   const liveSemester = Object.values(dbData.semesters||{}).filter(semester=>
     (semester.status==='active' || semester.status==='current') &&
+    (!semester.startDate||String(semester.startDate).replace(/\//g,'-')<=today) &&
     (!semester.endDate||String(semester.endDate).replace(/\//g,'-')>=today) &&
     (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
   ).sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0];
   if(liveSemester) return liveSemester;
-  const fallback = getPortalBatchProfile(batch);
+  const fallback = PORTAL_BATCH_SEMESTERS[String(batch||'').trim().toUpperCase()];
   return fallback ? {
     name: fallback.name,
     semesterNo: fallback.semesterNo,
