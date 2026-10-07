@@ -41,3 +41,5 @@
 .cw-grading-progress{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;margin:12px 0}.cw-grading-progress progress{height:12px;accent-color:var(--primary,#0d40fc);max-width:100%}.cw-homework-answers .cw-answer{margin-bottom:12px}
 
 .cw-homework-completions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.cw-homework-complete{display:inline-block;padding:6px 9px;background:#eaf7f2;color:#146b4e;border:1px solid #cbe9db;border-radius:8px;font-size:12px;line-height:1.7}.cw-course-badge{white-space:normal;max-width:180px;text-align:center}
+
+.cw-perfect-score,.cw-answer-correct{color:#14734d;font-weight:700}.cw-answer-incorrect{color:#a13333}.cw-reviewed-choice{padding:12px;margin:8px 0;border:1px solid #e1e7f1;border-radius:10px;overflow-wrap:anywhere}.cw-reviewed-selected{background:#eef5ff;border-color:#779cea}.cw-answer-review{max-width:1000px;margin:auto}

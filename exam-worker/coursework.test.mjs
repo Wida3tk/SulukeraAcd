@@ -538,3 +538,17 @@ test('saved homework is atomically queued even when the request stops before syn
  f.sql.prepare('INSERT INTO homework_attempts VALUES (?,?,?,?,?,?,?)').run('crashed-request',id,'student','crashed-request','[1]',5,new Date().toISOString());
  assert.equal(f.sql.prepare('SELECT state FROM coursework_sync WHERE lesson_id=? AND student_key=?').get(id,'student').state,'pending');
 });
+
+test('students review only their submitted answers, including after closing',async()=>{
+ const f=fixtures();await f.call('admin','/lesson',f.config);const id='course_lesson_1';
+ await assert.rejects(f.call('student','/answers',{lessonId:id}),/HOMEWORK_NOT_SUBMITTED/);
+ await f.call('student','/submit',{lessonId:id,answers:[1],requestId:'review-own'});
+ f.sql.prepare('UPDATE course_lessons SET closes_at=? WHERE id=?').run(new Date(Date.now()-1000).toISOString(),id);
+ const result=(await f.call('student','/answers',{lessonId:id})).data;
+ assert.equal(result.score,5);assert.equal(result.questions[0].selected,1);assert.equal(result.questions[0].isCorrect,true);assert.equal('correct' in result.questions[0],false);assert.ok(result.submittedAt);
+ await assert.rejects(f.call('teacher','/answers',{lessonId:id}),/FORBIDDEN/);
+ f.sql.prepare('DELETE FROM homework_attempts WHERE student_key=?').run('student');
+ await assert.rejects(f.call('student','/answers',{lessonId:id}),/HOMEWORK_NOT_SUBMITTED/);
+});
+
+test('complete Zoom report records unlinked students absent only in the chosen course',async()=>{const f=fixtures();f.records.enrollments.missing={studentKey:'missing',subjectKey:'course'};f.records.enrollments.outside={studentKey:'outside',subjectKey:'different'};const id=(await f.call('admin','/lesson',f.config)).data.id;await f.call('admin','/attendance',{lessonId:id,sourceHash:'full-roster',completeRoster:true,rows:[{studentKey:'student',percent:90}]});assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE student_key=?').get('missing').percent,0);assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE student_key=?').get('student').percent,90);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM course_attendance WHERE student_key=?').get('outside').n,0);});

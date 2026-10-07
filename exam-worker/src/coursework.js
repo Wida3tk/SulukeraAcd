@@ -252,7 +252,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     if (s.role === "student") {
       results = (
         await env.DB.prepare(
-          "SELECT lesson_id,MAX(score) score,COUNT(*) attempts FROM homework_attempts WHERE student_key=? GROUP BY lesson_id",
+          "SELECT lesson_id,MAX(score) score,COUNT(*) attempts,MAX(submitted_at) submittedAt FROM homework_attempts WHERE student_key=? GROUP BY lesson_id",
         )
           .bind(key)
           .all()
@@ -399,6 +399,15 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       }
     }
     return { data: { saved: true, id } };
+  }
+  if(path === "/coursework/answers" && request.method === "POST"){
+    if(s.role!=="student")reject("FORBIDDEN",403);
+    const b=await json(request),l=await lessonFor(env,b.lessonId,s);
+    if(l.status!=="published")reject("LESSON_NOT_PUBLISHED",403);
+    const attempt=await env.DB.prepare("SELECT answers_json,score,submitted_at FROM homework_attempts WHERE lesson_id=? AND student_key=? ORDER BY score DESC,submitted_at DESC LIMIT 1").bind(l.id,key).first();
+    if(!attempt)reject("HOMEWORK_NOT_SUBMITTED",404);
+    const answers=JSON.parse(attempt.answers_json);
+    return {data:{score:attempt.score,max:(await assessmentFor(env,l,s.settings)).homeworkMax,submittedAt:attempt.submitted_at,questions:JSON.parse(l.questions_json).map((q,i)=>({prompt:q.prompt,choices:q.choices,selected:answers[i],isCorrect:answers[i]===q.correct}))}};
   }
   if (path === "/coursework/questions" && request.method === "POST") {
     if (s.role !== "student") reject("FORBIDDEN", 403);
@@ -631,6 +640,12 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       const start=Date.parse(b.meeting.start),end=Date.parse(b.meeting.end);
       if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start||end-start>86400000||b.meeting.source!=="zoom_meeting_summary")reject("INVALID_MEETING_PERIOD");
       b.meeting.durationMinutes=(end-start)/60000;
+    }
+    if(b.completeRoster===true){
+      const present=new Set(b.rows.map(row=>row.studentKey));
+      const missing=[...eligible].filter(studentKey=>!present.has(studentKey));
+      b.rows.push(...missing.map(studentKey=>({studentKey,percent:0,kind:'confirmed_absence'})));
+      b.confirmedAbsentKeys=[...new Set([...(b.confirmedAbsentKeys||[]),...missing])];
     }
     const seen = new Set();
     const confirmedAbsences=new Set(b.confirmedAbsentKeys||[]);
