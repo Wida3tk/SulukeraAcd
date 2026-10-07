@@ -35,5 +35,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  await page.evaluate(async()=>{cwReportFilter='discussionPending';cwReportOnlyActions=true;cwReportSearch='nonexistent';cwActiveLesson='old';await cwOpenReport('lesson');});
  assert.equal(await page.locator('.cw-student-card').count(),45);
  assert.deepEqual(await page.evaluate(()=>({filter:cwReportFilter,only:cwReportOnlyActions,search:cwReportSearch})),{filter:'all',only:false,search:''});
+ await page.evaluate(()=>{cwReport.lesson.questions_json=JSON.stringify([{prompt:'سؤال واجب مرئي للمحاضر',choices:['اختيار أ','اختيار ب'],correct:1}]);cwReport.students[0].attendance={percent:100};cwReport.students[0].result={score:6,attempts:1};cwReport.students[0].homeworkAttempts=[{answers_json:'[1]',score:6,submitted_at:'2026-10-07T10:00:00Z'}];cwRenderReport();});
+ await page.locator('.cw-homework-answers summary').click();assert.match(await page.locator('.cw-homework-answers').innerText(),/إجابة الطالب: اختيار ب/);assert.match(await page.locator('.cw-grading-progress').first().innerText(),/3\/3/);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await browser.close();console.log('PASS: lecturer compact discussion folds, pagination, search, graded/missing filters, correct student save after pagination/search, report filters reset on lesson change, desktop/mobile; mocked writes only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

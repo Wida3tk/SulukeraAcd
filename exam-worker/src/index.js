@@ -109,6 +109,11 @@ async function firebaseStudentEnrollments(studentKey, token) {
   if (!response.ok) fail("ENROLLMENT_ACCESS_DENIED", 403);
   return response.json();
 }
+async function firebaseStudentGrades(studentKey,token){
+  const response=await fetch(`${FIREBASE_DB}/grades.json?auth=${encodeURIComponent(token)}&orderBy=%22studentKey%22&equalTo=${encodeURIComponent(JSON.stringify(studentKey))}`);
+  if(!response.ok)fail('GRADE_ACCESS_DENIED',403);
+  return response.json();
+}
 function isProfessionalSubject(subjectKey) {
   return String(subjectKey || "").startsWith("professional_");
 }
@@ -1076,7 +1081,7 @@ export default {
         return reply(request, { ok: true, service: "sulukera-exams" });
       const auth = await authenticate(request);
       const coursework = await handleCoursework(request, env, auth, path, {
-        firebaseRead, firebaseAdminToken, studentContext,
+        firebaseRead, firebaseAdminToken, studentContext, firebaseStudentGrades,
       });
       if (coursework) return reply(request, coursework.data);
       const graduation = await handleGraduationProject(request, env, auth, path, {

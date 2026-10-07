@@ -16,3 +16,10 @@ Attendance import accepts the detailed Zoom CSV with join/leave timestamps. Matc
 Grade synchronization uses Firebase ETags and preserves other grade components, merging the legacy key if the canonical record does not exist. Saved attempts and reflection reviews survive sync failures. Pending sync is visible after submission and can be retried by admin or the assigned lecturer. No background cron is configured.
 
 Tests use in-memory SQLite, a scoped Firebase fixture and simulated credential failure; they do not insert test records or submit homework to production.
+
+## Consistent grade sources (local fix, 7 October 2026)
+Student coursework and lecturer reports now read authenticated Firebase grade snapshots as a fallback when D1 has no attendance, homework attempt score, or graded discussion. Attendance/reflection authorization uses the same fallback. D1 attendance remains preferred where present. Manual homework/discussion marks are shown as manual grading; they do not create attempts, answers, or proof of submission. Reflection credit still requires a real basic homework attempt.
+
+Weekly grade saves record attendEntered/hwEntered/discEntered flags, preserving existing metadata. Legacy positive marks are readable; a legacy default zero without an explicit recording flag remains unknown. Re-save the relevant week to confirm manually recorded zeros. Reviewed reflection feedback remains visible even without a live-attendance record. No backfill, production writes, or deployment were performed.
+
+Lecturer link verification: the authorized lesson report now includes each enrolled student's individual homework attempts and selected answers, plus a three-component grading-completion indicator. Discussion answers are restricted to the current report roster. A reviewed reflection is displayed as awaiting the basic homework until there is an actual submission. Automated integration tests verify lecturer access, outsider denial, student/lecturer score agreement (including zero), answer isolation, and browser grading after search/pagination. Verification uses fixtures/mocked writes, not live accounts. These changes remain local.

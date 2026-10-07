@@ -298,7 +298,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 .sch-pc{padding:3px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:44px;}
 .sch-ps{border-radius:5px;padding:4px 6px;font-size:10px;color:white;height:100%;display:flex;flex-direction:column;justify-content:center;}
 </style>
-<link rel="stylesheet" href="coursework.css?v=20261006-lecturer">
+<link rel="stylesheet" href="coursework.css?v=20261007-grade-review">
 </head>
 <body>
 
@@ -5181,11 +5181,16 @@ async function saveGrades() {
         ? {exam:g.examEntered?(g.exam||0):null,examEntered:g.examEntered===true}
         : {
             [`${weekKey}_attend`]:g[weekKey]?.attend||0,
+            [`${weekKey}_attendEntered`]:g[weekKey]?.attend!==null&&g[weekKey]?.attend!==undefined,
             [`${weekKey}_hw`]:g[weekKey]?.hw||0,
-            [`${weekKey}_disc`]:g[weekKey]?.disc||0
+            [`${weekKey}_hwEntered`]:g[weekKey]?.hw!==null&&g[weekKey]?.hw!==undefined,
+            [`${weekKey}_disc`]:g[weekKey]?.disc||0,
+            [`${weekKey}_discEntered`]:g[weekKey]?.disc!==null&&g[weekKey]?.disc!==undefined,
+            [`${weekKey}_discApproved`]:currentUser?.role==='lecturer'
           };
       if(legacyKey!==gradeKey) updates[`grades/${legacyKey}`]=null;
       return fbRef('grades/'+gradeKey).transaction(current=>({
+        ...current,
         studentKey:st._fbKey,
         subjectKey:subjKey,
         w1_attend:current?.w1_attend||0, w1_hw:current?.w1_hw||0, w1_disc:current?.w1_disc||0,
@@ -8674,7 +8679,7 @@ async function cleanDuplicateStudents(){
 
 
 </script>
-<script src="coursework-ui.js?v=20261007-report-roster"></script>
+<script src="coursework-ui.js?v=20261007-grade-review"></script>
 <script src="student-status-ui.js?v=20261006-status"></script>
 <script src="performance.js?v=20261006-meetings"></script>
 </body>

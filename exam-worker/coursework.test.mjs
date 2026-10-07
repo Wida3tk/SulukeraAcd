@@ -6,6 +6,7 @@ import {
   handleCoursework,
   gradeHomework,
   attendanceGrade,
+  attendanceFromGrades,
 } from "./src/coursework.js";
 import vm from "node:vm";
 const fixtures = () => {
@@ -50,6 +51,7 @@ const fixtures = () => {
   };
   const ctx = {
     firebaseRead: async (path) => records[path] || {},
+    firebaseStudentGrades: async () => records.grades||{},
     studentContext: async () => ({
       studentKey: "student",
       student: records.students.student,
@@ -441,4 +443,71 @@ test("Zoom CSV parser handles quotes; overlapping reconnects are counted once", 
     ]),
     2.5,
   );
+});
+test('manual Firebase attendance unlocks reflection and agrees with lecturer report',async()=>{
+ const f=fixtures();const id=(await f.call('admin','/lesson',f.config)).data.id;
+ f.records.grades={g:{studentKey:'student',subjectKey:'course',w1_attend:2,updatedAt:'2026-10-06'}};
+ const list=(await f.call('student','')).data;assert.equal(list.lessons[0].attendance.percent,66.67);
+ const report=(await f.call('teacher','/report',{lessonId:id})).data;assert.equal(report.students[0].attendance.percent,66.67);
+ await f.call('student','/reflection',{lessonId:id,answers:['one','two','three']});
+ assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM attendance_reflections').get().n,1);
+ f.sql.prepare('INSERT INTO course_attendance VALUES (?,?,?,?,?,?)').run(id,'student',95,'zoom','admin',new Date().toISOString());
+ assert.equal((await f.call('student','')).data.lessons[0].attendance.percent,95);
+ await assert.rejects(f.call('student','/reflection',{lessonId:id,answers:['one','two','three']}),/REFLECTION_NOT_REQUIRED/);
+});
+test('zero attendance needs explicit recording and stays isolated by student subject and week',()=>{
+ const lesson={id:'one',subject_key:'course',week:1};
+ const grade={studentKey:'student',subjectKey:'course',w1_attend:0};
+ assert.equal(attendanceFromGrades(lesson,'student',{g:grade},5),null);
+ assert.equal(attendanceFromGrades(lesson,'student',{g:{...grade,w1_attendEntered:true}},5).percent,0);
+ assert.equal(attendanceFromGrades(lesson,'other',{g:{...grade,w1_attendEntered:true}},5),null);
+ assert.equal(attendanceFromGrades({...lesson,week:2},'student',{g:{...grade,w1_attendEntered:true}},5),null);
+ assert.equal(attendanceFromGrades(lesson,'student',{g:{...grade,subjectKey:'other',w1_attend:2}},5),null);
+ assert.equal(attendanceFromGrades(lesson,'student',{g:{...grade,w1_attend:7}},5),null);
+});
+test('manual homework and discussion grades display without fabricating electronic submissions',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+ f.records.grades={g:{studentKey:'student',subjectKey:'course',w1_attend:2,w1_hw:4,w1_disc:3}};
+ const lesson=(await f.call('student','')).data.lessons[0];
+ assert.deepEqual(lesson.recordedGrades,{hw:4,disc:null});assert.equal(lesson.result,null);assert.equal(lesson.discussion,null);
+ const report=(await f.call('teacher','/report',{lessonId:id})).data;
+ assert.deepEqual(report.students[0].recordedGrades,{hw:4,disc:3});assert.equal(report.students[0].result,null);assert.equal(report.discussions.length,0);
+ const context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+ const totals=context.cwReportTotals({recordedGrades:{hw:4,disc:3},attendance:{score:2,percent:66.67}},report.lesson,null);
+ assert.equal(totals.total,9);
+ const rendered=context.cwStudentLessonCard({...lesson,discussionPrompt:'discussion prompt'},1);assert.match(rendered,/رصد يدوي/);assert.equal(rendered.includes('درجة المناقشة المرصودة يدويًا'),false);
+ f.records.grades.g={studentKey:'student',subjectKey:'course',w1_hw:0,w1_disc:0};
+ assert.deepEqual((await f.call('student','')).data.lessons[0].recordedGrades,{hw:null,disc:null});
+ f.records.grades.g.w1_hwEntered=true;f.records.grades.g.w1_discEntered=true;
+ assert.deepEqual((await f.call('student','')).data.lessons[0].recordedGrades,{hw:0,disc:null});
+});
+test('lecturer sees the enrolled student answers, grading progress, and scoped identities',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',{...f.config,discussionPrompt:'وضح المفهوم'})).data.id;
+ await f.call('student','/submit',{lessonId:id,answers:[1],requestId:'answer-visible'});
+ await f.call('student','/discussion',{lessonId:id,answer:'إجابة مناقشة تخص الطالب'});
+ await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:0,feedback:'ملاحظات المحاضر'});
+ f.records.grades={g:{studentKey:'student',subjectKey:'course',w1_attend:2}};
+ f.sql.prepare('INSERT INTO homework_attempts VALUES (?,?,?,?,?,?,?)').run('unrelated',id,'other','unrelated','[0]',0,new Date().toISOString());
+ f.sql.prepare('INSERT INTO academic_discussions (lesson_id,student_key,answer,submitted_at) VALUES (?,?,?,?)').run(id,'other','إجابة خارج قائمة الطلاب',new Date().toISOString());
+ const report=(await f.call('teacher','/report',{lessonId:id})).data;
+ assert.equal(report.students.length,1);assert.equal(report.students[0].homeworkAttempts.length,1);assert.deepEqual(JSON.parse(report.students[0].homeworkAttempts[0].answers_json),[1]);assert.equal(report.discussions.length,1);assert.equal(report.discussions[0].answer,'إجابة مناقشة تخص الطالب');assert.equal(report.discussions[0].score,0);
+ const student=(await f.call('student','')).data.lessons[0];assert.equal(student.discussion.feedback,'ملاحظات المحاضر');assert.equal(student.discussion.score,0);assert.equal(student.result.score,report.students[0].result.score);
+ const context={cwReport:report};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+ const rendered=context.cwHomeworkAnswers(report.students[0],report.lesson);assert.match(rendered,/إجابة الطالب: ب/);assert.match(rendered,/صحيحة/);assert.match(context.cwGradingProgress(context.cwReportTotals(report.students[0],report.lesson,report.discussions[0])),/3\/3/);
+ assert.equal(context.cwStudentReportState({reflection:{score:3},attendance:{percent:0}}),'absent');assert.equal(context.cwStudentReportState({reflection:{score:3},result:{score:0},attendance:{percent:0}}),'reviewed');
+ await assert.rejects(f.call('outsider','/report',{lessonId:id}),/SUBJECT_ACCESS_DENIED/);
+ await assert.rejects(f.call('outsider','/discussion-review',{lessonId:id,studentKey:'student',score:3}),/SUBJECT_ACCESS_DENIED/);
+});
+test('student sees attendance and homework immediately but reviewed components wait for approval',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',{...f.config,discussionPrompt:'السؤال'})).data.id;
+ f.records.grades={g:{studentKey:'student',subjectKey:'course',w1_attend:2,w1_hw:4,w1_disc:5,w1_discEntered:true}};
+ await f.call('student','/discussion',{lessonId:id,answer:'إجابة للمراجعة'});
+ await f.call('student','/reflection',{lessonId:id,answers:['أ','ب','ج']});
+ f.sql.prepare('UPDATE academic_discussions SET score=5,feedback=? WHERE lesson_id=?').run('غير معتمد',id);
+ f.sql.prepare('UPDATE attendance_reflections SET score=3,feedback=? WHERE lesson_id=?').run('غير معتمد',id);
+ let lesson=(await f.call('student','')).data.lessons[0];assert.equal(lesson.attendance.score,2);assert.equal(lesson.recordedGrades.hw,4);assert.equal(lesson.recordedGrades.disc,null);assert.equal(lesson.discussion.score,null);assert.equal(lesson.reflection.score,null);assert.equal(lesson.reflection.feedback,'');
+ const context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);const card=context.cwStudentLessonCard(lesson,1);assert.match(card,/4\/5/);assert.match(card,/الحضور: 2\/3/);assert.match(card,/قيد المراجعة/);assert.equal(card.includes('غير معتمد'),false);
+ await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:0,feedback:'معتمد'});await f.call('teacher','/review',{lessonId:id,studentKey:'student',score:0,feedback:'معتمد'});
+ lesson=(await f.call('student','')).data.lessons[0];assert.equal(lesson.discussion.score,0);assert.equal(lesson.reflection.score,0);assert.equal(lesson.discussion.feedback,'معتمد');assert.equal(lesson.result,null);
+ assert.match(context.cwStudentLessonCard(lesson,1),/أكمل الواجب الأساسي/);
 });

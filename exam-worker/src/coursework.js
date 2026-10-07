@@ -48,6 +48,28 @@ function isCurrent(subject, semesters, key) {
     !["inactive", "finished", "completed", "archived"].includes(term?.status)
   );
 }
+export function attendanceFromGrades(lesson,studentKey,grades,max){
+  if(!(Number(max)>0))return null;
+  const candidates=Object.values(grades||{}).filter(g=>g.studentKey===studentKey&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  const grade=candidates[0];if(!grade)return null;
+  const raw=grade[`w${lesson.week}_attend`]??grade[`w${lesson.week}`]?.attend;
+  if(raw===null||raw===undefined||raw==='')return null;
+  const score=Number(raw),recorded=grade[`w${lesson.week}_attendEntered`]===true;
+  if(!Number.isFinite(score)||score<0||score>max||(!recorded&&score===0))return null;
+  return {lesson_id:lesson.id,student_key:studentKey,percent:Math.round(score/max*10000)/100,source:'firebase_grade',score};
+}
+export function componentsFromGrades(lesson,studentKey,grades,assessment){
+ const grade=Object.values(grades||{}).filter(g=>g.studentKey===studentKey&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];
+ const output={};
+ for(const [field,max] of [['hw',assessment.homeworkMax],['disc',assessment.discussionMax]]){
+  const raw=grade?.[`w${lesson.week}_${field}`]??grade?.[`w${lesson.week}`]?.[field],value=Number(raw);
+  output[field]=raw!==undefined&&raw!==null&&raw!==''&&Number.isFinite(value)&&value>=0&&value<=max&&(value>0||grade?.[`w${lesson.week}_${field}Entered`]===true)?value:null;
+ }
+ return output;
+}
+function studentComponentsFromGrades(lesson,key,grades,assessment){const result=componentsFromGrades(lesson,key,grades,assessment),grade=Object.values(grades||{}).filter(g=>g.studentKey===key&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];if(grade?.[`w${lesson.week}_discApproved`]!==true)result.disc=null;return result;}
+export function studentReviewedRecord(record){return record&&record.reviewed_at?record:record?{...record,score:null,feedback:''}:null;}
+async function scopedGrades(s,auth,ctx){return s.role==='student'?ctx.firebaseStudentGrades(auth.profile.studentKey,auth.token):ctx.firebaseRead('grades',auth.token);}
 async function scope(auth, ctx) {
   const role = auth.profile.role;
   if (!["admin", "lecturer", "student"].includes(role))
@@ -149,8 +171,8 @@ async function synchronize(env, ctx, l, studentKey, actor) {
     const attend = attendance
       ? attendanceGrade(attendance.percent, maxAttend)
       : null;
-    if (attend != null || reflection?.score != null)
-      fields[`w${l.week}_attend`] = best?.score != null ? (reflection?.score ?? attend) : attend;
+    if (best?.score != null && reflection?.score != null) fields[`w${l.week}_attend`]=reflection.score;
+    else if (attend != null) fields[`w${l.week}_attend`]=attend;
     else if (attendance) fields[`w${l.week}_attend`] = null;
     const key = safeKey(`grade_${studentKey}_${l.subject_key}`),
       legacy = safeKey(`${studentKey}_${l.subject_key}`);
@@ -249,6 +271,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           .all()
       ).results;
     }
+    const gradeRecords=await scopedGrades(s,auth,ctx);
     const assessments = (await env.DB.prepare("SELECT * FROM lesson_assessment").all()).results;
     const discussions = s.role === "student" ? (await env.DB.prepare("SELECT * FROM academic_discussions WHERE student_key=?").bind(key).all()).results : [];
     return {
@@ -266,13 +289,14 @@ export async function handleCoursework(request, env, auth, path, ctx) {
             attendanceMax:assessments.find(a=>a.lesson_id===l.id)?.attendance_max??(Number(s.settings.attend)||5),
             discussionMax:assessments.find(a=>a.lesson_id===l.id)?.discussion_max??(Number(s.settings.disc)||5),
             discussionPrompt:assessments.find(a=>a.lesson_id===l.id)?.discussion_prompt||'',
-            discussion:discussions.find(d=>d.lesson_id===l.id)||null,
+            discussion:studentReviewedRecord(discussions.find(d=>d.lesson_id===l.id)),
+            recordedGrades:studentComponentsFromGrades(l,key,gradeRecords,{homeworkMax:assessments.find(a=>a.lesson_id===l.id)?.homework_max??(Number(s.settings.hw)||5),discussionMax:assessments.find(a=>a.lesson_id===l.id)?.discussion_max??(Number(s.settings.disc)||5)}),
             questions_json: undefined,
             questions: s.role === "student" ? undefined : qs,
             questionCount: qs.length,
             result: results.find((r) => r.lesson_id === l.id) || null,
-            attendance: attendance.find((r) => r.lesson_id === l.id) || null,
-            reflection: reflections.find((r) => r.lesson_id === l.id) || null,
+            attendance: attendance.find((r) => r.lesson_id === l.id) || attendanceFromGrades(l,key,gradeRecords,assessments.find(a=>a.lesson_id===l.id)?.attendance_max??(Number(s.settings.attend)||5)),
+            reflection: studentReviewedRecord(reflections.find((r) => r.lesson_id === l.id)),
           };
         }),
         maxHomework: Number(s.settings.hw) || 5,
@@ -444,11 +468,12 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     if (s.role !== "student") reject("FORBIDDEN", 403);
     const b = await json(request),
       l = await lessonFor(env, b.lessonId, s),
-      a = await env.DB.prepare(
+      recordedAttendance = await env.DB.prepare(
         "SELECT percent FROM course_attendance WHERE lesson_id=? AND student_key=?",
       )
         .bind(l.id, key)
         .first();
+    const a=recordedAttendance||attendanceFromGrades(l,key,await scopedGrades(s,auth,ctx),(await assessmentFor(env,l,s.settings)).attendanceMax);
     if (!a || a.percent >= 80) reject("REFLECTION_NOT_REQUIRED", 403);
     if (
       l.status !== "published" ||
@@ -554,16 +579,20 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           .bind(l.id)
           .all()
       ).results;
+    const gradeRecords=await scopedGrades(s,auth,ctx),assessment=await assessmentFor(env,l,s.settings);
+    const homeworkAttempts=(await env.DB.prepare("SELECT id,student_key,answers_json,score,submitted_at FROM homework_attempts WHERE lesson_id=? ORDER BY submitted_at DESC,id DESC").bind(l.id).all()).results;
     return {
       data: {
         students: keys.map((key) => ({
           key,
           ...s.students[key],
+          recordedGrades:componentsFromGrades(l,key,gradeRecords,assessment),
+          homeworkAttempts:homeworkAttempts.filter(attempt=>attempt.student_key===key),
           result: attempts.find((v) => v.student_key === key) || null,
-          attendance: attendance.find((v) => v.student_key === key) || null,
+          attendance: attendance.find((v) => v.student_key === key) || attendanceFromGrades(l,key,gradeRecords,assessment.attendanceMax),
           reflection: reflections.find((v) => v.student_key === key) || null,
         })),
-        discussions: (await env.DB.prepare("SELECT * FROM academic_discussions WHERE lesson_id=?").bind(l.id).all()).results,
+        discussions: (await env.DB.prepare("SELECT * FROM academic_discussions WHERE lesson_id=?").bind(l.id).all()).results.filter(d=>keys.includes(d.student_key)),
         lesson: {...l,...await assessmentFor(env,l,s.settings)},
       },
     };
