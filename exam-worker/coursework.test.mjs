@@ -227,6 +227,21 @@ test("whole meeting productivity is idempotent across shared batches and retries
     await assert.rejects(approve(one,'student','offline'),/SYNC_UNAVAILABLE/);
   }finally{globalThis.fetch=originalFetch;}
 });
+test("admin attendance uses authenticated ledger fallback when service credentials fail", async () => {
+  const f=fixtures(),originalFetch=globalThis.fetch,requests=[];
+  const id=(await f.call('admin','/lesson',f.config)).data.id;
+  globalThis.fetch=async(url,options)=>{requests.push({url:String(url),options});return new Response('{}',{status:200});};
+  try{
+    const result=await f.call('admin','/attendance',{lessonId:id,sourceHash:'fallback',meeting:{start:'2026-10-06T15:00:00Z',end:'2026-10-06T17:30:00Z',source:'zoom_meeting_summary'},rows:[{studentKey:'student',percent:90}]});
+    assert.equal(result.data.saved,true);assert.equal(result.data.productivity.recorded,true);
+    assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE lesson_id=?').get(id).percent,90);
+    assert.equal(requests.length,1);assert.match(requests[0].url,/lecturerProductivity\/2026-10\/teacher\/meetings\/meeting_\d+\.json\?auth=token$/);
+    assert.equal(requests[0].options.method,'PUT');assert.equal(JSON.parse(requests[0].options.body).durationMinutes,150);
+    globalThis.fetch=async()=>new Response('{}',{status:403});
+    await assert.rejects(f.call('admin','/attendance',{lessonId:id,sourceHash:'denied',meeting:{start:'2026-10-06T15:00:00Z',end:'2026-10-06T17:30:00Z',source:'zoom_meeting_summary'},rows:[{studentKey:'student',percent:50}]}),/PRODUCTIVITY_SYNC_UNAVAILABLE/);
+    assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE lesson_id=?').get(id).percent,90);
+  }finally{globalThis.fetch=originalFetch;}
+});
 test("every inactive account state blocks coursework without removing academic records", async () => {
   for(const status of ['suspended','frozen','withdrawn','paused']){
     const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;

@@ -14,6 +14,7 @@
 <script src="vendor/qrcode.js"></script>
 <link rel="stylesheet" href="performance.css?v=20261005-4">
 <link rel="stylesheet" href="performance-review.css?v=20261007-hours-monthly">
+<link rel="stylesheet" href="revenue.css?v=20261007-revenue">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root{--primary:#0D40FC;--primary-dark:#001442;--primary-light:#55D7FF;--neon:#55D7FF;--bg:#f0f4ff;--surface:#ffffff;--border:#d0dcf8;--text:#020716;--text-muted:#4a5580;--text-light:#8090bb;--danger:#c0392b;--danger-light:#fdf0ef;--success:#1a7a3c;--success-light:#eafaf0;--warning:#b35c00;--warning-light:#fff5e6;--radius:10px;--radius-lg:14px;--shadow:0 2px 12px rgba(13,64,252,0.08);--shadow-md:0 4px 20px rgba(13,64,252,0.13);}
@@ -380,6 +381,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 
       <!-- LECTURER PRODUCTIVITY (ADMIN ONLY) -->
       <div class="page" id="page-performance"><div id="performanceContent"></div></div>
+      <div class="page" id="page-revenue"><div id="revenueContent"></div></div>
       <div class="page" id="page-productivity"><div id="lecturerProductivityContent"></div></div>
 
       <!-- SUBJECTS -->
@@ -2641,6 +2643,7 @@ const navConfig = {
   ],
   finance: [
     {id:'students',icon:'💰',label:'الملفات المالية للطلاب'},
+    {id:'revenue',icon:'📊',label:'الإيرادات وأهداف المنتجات'},
   ],
   student: [
     {id:'mygrades',icon:'📊',label:'بياناتي ودرجاتي'},
@@ -2650,6 +2653,7 @@ const EXAM_API_BASE='https://sulukera-exams.ro7e-entaa.workers.dev';
 const adminNavGroups=[
   {id:'followup',icon:'🔎',label:'الرئيسية والمتابعة',items:[
     {id:'performance',icon:'📊',label:'الأداء والتقدم'},
+    {id:'revenue',icon:'💰',label:'الإيرادات وأهداف المنتجات'},
     {id:'alerts',icon:'🔔',label:'الطلبات والتنبيهات'},
     {id:'academicadvisor',icon:'🧭',label:'المرشد الأكاديمي'},
     {id:'productivity',icon:'⏱️',label:'الساعات الإنتاجية'}
@@ -2717,6 +2721,7 @@ function updateStudentRequestsNavBadge(){
   if(count) item.insertAdjacentHTML('beforeend',`<span class="nav-count-badge" id="studentRequestsNavBadge">${count}</span>`);
 }
 const pageTitles={
+  revenue:'الإيرادات وأهداف المنتجات',
   coursework:'المحاضرات والواجبات',
   performance:'الأداء والتقدم',dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'المحاضرون والمستخدمون',
@@ -2756,6 +2761,7 @@ function renderTopbarActions(pageId) {
   else el.innerHTML='';
 }
 function refreshPage(p) {
+  if (p==='revenue') renderRevenue();
   if (p==='performance') renderPerformance();
   if (p==='dashboard') renderDashboard();
   if (p==='productivity') renderLecturerProductivity();
@@ -8685,6 +8691,8 @@ async function cleanDuplicateStudents(){
 <script src="performance.js?v=20261006-meetings"></script>
 <script src="performance-review.js?v=20261007-productivity-months"></script>
 <script src="lecturer-hours.js?v=20261007-hours-monthly"></script>
+<script src="revenue-model.js?v=20261007-revenue"></script>
+<script src="revenue-ui.js?v=20261007-revenue"></script>
 </body>
 </html>
 

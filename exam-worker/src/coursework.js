@@ -671,7 +671,14 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       if(lecturer){
         const item=globalThis.SulukeraProductivity.meetingRecord(lecturer,b.meeting,{subjectKey:l.subject_key,lessonId:l.id,sourceHash:b.sourceHash,approvedBy:auth.uid,approvedAt:new Date().toISOString()});
         try{await serviceFetch(env,ctx,item.path,{method:'PUT',body:JSON.stringify(item.record)});}
-        catch{reject('PRODUCTIVITY_SYNC_UNAVAILABLE',503);}
+        catch{
+          // This endpoint is admin-only. An authenticated admin can write the
+          // same narrowly scoped ledger entry when the service credential fails.
+          const response=await fetch(`${dbUrl}/${item.path}.json?auth=${encodeURIComponent(auth.token)}`,{
+            method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(item.record),
+          }).catch(()=>null);
+          if(!response?.ok)reject('PRODUCTIVITY_SYNC_UNAVAILABLE',503);
+        }
         productivity={recorded:true,...item};
       }else productivity={recorded:false,reason:'LECTURER_NOT_ASSIGNED'};
     }
