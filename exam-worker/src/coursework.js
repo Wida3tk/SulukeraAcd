@@ -222,7 +222,7 @@ async function synchronize(env, ctx, l, studentKey, actor) {
     await env.DB.prepare(
       "UPDATE coursework_sync SET state='pending',error=?,updated_at=? WHERE lesson_id=? AND student_key=?",
     )
-      .bind(error.message, now, l.id, studentKey)
+      .bind(error.message + ":" + (()=>{try{return JSON.parse(env.FIREBASE_SERVICE_ACCOUNT).client_email||"unknown"}catch{return "unknown"}})(), now, l.id, studentKey)
       .run();
     return false;
   }
