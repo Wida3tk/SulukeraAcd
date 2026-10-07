@@ -34,4 +34,10 @@ End-of-month snapshots of student/program/cohort/state/stage; append-only accoun
 
 ## Verification
 
+### Hour-based view and 2026 workbook import
+
+The subsequently requested `lecturer-hours.js` overrides the productivity view with monthly direct/office hours and year-to-date sums in both review and lecturer productivity pages. Old percentages are preserved but never interpreted as hours. Direct hours include manual/imported productiveHours, Zoom meetings and existing extraHours; office hours are separate. Only current lecturer users contribute to totals. Monthly edits preserve meeting records and unrelated fields.
+
+The provided 2026 lecturer report was read without modifying the workbook. Individual monthly component rows were used, not repeated subtotals or grand totals. The combined Rozan/Mohammad row explicitly identifies Mohammad from March; January/February were excluded from his existing account. Seven existing lecturer usernames matched, with 31 populated monthly records. Import sets component fields and provenance at the existing monthly productivity path, making repeat execution idempotent; it never writes users or creates accounts. No 2025, supervision or unmatched lecturer data is imported.
+
 Synthetic browser fixtures, no live student downloads or writes. Tests cover valid dates/year boundaries, zero baseline, month switching, cohort merging, unique submitters, drill-down/search/escaping, semester counts, source failures, admin guard and desktop/mobile overflow.
