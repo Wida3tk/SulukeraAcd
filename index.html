@@ -303,6 +303,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 </style>
 <link rel="stylesheet" href="coursework.css?v=20261007-task-cards">
 <link rel="stylesheet" href="lecturer-survey.css?v=20261008-survey">
+<link rel="stylesheet" href="evaluation-dashboard.css?v=20261008-dimensions">
 </head>
 <body>
 
@@ -820,6 +821,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
       <div class="page" id="page-evaluations">
         <nav class="ls-admin-tabs" aria-label="نوع التقييم"><button class="btn" data-evaluation-tab="students" aria-pressed="true" onclick="lecturerSurveyAdminSelect('students')">تقييم الطلاب</button><button class="btn" data-evaluation-tab="lecturers" aria-pressed="false" onclick="lecturerSurveyAdminSelect('lecturers')">رضا المحاضرين</button></nav>
         <div id="studentEvaluationPanel">
+        <div id="studentEvaluationOverview"></div>
         <div class="card card-accent">
           <div class="filter-toolbar"><div class="form-group" style="margin:0"><label>المقرر والتقييم</label><select id="evaluationCourseSelect" onchange="renderSelectedEvaluation(this.value)"><option value="">-- اختاري مقررًا لعرض تقييمه --</option></select></div><div class="form-group" style="margin:0"><label>حالة التقرير</label><select id="evaluationStatusFilter" onchange="populateEvaluationCourseOptions()"><option value="all">جميع الحالات</option><option value="draft">بانتظار الاعتماد</option><option value="published">منشور للمحاضر</option></select></div><button class="btn" onclick="loadExamEvaluationAnalytics()">تحديث التحليل</button></div>
         </div>
@@ -6760,13 +6762,16 @@ let examEvaluationGroups=[];
 async function loadExamEvaluationAnalytics(){
   const host=document.getElementById('examEvaluationAnalytics');if(!host||currentUser?.role!=='admin')return;
   host.innerHTML='<div class="empty">جاري تحليل التقييمات...</div>';
+  renderStudentEvaluationOverview('loading');
   try{
     examEvaluationGroups=((await secureAdminExamRequest('/admin/evaluations')).evaluations||[]).map(group=>{const subject=subjects.find(item=>item._fbKey===group.subjectKey),eligible=subject?getSubjectStudentIdxs(subject).map(index=>students[index]).filter(student=>student&&SulukeraStudentAccount.isActive(student)&&sameBatchName(student.batch,group.batch)).length:students.filter(student=>SulukeraStudentAccount.isActive(student)&&sameBatchName(student.batch,group.batch)).length;return {...group,eligibleCount:group.eligibleCount??eligible,responseRate:group.responseRate??(eligible?Math.round(Number(group.responseCount||0)/eligible*1000)/10:0)};});
+    renderStudentEvaluationOverview();
     if(!examEvaluationGroups.length){host.innerHTML='<div class="empty">لم تصل تقييمات للمقررات بعد.</div>';return;}
     populateEvaluationCourseOptions();
-  }catch(error){console.error('load evaluation analytics error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل تحليل التقييمات الآن.</div>';}
+  }catch(error){renderStudentEvaluationOverview('error');console.error('load evaluation analytics error',error);host.innerHTML='<div class="alert alert-warn">تعذر تحميل تحليل التقييمات الآن.</div>';}
 }
 function populateEvaluationCourseOptions(){
+  renderStudentEvaluationOverview();
   const select=document.getElementById('evaluationCourseSelect'),host=document.getElementById('examEvaluationAnalytics');if(!select||!host)return;
   const previous=select.value,status=document.getElementById('evaluationStatusFilter')?.value||'all',visible=examEvaluationGroups.filter(group=>status==='all'||group.publicationStatus===status);
   select.innerHTML='<option value="">-- اختاري مقررًا لعرض تقييمه --</option>'+visible.map(group=>`<option value="${group.examId}">${escapeHtml(group.subjectName)} · ${escapeHtml(group.batch)} · ${group.responseCount} استجابة</option>`).join('');
@@ -8706,6 +8711,7 @@ async function cleanDuplicateStudents(){
 <script src="revenue-ui.js?v=20261007-course-categories"></script>
 <script src="lecturer-survey-model.js?v=20261008-survey"></script>
 <script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>
+<script src="evaluation-dashboard.js?v=20261008-dimensions"></script>
 </body>
 </html>
 
