@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261006-canonical-courses"></script>
+<script src="grade-result-policy.js?v=20261008-pending-results"></script>
 <script src="student-account-policy.js?v=20261006-status"></script>
 <script src="productivity-ledger.js?v=20261006-meetings"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1449,11 +1450,12 @@ async function loadAllFromFirebase(){
         const stdIdx=students.findIndex(s=>s._fbKey===g.studentKey);
         if(si>=0 && stdIdx>=0){
           grades[si][stdIdx]={
+            ...g,
             _fbKey:`${g.studentKey}_${g.subjectKey}`,
-            w1:{attend:g.w1_attend||0,hw:g.w1_hw||0,disc:g.w1_disc||0},
-            w2:{attend:g.w2_attend||0,hw:g.w2_hw||0,disc:g.w2_disc||0},
-            w3:{attend:g.w3_attend||0,hw:g.w3_hw||0,disc:g.w3_disc||0},
-            w4:{attend:g.w4_attend||0,hw:g.w4_hw||0,disc:g.w4_disc||0},
+            w1:{attend:isCourseworkFieldEntered(g,'w1','attend')?g.w1_attend:null,hw:isCourseworkFieldEntered(g,'w1','hw')?g.w1_hw:null,disc:isCourseworkFieldEntered(g,'w1','disc')?g.w1_disc:null},
+            w2:{attend:isCourseworkFieldEntered(g,'w2','attend')?g.w2_attend:null,hw:isCourseworkFieldEntered(g,'w2','hw')?g.w2_hw:null,disc:isCourseworkFieldEntered(g,'w2','disc')?g.w2_disc:null},
+            w3:{attend:isCourseworkFieldEntered(g,'w3','attend')?g.w3_attend:null,hw:isCourseworkFieldEntered(g,'w3','hw')?g.w3_hw:null,disc:isCourseworkFieldEntered(g,'w3','disc')?g.w3_disc:null},
+            w4:{attend:isCourseworkFieldEntered(g,'w4','attend')?g.w4_attend:null,hw:isCourseworkFieldEntered(g,'w4','hw')?g.w4_hw:null,disc:isCourseworkFieldEntered(g,'w4','disc')?g.w4_disc:null},
             exam:(g.exam!==undefined&&g.exam!==null&&g.exam!=='')?g.exam:null,
             semesterKey:g.semesterKey||'',
             examEntered:g.examEntered===true || Number(g.exam)>0
@@ -2266,18 +2268,18 @@ function isExamEntered(g){
   return exam!==undefined && exam!==null && exam!=='' && Number(exam)>0;
 }
 function isFailingGrade(g){
-  return isExamEntered(g) && calcTotal(g)<settings.gradeFail;
+  return isGradeComplete(g) && calcTotal(g)<settings.gradeFail;
 }
 function getGradeStatus(g){
-  return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
+  return isGradeComplete(g) ? getStatus(calcTotal(g)) : 'لم تُرصد';
 }
 function getGradeDisplay(g){
-  if(!isExamEntered(g)) return {letter:'⏳',className:'pending',total:null,status:'قيد الرصد'};
+  if(!isGradeComplete(g)) return {letter:'—',className:'pending',total:null,status:'لم تُرصد'};
   const total=calcTotal(g);
   return {letter:getGrade(total),className:getGrade(total),total,status:getStatus(total)};
 }
 function getStudentCourseResultMeta(g){
-  if(!g || !isExamEntered(g)) return {label:'قيد الرصد', className:'badge-warn'};
+  if(!g || !isGradeComplete(g)) return {label:'لم تُرصد', className:'badge-warn'};
   return calcTotal(g)>=settings.gradeFail
     ? {label:'اجتياز', className:'badge-pass'}
     : {label:'تعثر', className:'badge-fail'};
@@ -2490,7 +2492,7 @@ function getSelectedStudentCrossBatchSubjectIdxs(studentIdx){
     .map(record=>subjects.findIndex(subject=>subject._fbKey===record.subjectKey))
     .filter(idx=>idx>=0);
 }
-function makeEmptyGrade(){return{w1:{attend:0,hw:0,disc:0},w2:{attend:0,hw:0,disc:0},w3:{attend:0,hw:0,disc:0},w4:{attend:0,hw:0,disc:0},exam:null,examEntered:false};}
+function makeEmptyGrade(){return{w1:{attend:null,hw:null,disc:null},w2:{attend:null,hw:null,disc:null},w3:{attend:null,hw:null,disc:null},w4:{attend:null,hw:null,disc:null},exam:null,examEntered:false};}
 async function syncMissingSemesterEnrollments(studentIdx=null){
   const updates={};
   let added=0;
@@ -4406,7 +4408,7 @@ function renderStudentAcademicProgressSheet(stdIdx, st, mySubjs){
   });
   const completedCount=rows.filter(row=>row.result.label==='اجتياز').length;
   const strugglingCount=rows.filter(row=>row.result.label==='تعثر').length;
-  const pendingCount=rows.filter(row=>row.result.label==='قيد الرصد').length;
+  const pendingCount=rows.filter(row=>row.result.label==='لم تُرصد').length;
   return `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;">
       <div class="stat" style="margin:0"><div class="stat-icon">📚</div><div class="stat-label">إجمالي المقررات</div><div class="stat-value" style="font-size:24px">${rows.length}</div><div class="stat-sub">في السجل الأكاديمي</div></div>
@@ -4694,7 +4696,7 @@ async function saveStudentGradeFromProfile(){
   if(!grades[si][stdIdx]) grades[si][stdIdx]=makeEmptyGrade();
   const normalize=(id,max)=>{
     const raw=document.getElementById(id)?.value;
-    if(raw==='') return 0;
+    if(raw==='') return null;
     return Math.max(0, Math.min(max, parseFloat(raw)||0));
   };
   grades[si][stdIdx]={
@@ -4705,9 +4707,11 @@ async function saveStudentGradeFromProfile(){
     exam:document.getElementById('gradeEditor_exam')?.value===''?null:normalize('gradeEditor_exam',settings.exam),
     examEntered:document.getElementById('gradeEditor_exam')?.value!==''
   };
+  const enteredFields={};for(const w of ['w1','w2','w3','w4'])for(const f of ['attend','hw','disc'])enteredFields[w+'_'+f+'Entered']=grades[si][stdIdx][w][f]!==null;Object.assign(grades[si][stdIdx],enteredFields);
   const gradeKey=('grade_'+student._fbKey+'_'+subject._fbKey).replace(/[.#$[\]]/g,'_');
   try{
     await fbRef('grades/'+gradeKey).transaction(current=>({
+      ...current,...enteredFields,
       studentKey:student._fbKey,
       subjectKey:subject._fbKey,
       w1_attend:grades[si][stdIdx].w1.attend, w1_hw:grades[si][stdIdx].w1.hw, w1_disc:grades[si][stdIdx].w1.disc,
@@ -4859,22 +4863,22 @@ function renderProfileGrades(stdIdx, mySubjs) {
   return mySubjs.map(subj=>{
     const g=grades[subj.idx]?.[stdIdx]; if(!g) return '';
     const total=calcTotal(g); const display=getGradeDisplay(g); const gr=display.letter;
-    const examDone=isExamEntered(g);
+    const examDone=isGradeComplete(g);
     const currentProgress=examDone?total:(courseworkMax?Math.min(100,Math.round((total/courseworkMax)*100)):0);
     return `<div class="subject-grade-card">
       <div class="subject-grade-header">
         <div><div style="font-size:14px;font-weight:700">${subj.name}</div><div style="font-size:11px;color:var(--neon)">${getLecturerName(subj.lecturerUserId)}</div></div>
-        <div><span class="badge badge-${display.className==='pending'?'warn':display.className}">${gr}</span> <span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${display.status}</span></div>
+        <div><span class="badge badge-${display.className==='pending'?'warn':display.className}">${gr}</span> <span class="badge ${!isGradeComplete(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${display.status}</span></div>
       </div>
       <div class="subject-grade-body">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;padding:10px 14px;background:var(--bg);border-radius:var(--radius)">
           <div style="text-align:center"><div style="font-size:44px;font-weight:800;color:${!examDone?'var(--primary)':total>=settings.gradeA?'#1a7a3c':total>=settings.gradeFail?'var(--primary)':'#c0392b'};line-height:1">${total}</div><div style="font-size:11px;color:var(--text-muted)">${examDone?'من 100':`المجموع الحالي من ${courseworkMax}`}</div></div>
-          <div style="flex:1"><div class="progress" style="height:12px;margin-bottom:6px"><div class="progress-fill ${pc(currentProgress)}" style="width:${currentProgress}%"></div></div>${!examDone?'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">النتيجة النهائية قيد الرصد حتى إدخال الاختبار</div>':''}</div>
+          <div style="flex:1"><div class="progress" style="height:12px;margin-bottom:6px"><div class="progress-fill ${pc(currentProgress)}" style="width:${currentProgress}%"></div></div>${!examDone?'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">النتيجة النهائية لم تُرصد حتى اكتمال جميع الدرجات</div>':''}</div>
         </div>
         <div class="week-breakdown">
           ${['w1','w2','w3','w4'].map((w,i)=>{const wg=g[w];const wt=(wg.attend||0)+(wg.hw||0)+(wg.disc||0);return `<div class="week-box"><div class="week-box-label">أسبوع ${i+1}</div><div class="week-box-val">${wt}</div><div class="week-box-max">/${wkMax}</div></div>`;}).join('')}
         </div>
-        <div style="padding:10px 14px;background:${!isExamEntered(g)?'var(--warn-light)':total>=settings.gradeFail?'var(--success-light)':'var(--danger-light)'};border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+        <div style="padding:10px 14px;background:${!isGradeComplete(g)?'var(--warn-light)':total>=settings.gradeFail?'var(--success-light)':'var(--danger-light)'};border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
           <strong>📝 الاختبار النهائي</strong><span style="font-size:22px;font-weight:800">${g.exam??'—'}/${settings.exam}</span>
         </div>
         ${canManageAcademicAdmin()?`<div style="margin-top:10px;text-align:left"><button class="btn btn-success btn-sm" onclick="openStudentGradeEditor(${stdIdx},${subj.idx})">✏️ تعديل درجات المقرر</button></div>`:''}
@@ -5158,7 +5162,7 @@ function loadGradesTable() {
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.exam}" value="${g.exam??''}" onchange="updateGrade(${si},${stdIdx},'exam',null,this.value)"></td>
       <td><strong>${isExamEntered(g)?total:'—'}</strong>${isExamEntered(g)?'/100':''}</td><td><span class="badge badge-${display.className==='pending'?'warn':display.className}">${gr}</span></td>
-      <td><span class="badge ${!isExamEntered(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td></tr>`;
+      <td><span class="badge ${!isGradeComplete(g)?'badge-warn':total>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td></tr>`;
     return `<tr><td class="mono">${row+1}</td><td><strong>${getStudentFullName(st)}</strong> ${studentAccountBadge(st)}</td>
       <td><span class="badge badge-student">${st?.batch||'—'}</span></td>
       <td><input class="grade-input" type="number" min="0" max="${settings.attend}" value="${wg?.attend??''}" onchange="updateGrade(${si},${stdIdx},'${wKey}','attend',this.value)"></td>
@@ -5175,7 +5179,7 @@ function updateGrade(si,stdIdx,week,field,val) {
   if (!grades[si][stdIdx]) grades[si][stdIdx]=makeEmptyGrade();
   const v=val===''?null:Math.max(0,parseFloat(val)||0);
   if (week==='exam') { grades[si][stdIdx].exam=v; grades[si][stdIdx].examEntered=val!==''; }
-  else grades[si][stdIdx][week][field]=v;
+  else {grades[si][stdIdx][week][field]=v;grades[si][stdIdx][week+'_'+field+'Entered']=val!=='';}
 }
 async function saveGrades() {
   const selectedValue=document.getElementById('gradeSubjectSelect').value;
@@ -5345,7 +5349,7 @@ async function approveGradeReviewRequest(requestKey){
         w4_attend:grade.w4_attend||0,w4_hw:grade.w4_hw||0,w4_disc:grade.w4_disc||0,
         exam:grade.exam??null,examEntered:grade.examEntered===true,updatedAt:now};
       if(field==='exam'){ next.exam=value; next.examEntered=true; }
-      else next[field]=value;
+      else {next[field]=value;next[field+'Entered']=true;}
       return next;
     });
     const requestUpdate={status:'completed',lecturerNote,lecturerReviewedAt:now,lecturerReviewedBy:currentUser?.username||currentUser?.id||'lecturer',gradeReviewField:field,gradeReviewValue:value};
@@ -5354,7 +5358,7 @@ async function approveGradeReviewRequest(requestKey){
     if(!grades[si]) grades[si]={};
     if(!grades[si][stdIdx]) grades[si][stdIdx]=makeEmptyGrade();
     if(field==='exam'){ grades[si][stdIdx].exam=value; grades[si][stdIdx].examEntered=true; }
-    else { const [week,part]=field.split('_'); grades[si][stdIdx][week][part]=value; }
+    else { const [week,part]=field.split('_'); grades[si][stdIdx][week][part]=value;grades[si][stdIdx][field+'Entered']=true; }
     await saveActivityLog({action:'اعتماد مراجعة درجة',targetType:'student_request',targetKey:requestKey,targetLabel:`${getStudentFullName(student)} · ${subject.name}`,studentKey:student._fbKey,subjectKey:subject._fbKey,details:`${meta.label}: ${value}${lecturerNote?` · ملاحظة: ${lecturerNote}`:''}`});
     loadGradesTable();
     showToast('✅ تم تحديث الدرجة واعتماد الطلب');

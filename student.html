@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261006-canonical-courses"></script>
+<script src="grade-result-policy.js?v=20261008-pending-results"></script>
 <script src="student-account-policy.js?v=20261006-status"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
@@ -628,13 +629,13 @@ function isExamEntered(g){
   return exam!==undefined && exam!==null && exam!=='' && Number(exam)>0;
 }
 function isFailingGrade(g){
-  return isExamEntered(g) && calcTotal(g)<settings.gradeFail;
+  return isGradeComplete(g) && calcTotal(g)<settings.gradeFail;
 }
 function getGradeStatus(g){
-  return isExamEntered(g) ? getStatus(calcTotal(g)) : 'قيد الرصد';
+  return isGradeComplete(g) ? getStatus(calcTotal(g)) : 'لم تُرصد';
 }
 function getGradeDisplay(g){
-  if(!isExamEntered(g)) return {letter:'⏳',className:'pending',total:null,status:'قيد الرصد'};
+  if(!isGradeComplete(g)) return {letter:'—',className:'pending',total:null,status:'لم تُرصد'};
   const total=calcTotal(g);
   return {letter:getGrade(total),className:getGrade(total),total,status:getStatus(total)};
 }
@@ -1430,7 +1431,7 @@ async function renderStudentGradesTab(){
       const display = getGradeDisplay(g);
       const gr = display.letter;
       const status = display.status;
-      const examDone = isExamEntered(g);
+      const examDone = isGradeComplete(g);
       const wkMax = settings.attend+settings.hw+settings.disc;
       const courseworkMax = wkMax*4;
       const currentProgress = examDone?total:(courseworkMax?Math.min(100,Math.round((total/courseworkMax)*100)):0);
@@ -1455,14 +1456,14 @@ async function renderStudentGradesTab(){
               <div style="flex:1">
                 <div class="progress"><div class="progress-fill pf-${pc(currentProgress)}" style="width:${currentProgress}%"></div></div>
                 <div style="font-size:11px;color:${!examDone?'var(--muted)':total>=settings.gradeFail?'var(--success)':'var(--danger)'};margin-top:4px;font-weight:600">
-                  ${examDone?status:'النتيجة النهائية قيد الرصد'}
+                  ${examDone?status:'النتيجة النهائية لم تُرصد'}
                 </div>
               </div>
             </div>
             <div class="weeks-row">
               ${['w1','w2','w3','w4'].map((w,wi)=>{
-                const wa=(g?.[w+'_attend']||0), wh=(g?.[w+'_hw']||0), wd=(g?.[w+'_disc']||0);
-                const wt=wa+wh+wd;
+                const wa=gradeFieldDisplay(g,w,'attend'), wh=gradeFieldDisplay(g,w,'hw'), wd=gradeFieldDisplay(g,w,'disc');
+                const wt=['attend','hw','disc'].every(f=>isCourseworkFieldEntered(g,w,f))?Number(wa)+Number(wh)+Number(wd):'لم تُرصد';
                 return `<div class="week-box">
                   <div class="week-box-label">أسبوع ${wi+1}</div>
                   <div class="week-box-val">${wt}</div>
@@ -2662,7 +2663,7 @@ function renderWeekTable(w){
           value="${g?.exam??''}" data-stkey="${st.fbKey}" data-field="exam"></td>
         <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
         <td><span class="badge badge-${display.className}">${gr}</span></td>
-        <td><span class="badge ${!isExamEntered(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
+        <td><span class="badge ${!isGradeComplete(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
       </tr>`;
     }).join('');
   } else {
@@ -2702,7 +2703,7 @@ function buildSummaryHTML(subjectKey, students){
           <td class="mono">${st.id}</td>
           <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
           <td><span class="badge badge-${display.className}">${gr}</span></td>
-          <td><span class="badge ${!isExamEntered(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
+          <td><span class="badge ${!isGradeComplete(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
         </tr>`;
       }).join('')}
     </tbody>
