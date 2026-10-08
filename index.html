@@ -302,6 +302,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 .sch-ps{border-radius:5px;padding:4px 6px;font-size:10px;color:white;height:100%;display:flex;flex-direction:column;justify-content:center;}
 </style>
 <link rel="stylesheet" href="coursework.css?v=20261007-task-cards">
+<link rel="stylesheet" href="lecturer-survey.css?v=20261008-survey">
 </head>
 <body>
 
@@ -817,10 +818,14 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 
       <!-- COURSE EVALUATIONS -->
       <div class="page" id="page-evaluations">
+        <nav class="ls-admin-tabs" aria-label="نوع التقييم"><button class="btn" data-evaluation-tab="students" aria-pressed="true" onclick="lecturerSurveyAdminSelect('students')">تقييم الطلاب</button><button class="btn" data-evaluation-tab="lecturers" aria-pressed="false" onclick="lecturerSurveyAdminSelect('lecturers')">رضا المحاضرين</button></nav>
+        <div id="studentEvaluationPanel">
         <div class="card card-accent">
           <div class="filter-toolbar"><div class="form-group" style="margin:0"><label>المقرر والتقييم</label><select id="evaluationCourseSelect" onchange="renderSelectedEvaluation(this.value)"><option value="">-- اختاري مقررًا لعرض تقييمه --</option></select></div><div class="form-group" style="margin:0"><label>حالة التقرير</label><select id="evaluationStatusFilter" onchange="populateEvaluationCourseOptions()"><option value="all">جميع الحالات</option><option value="draft">بانتظار الاعتماد</option><option value="published">منشور للمحاضر</option></select></div><button class="btn" onclick="loadExamEvaluationAnalytics()">تحديث التحليل</button></div>
         </div>
         <div id="examEvaluationAnalytics"><div class="empty">اختاري مقررًا لعرض رضا الطلاب وتحليل التقييم.</div></div>
+      </div>
+        <div id="lecturerSurveyAdminPanel" hidden><div id="lecturerSurveyAnalytics"></div></div>
       </div>
 
       <!-- SETTINGS -->
@@ -2577,6 +2582,7 @@ async function doLogin(){
 async function _finishLogin() {
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appShell').style.display='block';
+  if(currentUser.role==='lecturer') void lecturerSurveyGate();
   document.getElementById('sidebarUserName').textContent=currentUser.name;
   const roleNames={admin:'مدير النظام',finance:'موظف المالية',lecturer:'عضو هيئة التدريس',student:'طالب'};
   document.getElementById('sidebarUserRole').textContent=roleNames[currentUser.role];
@@ -2601,6 +2607,8 @@ async function _finishLogin() {
   // تحديث التسجيلات والدرجات معاً ولا يجوز تنفيذه بصمت.
 }
 async function doLogout() {
+  lecturerSurveyClose();
+  lecturerSurveyUI.report=null;
   try{ await firebase.auth().signOut(); }catch(error){ console.warn('Firebase sign-out error',error); }
   currentUser=null;
   students=[]; subjects=[]; grades={}; users=[]; programsData=[];
@@ -5922,7 +5930,9 @@ function printStudentPortalTranscript(){
       .week-box{background:#f7f9fc;border-radius:10px;padding:10px;text-align:center;}
       .progress{height:10px;background:#e5eaf5;border-radius:99px;overflow:hidden;}
       .progress-fill{height:100%;background:#0D40FC;}
-    </style></head><body><div class="wrap">${card.innerHTML}</div></body></html>`);
+    </style></head><body><div class="wrap">${card.innerHTML}</div><script src="lecturer-survey-model.js?v=20261008-survey"></script>
+<script src="lecturer-survey-ui.js?v=20261008-survey"></script>
+</body></html>`);
   printWindow.document.close();
   printWindow.focus();
   printWindow.print();
@@ -8690,7 +8700,7 @@ async function cleanDuplicateStudents(){
 <script src="coursework-ui.js?v=20261007-task-cards"></script>
 <script src="student-status-ui.js?v=20261006-status"></script>
 <script src="performance.js?v=20261006-meetings"></script>
-<script src="performance-review.js?v=20261007-productivity-months"></script>
+<script src="performance-review.js?v=20261008-survey"></script>
 <script src="performance-obm.js?v=20261007-obm-count-correction"></script>
 <script src="performance-aba-recorded.js?v=20261007-aba-recorded-graduates"></script>
 <script src="lecturer-hours.js?v=20261007-hours-monthly"></script>

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test coursework.test.mjs revenue.test.mjs",
+    "test": "node --test coursework.test.mjs revenue.test.mjs lecturer-survey.test.mjs",
     "check": "node --check src/index.js && wrangler deploy --dry-run",
     "deploy": "wrangler deploy"
   },

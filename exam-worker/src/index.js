@@ -1,5 +1,6 @@
 import { handleGraduationProject } from "./graduation-projects.js";
 import { handleRevenue } from "./revenue.js";
+import { handleLecturerSurvey } from "./lecturer-survey.js";
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
 import { handleCoursework, retryPendingCoursework } from "./coursework.js";
@@ -1084,6 +1085,8 @@ export default {
       if (path === "/health")
         return reply(request, { ok: true, service: "sulukera-exams" });
       const auth = await authenticate(request);
+      const lecturerSurvey=await handleLecturerSurvey(request,env,auth,path,{firebaseRead});
+      if(lecturerSurvey){const response=reply(request,lecturerSurvey.data);response.headers.set('Cache-Control','private, no-store');return response;}
       const revenue=await handleRevenue(request,env,auth,path);
       if(revenue){const response=reply(request,revenue.data);response.headers.set('Cache-Control','private, no-store');return response;}
       const coursework = await handleCoursework(request, env, auth, path, {
