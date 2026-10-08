@@ -332,6 +332,7 @@ tr:hover td{background:#f8faff;}
 @media(max-width:600px){.secure-exam-shell,.evaluation-shell{padding:14px;border-radius:16px}.secure-question{padding:16px}.secure-question-list{gap:18px}.evaluation-score{min-width:43px;padding:8px 10px}}
 </style>
 <link rel="stylesheet" href="coursework.css?v=20261007-task-cards">
+<link rel="stylesheet" href="lecturer-survey.css?v=20261008-student-survey">
 </head>
 <body>
 
@@ -753,6 +754,7 @@ async function doLogin(){
       currentUser = {role:'lecturer', data:found, fbKey:found._fbKey, authKey:found._fbKey, authUser:found,authUid:firebaseUser.uid};
       await loadAllData();
       showLecturerView();
+      void lecturerSurveyGate();
     }
   } catch(e){
     console.error('Login error:',e);
@@ -804,6 +806,7 @@ async function changeMyPassword(){
 }
 
 async function doLogout(){
+  lecturerSurveyClose();
   stopStudentAccountLiveUpdates();
   stopExamSchedulesLiveUpdates();
   stopProfessionalLiveUpdates();
@@ -3049,5 +3052,7 @@ window.addEventListener('load', initFB);
 </script>
 <script src="coursework-ui.js?v=20261007-task-cards"></script>
 <script src="student-account-live.js?v=20261006-status"></script>
+<script src="lecturer-survey-model.js?v=20261008-student-survey"></script>
+<script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>
 </body>
 </html>
