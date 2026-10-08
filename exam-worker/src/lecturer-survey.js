@@ -1,4 +1,5 @@
 import '../../lecturer-survey-model.js';
+const isExempt=(campaign,uid,profile)=>campaign.id==='lecturer-2026-08-23-2026-09-24'&&(uid==='Rd1O695bgWdbu3xk1AUAoIYmJPk2'||String(profile.username||'').toLowerCase()==='aalmubaddal');
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 export async function handleLecturerSurvey(request,env,auth,path,deps){
  if(!path.startsWith('/lecturer/satisfaction')&&!path.startsWith('/admin/lecturer-satisfaction'))return null;
@@ -6,6 +7,7 @@ export async function handleLecturerSurvey(request,env,auth,path,deps){
  if(path.startsWith('/lecturer/')){
   if(auth.profile.role!=='lecturer')fail('FORBIDDEN',403);
   if(path!=='/lecturer/satisfaction')fail('NOT_FOUND',404);
+  if(isExempt(campaign,auth.uid,auth.profile)){if(request.method==='GET')return {data:{campaign,completed:true,exempt:true,name:auth.profile.name||auth.profile.username}};fail('SURVEY_EXEMPT',403);}
   if(request.method==='GET'){const row=await env.DB.prepare('SELECT submitted_at FROM lecturer_survey_responses WHERE campaign_id=? AND lecturer_uid=?').bind(campaign.id,auth.uid).first();return {data:{campaign,completed:!!row,submittedAt:row?.submitted_at||null,name:auth.profile.name||auth.profile.username}};}
   if(request.method==='POST'){
    let body;try{body=await request.json();}catch{fail('INVALID_JSON');}
@@ -19,6 +21,6 @@ export async function handleLecturerSurvey(request,env,auth,path,deps){
  if(auth.profile.role!=='admin')fail('FORBIDDEN',403);
  if(path!=='/admin/lecturer-satisfaction'||request.method!=='GET')fail('NOT_FOUND',404);
  const [result,users]=await Promise.all([env.DB.prepare('SELECT lecturer_uid,lecturer_name,lecturer_username,responses_json,submitted_at FROM lecturer_survey_responses WHERE campaign_id=? ORDER BY submitted_at DESC').bind(campaign.id).all(),deps.firebaseRead('users',auth.token)]);
- const records=result.results.map(r=>({uid:r.lecturer_uid,name:r.lecturer_name,username:r.lecturer_username,responses:model.validate(JSON.parse(r.responses_json)),submittedAt:r.submitted_at})),roster=Object.entries(users||{}).filter(([,u])=>u.role==='lecturer').map(([uid,u])=>({uid,name:u.name||u.username,username:u.username||uid})),answered=new Set(records.map(r=>r.uid)),eligibleResponded=roster.filter(u=>answered.has(u.uid)).length;
+ const records=result.results.filter(r=>!isExempt(campaign,r.lecturer_uid,{username:r.lecturer_username})).map(r=>({uid:r.lecturer_uid,name:r.lecturer_name,username:r.lecturer_username,responses:model.validate(JSON.parse(r.responses_json)),submittedAt:r.submitted_at})),roster=Object.entries(users||{}).filter(([uid,u])=>u.role==='lecturer'&&!isExempt(campaign,uid,u)).map(([uid,u])=>({uid,name:u.name||u.username,username:u.username||uid})),answered=new Set(records.map(r=>r.uid)),eligibleResponded=roster.filter(u=>answered.has(u.uid)).length;
  return {data:{campaign,...model.analytics(records),eligibleCount:roster.length,eligibleResponded,responseRate:roster.length?eligibleResponded/roster.length*100:null,pending:roster.filter(u=>!answered.has(u.uid)),records}};
 }
