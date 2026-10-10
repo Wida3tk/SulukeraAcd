@@ -2013,6 +2013,7 @@ async function downloadStudentGraduationFile(id,name){try{const response=await f
 function renderLecturerPortalTab(tab){
   currentAppTab = tab;
   if(tab==='coursework')return renderAcademicCoursework();
+  if(tab==='evaluation')return renderFacultyEvaluation();
   if(tab==='professional-teaching') return renderProfessionalLecturerPortal();
   if(tab==='lecturer-requests') return renderLecturerRequestsTab();
   if(tab==='home') return renderLecturerHomeTab();
@@ -2042,12 +2043,13 @@ function showLecturerView(){
   document.getElementById('topbarRole').className = 'user-role role-lecturer';
   const professionalUnits=getProfessionalLecturerUnits(),academicSubjects=getLecturerSubjects(),professionalOnly=professionalUnits.length>0&&!academicSubjects.length;
   const tabs=professionalOnly
-    ? [{id:'professional-teaching',label:'🚀 مساري المهني'},{id:'lecturer-requests',label:'📝 طلباتي'}]
+    ? [{id:'professional-teaching',label:'🚀 مساري المهني'},{id:'evaluation',label:'⭐ التقييم'},{id:'lecturer-requests',label:'📝 طلباتي'}]
     : [
       { id:'home', label:'🏠 الرئيسية' },
       { id:'courses', label:'📚 المقررات' },
       { id:'coursework', label:'📝 رصد الدرجات' },
       { id:'grades', label:'📊 سجل الدرجات' },
+      { id:'evaluation', label:'⭐ التقييم' },
       { id:'lecturer-requests', label:'📝 طلباتي' },
       { id:'schedule', label:'📅 الجدول الأسبوعي' },
       ...(professionalUnits.length?[{id:'professional-teaching',label:'🚀 مساري المهني'}]:[])
@@ -3056,6 +3058,8 @@ window.addEventListener('load', initFB);
 <script src="coursework-ui.js?v=20261007-task-cards"></script>
 <link rel="stylesheet" href="lecturer-grading.css?v=20261011">
 <script src="lecturer-grading.js?v=20261011"></script>
+<script src="faculty-evaluation.js?v=20261011"></script>
+<link rel="stylesheet" href="faculty-evaluation.css?v=20261011">
 <script src="student-account-live.js?v=20261006-status"></script>
 <script src="lecturer-survey-model.js?v=20261008-student-survey"></script>
 <script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>
