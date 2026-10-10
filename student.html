@@ -929,6 +929,7 @@ function stopProfessionalLiveUpdates(){
 //  STUDENT VIEW
 // ══════════════════════════════════════════════
 function showStudentView(){
+  document.getElementById('appTabs').classList.remove('faculty-nav');
   if(!SulukeraStudentAccount.isActive(currentUser?.data)){disableInactiveStudent();return;}
   startStudentAccountLiveUpdates();
   document.getElementById('loginScreen').style.display='none';
@@ -2030,6 +2031,7 @@ function configureAppTabs(items){
 //  LECTURER VIEW
 // ══════════════════════════════════════════════
 function showLecturerView(){
+  document.getElementById('appTabs').classList.add('faculty-nav');
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
   document.getElementById('appTabs').style.display='block';
@@ -2043,8 +2045,8 @@ function showLecturerView(){
     ? [{id:'professional-teaching',label:'🚀 مساري المهني'},{id:'lecturer-requests',label:'📝 طلباتي'}]
     : [
       { id:'home', label:'🏠 الرئيسية' },
-      { id:'courses', label:'📚 المقررات المسندة' },
-      { id:'coursework', label:'📝 الواجبات والحضور' },
+      { id:'courses', label:'📚 المقررات' },
+      { id:'coursework', label:'📝 رصد الدرجات' },
       { id:'grades', label:'📊 سجل الدرجات' },
       { id:'lecturer-requests', label:'📝 طلباتي' },
       { id:'schedule', label:'📅 الجدول الأسبوعي' },
@@ -2413,7 +2415,7 @@ function renderLecturerHomeTab(){
       ${scheduleSlots.length ? `<div style="display:grid;gap:8px;">${scheduleSlots.slice(0,5).map(slot=>`
         <div style="padding:11px 13px;background:var(--bg);border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center;">
           <div><strong>${slot.subject||'—'}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${slot.day||'—'} · ${slot.timeStart||'—'} - ${slot.timeEnd||'—'}</div></div>
-          <div style="font-size:11px;color:var(--muted)">${slot.room?`🏠 ${slot.room}`:'بدون قاعة'}</div>
+          <div style="font-size:11px;color:var(--muted)">${/^https:\/\//i.test(slot.room||'')?`<a class="btn-primary" style="display:inline-block;text-decoration:none;white-space:nowrap" href="${escapeHtml(slot.room)}" target="_blank" rel="noopener noreferrer">دخول Zoom ↗</a>`:slot.room?escapeHtml(slot.room):'بدون قاعة'}</div>
         </div>`).join('')}</div>` : '<div class="empty">لا توجد محاضرات مرتبطة بالحساب حالياً</div>'}
     </div>`;
 }
@@ -2444,7 +2446,7 @@ function renderLecturerCoursesTab(){
   }).join('');
   document.getElementById('mainContent').innerHTML = `
     <div class="card">
-      <div class="card-title">📚 المقررات المسندة</div>
+      <div class="card-title">📚 المقررات</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         ${Object.entries(batchMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([batchName, info])=>`
           <span class="badge badge-student">${batchName}: ${info.students.size} طالب</span>`).join('')}
@@ -3052,6 +3054,8 @@ window.addEventListener('load', initFB);
 
 </script>
 <script src="coursework-ui.js?v=20261007-task-cards"></script>
+<link rel="stylesheet" href="lecturer-grading.css?v=20261011">
+<script src="lecturer-grading.js?v=20261011"></script>
 <script src="student-account-live.js?v=20261006-status"></script>
 <script src="lecturer-survey-model.js?v=20261008-student-survey"></script>
 <script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>

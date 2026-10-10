@@ -1,0 +1,19 @@
+.faculty-nav{padding:12px 24px!important;background:linear-gradient(110deg,#081d48,#123880)!important;border:0!important;box-shadow:0 8px 24px #102b6820;}
+.faculty-nav>div{gap:7px!important;flex-wrap:wrap;}
+.faculty-nav .app-tab{border:1px solid #ffffff20!important;border-radius:12px;margin:2px;padding:12px 18px!important;color:#dbe7ff!important;transition:background .2s;}
+.faculty-nav .app-tab:hover{background:#ffffff15;}
+.faculty-nav .app-tab.active{background:white!important;color:#153ac5!important;box-shadow:0 4px 12px #0002;}
+.faculty-question{padding:16px;border:1px solid #ddd8ff;border-radius:14px;background:#f6f3ff;margin:14px 0;}
+.faculty-question summary{font-weight:800;color:#5838b4;cursor:pointer;}
+.faculty-question p{white-space:pre-wrap;line-height:1.9;}
+.faculty-student-list{display:grid;gap:14px;margin-top:18px;}
+.faculty-student{border:1px solid #dce5fa;border-radius:18px;padding:20px;background:#fff;box-shadow:0 4px 16px #183e7006;display:grid;grid-template-columns:minmax(180px,1fr) minmax(420px,2fr);gap:14px 24px;}
+.faculty-student header{display:flex;gap:12px;align-items:center;}.faculty-student h4{font-size:16px;margin:0 0 6px;color:#122d61;}.faculty-student header small{color:#7585a3;}
+.faculty-grades{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.faculty-grade{font:inherit;border:1px solid #dce5fa;border-radius:13px;background:#f5f8ff;color:#173462;padding:14px 10px;text-align:center;display:grid;gap:7px;cursor:pointer;}
+.faculty-grade strong{font-size:23px;}.faculty-grade strong small{font-size:13px;}.faculty-grade>small{font-size:11px;}.faculty-grade:disabled{opacity:1;cursor:default;}.faculty-grade:not(:disabled):hover{box-shadow:0 4px 16px #153ac520;border-color:#7695ee;}.faculty-discussion{background:#f1ecff;border-color:#d5c6fa;color:#613bb0;}.faculty-attendance{background:#edfaf5;color:#0a7960;border-color:#cceade;}
+.faculty-student footer{grid-column:1/-1;display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid #edf1fb;padding-top:12px;font-size:12px;color:#63718e;}.faculty-student footer strong{color:#173462;}
+.faculty-grade strong,.faculty-student footer strong{direction:ltr;unicode-bidi:isolate;}
+.faculty-modal{position:fixed;inset:0;z-index:10000;background:#051633a6;backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:24px;direction:rtl;}
+.faculty-modal>section{background:white;border-radius:22px;width:min(100%,1000px);max-height:90vh;overflow:auto;box-shadow:0 24px 100px #0004;}.faculty-modal>section>header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 28px;background:#f1f5ff;}.faculty-modal h2{margin:0;color:#173462;}.faculty-modal header p{color:#677999;margin:8px 0 0;}.faculty-modal-body{padding:24px;}.faculty-modal .cw-discussion-answer p,.faculty-modal .cw-answer p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9;}.faculty-modal .cw-discussion-review{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(220px,1fr);gap:20px;}.faculty-modal .cw-discussion-save{grid-column:1/-1;}.faculty-modal input,.faculty-modal textarea{width:100%;box-sizing:border-box;font:inherit;border:1px solid #d4dff4;border-radius:10px;padding:12px;}.faculty-modal textarea{min-height:110px;}.faculty-modal label{display:grid;gap:8px;}.faculty-modal .cw-answer{padding:16px;background:#f6f8ff;border-radius:12px;margin-bottom:16px;}#facultyReviewError{color:#b42335;padding:0 24px;}
+@media(max-width:800px){.faculty-student{grid-template-columns:1fr;}.faculty-grades{min-width:0;}.faculty-nav{padding:10px!important;}.faculty-nav .app-tab{padding:10px 12px!important;}.faculty-modal{padding:10px;}.faculty-modal .cw-discussion-review{grid-template-columns:1fr;}.faculty-modal-body{padding:16px;}.faculty-grade strong{font-size:19px;}}
