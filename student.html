@@ -2092,7 +2092,7 @@ async function saveProfessionalLecturerReview(studentKey,unitId){
   try{await fbRef(`professionalDiscussionReviews/${studentKey}/${PROFESSIONAL_PROGRAM_ID}/${unitId}`).set(payload);dbData.professionalDiscussionReviews=dbData.professionalDiscussionReviews||{};dbData.professionalDiscussionReviews[studentKey]=dbData.professionalDiscussionReviews[studentKey]||{};dbData.professionalDiscussionReviews[studentKey][PROFESSIONAL_PROGRAM_ID]=dbData.professionalDiscussionReviews[studentKey][PROFESSIONAL_PROGRAM_ID]||{};dbData.professionalDiscussionReviews[studentKey][PROFESSIONAL_PROGRAM_ID][unitId]=payload;toast('تم حفظ التقييم والتعليق');}catch(error){console.error(error);toast('تعذر حفظ التقييم');}
 }
 
-function getLecturerSubjects(){
+function getLecturerSubjects(includeHistory=false){
   if(!dbData.subjects) return [];
   const u = currentUser.data;
   const linkedSubjectKeys = new Set((Array.isArray(u.subjects)?u.subjects:[]).filter(value=>typeof value==='string'));
@@ -2115,6 +2115,7 @@ function getLecturerSubjects(){
              myIds.has(s.lecturerUserId?.toLowerCase());
     })
     .map(([k,s])=>({key:k,...s}));
+  if(includeHistory)return allMySubjs;
 
   // عند وجود خطط الدفعات الجديدة لا نعرض المقررات القديمة غير المرتبطة بالخطة.
   const hasStructuredSubjects=Object.values(dbData.subjects||{}).some(s=>s.courseKey);
@@ -2427,6 +2428,7 @@ function renderLecturerRequestsTab(){const requests=getLecturerLeaveRequests(),s
 async function submitLecturerLeaveRequest(){const fromDate=document.getElementById('lecturerLeaveFrom')?.value||'',toDate=document.getElementById('lecturerLeaveTo')?.value||'',reason=document.getElementById('lecturerLeaveReason')?.value.trim()||'';if(!fromDate||!toDate||toDate<fromDate)return toast('يرجى تحديد فترة إجازة صحيحة');const user=firebase.auth().currentUser,key=fbRef('lecturerFollowUps').push().key,payload={type:'lecturer_leave',lecturerUid:user.uid,lecturerKey:currentUser.fbKey||currentUser.data?.username||'',lecturerName:currentUser.data?.name||'',fromDate,toDate,reason,status:'pending',adminNote:'',createdAt:new Date().toISOString(),reviewedAt:'',reviewedBy:''};try{loader(true);await fbRef('lecturerFollowUps/'+key).set(payload);dbData.lecturerFollowUps=dbData.lecturerFollowUps||{};dbData.lecturerFollowUps[key]=payload;toast('✅ تم إرسال طلب الإجازة للإدارة');renderLecturerRequestsTab()}catch(error){console.error(error);toast('⚠️ تعذر إرسال الطلب')}finally{loader(false)}}
 
 function renderLecturerCoursesTab(){
+  return renderFacultyCoursesArchive();
   const { mySubjects, batchMap } = getLecturerAcademicData();
   if(!mySubjects.length){
     document.getElementById('mainContent').innerHTML=`<div class="card"><div class="empty">📚 لا توجد مقررات لعرضها</div></div>`;
@@ -3059,6 +3061,7 @@ window.addEventListener('load', initFB);
 <link rel="stylesheet" href="lecturer-grading.css?v=20261011">
 <script src="lecturer-grading.js?v=20261011"></script>
 <script src="faculty-evaluation.js?v=20261011"></script>
+<script src="faculty-courses.js?v=20261011"></script>
 <link rel="stylesheet" href="faculty-evaluation.css?v=20261011">
 <script src="student-account-live.js?v=20261006-status"></script>
 <script src="lecturer-survey-model.js?v=20261008-student-survey"></script>

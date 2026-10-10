@@ -1,0 +1,3 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');const context=vm.createContext({});vm.runInContext(fs.readFileSync('faculty-courses.js','utf8'),context);
+const result=context.facultyCourseGroups([{key:'old'},{key:'new'},{key:'unknown'}],{old:{startDate:'2026-08-23',endDate:'2026-09-24',subjects:['old']},current:{startDate:'2026-10-04',endDate:'2026-11-05',subjects:['new']}},'2026-10-11');
+assert.equal(result.finished[0].rows[0].key,'old');assert.equal(result.current[0].rows[0].key,'new');assert.equal(result.unclassified[0].rows[0].key,'unknown');assert.equal(result.current[0].start,'2026-10-04');console.log('PASS: current and historical lecturer courses, dates, unclassified history retained.');
