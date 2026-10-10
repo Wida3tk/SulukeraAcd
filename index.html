@@ -7,7 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="academic-policy.js?v=20261006-canonical-courses"></script>
+<script src="academic-policy.js?v=20261011-exception-term"></script>
 <script src="grade-result-policy.js?v=20261008-pending-results"></script>
 <script src="student-account-policy.js?v=20261006-status"></script>
 <script src="productivity-ledger.js?v=20261006-meetings"></script>
@@ -4603,6 +4603,7 @@ async function saveStudentAdminSheetFromProfile(stdIdx){
   const secureClosesLocal=document.getElementById('studentExamException_secureClosesAt')?.value||'';
   const exceptionPayload=exceptionForm?{
     studentKey:st._fbKey,
+    requestedAt:(examExceptionsData[st._fbKey]?.requestedAt||examExceptionsData[st._fbKey]?.createdAt||examExceptionsData[st._fbKey]?.fromDate||examExceptionsData[st._fbKey]?.updatedAt||new Date().toISOString()),
     active:document.getElementById('studentExamException_active')?.value==='true',
     type:document.getElementById('studentExamException_type')?.value||'medical',
     subjectKey,
@@ -6833,7 +6834,7 @@ async function syncEvaluatedExamResults(options={}){
 async function syncStudentExamExceptionToService(student,exception){
   if(!student?._fbKey||currentUser?.role!=='admin') return 0;
   const exams=(await secureAdminExamRequest('/admin/exams')).exams||[];
-  const matching=exams.filter(exam=>sameBatchName(exam.batch,student.batch)&&(!exception.subjectKey||exam.subject_key===exception.subjectKey));
+  const matching=exams.filter(exam=>sameBatchName(exam.batch,student.batch)&&SulukeraAcademicPolicy.exceptionApplies(exception,student,exam.subject_key,semestersData));
   for(const exam of matching){
     // تاريخ العودة تنبيه للإدارة وليس فتحًا تلقائيًا للاختبار.
     // لا يُفتح الاستثناء إلا عند تحديد نافذة آمنة صراحةً من الإدارة.

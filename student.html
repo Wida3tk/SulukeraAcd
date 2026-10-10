@@ -7,7 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="academic-policy.js?v=20261006-canonical-courses"></script>
+<script src="academic-policy.js?v=20261011-exception-term"></script>
 <script src="grade-result-policy.js?v=20261008-pending-results"></script>
 <script src="student-account-policy.js?v=20261006-status"></script>
 <style>
@@ -1685,7 +1685,7 @@ function getNextUpcomingSlot(slots){
 }
 function getStudentExamSchedules(){
   if(!currentUser?.fbKey) return [];
-  const exception=dbData.studentExamExceptions?.[currentUser.fbKey];
+  const exception=getActiveExamException(currentUser.fbKey);
   const blocksExams=exception?.active&&(!exception.secureOpensAt||!exception.secureClosesAt);
   if(blocksExams) return [];
   const student=currentUser.data||{};
@@ -1712,7 +1712,7 @@ function getProfessionalExamPreview(){
 }
 function renderStudentExamsTab(){
   const exams=getStudentExamSchedules();
-  const exception=dbData.studentExamExceptions?.[currentUser.fbKey];
+  const exception=getActiveExamException(currentUser.fbKey);
   const blocksExams=exception?.active&&(!exception.secureOpensAt||!exception.secureClosesAt);
   const studentName=getStudentDisplayName(currentUser.data);
   const professionalOnly=!!getStudentProfessionalContext()&&!Object.values(dbData.enrollments||{}).some(enrollment=>enrollment?.studentKey===currentUser.fbKey),professionalExam=professionalOnly?getProfessionalExamPreview():null;
@@ -2613,7 +2613,7 @@ function getLecturerStudentSortName(studentKey){
 }
 function getActiveExamException(studentKey,subjectKey=''){
   const exception=dbData.studentExamExceptions?.[studentKey];
-  if(!exception?.active) return null;
+  if(!SulukeraAcademicPolicy.exceptionApplies(exception,dbData.students?.[studentKey]||currentUser?.data,subjectKey,dbData.semesters)) return null;
   if(exception.subjectKey&&subjectKey&&exception.subjectKey!==subjectKey) return null;
   return exception;
 }

@@ -51,5 +51,17 @@
     }
     return result;
   }
-  root.SulukeraAcademicPolicy={resolvePlan,semesterLimit,subjectSemester,subjectAllowed,projectStage,hasRecordedGrade,canonicalSubjects};
+  function exceptionApplies(exception,student,subjectKey,semesters={},today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'})){
+    if(!exception?.active)return false;
+    if(exception.subjectKey&&subjectKey&&exception.subjectKey!==subjectKey)return false;
+    if(exception.professionalProgramId)return true;
+    const terms=Object.entries(semesters).filter(([,term])=>(term.batches||[]).some(b=>normalize(b)===normalize(student?.batch)));
+    const date=String(exception.requestedAt||exception.createdAt||exception.fromDate||exception.updatedAt||'').slice(0,10).replace(/\//g,'-');
+    const origin=exception.semesterKey?terms.find(([key])=>key===exception.semesterKey):terms.find(([,term])=>date&&term.startDate&&term.endDate&&term.startDate<=date&&term.endDate>=date);
+    // Legacy unscoped exceptions must not silently follow students into a new term.
+    if(!origin)return false;
+    const target=subjectKey?terms.find(([,term])=>(term.subjects||[]).includes(subjectKey)):terms.find(([,term])=>term.startDate<=today&&term.endDate>=today);
+    return !!target&&target[0]===origin[0];
+  }
+  root.SulukeraAcademicPolicy={resolvePlan,semesterLimit,subjectSemester,subjectAllowed,projectStage,hasRecordedGrade,canonicalSubjects,exceptionApplies};
 })(globalThis);
