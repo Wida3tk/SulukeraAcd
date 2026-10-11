@@ -569,7 +569,7 @@ function cwMergeStudentGrade(grade,subjectKey){
  for(const l of rows){
   const week=`w${l.week}`,hw=l.result?.score??l.recordedGrades?.hw;
   if(hw!=null)merged[`${week}_hw`]=hw;
-  if(l.attendance){const a=l.attendance;const score=a.score??cwAttendancePoints(a.percent,l.attendanceMax,l);if(score!=null)merged[`${week}_attend`]=score;}
+  if(l.attendance){const a=l.attendance;const score=a.score??(l.attendanceMax===3?cwAttendancePoints(a.percent,l.attendanceMax,l):a.percent>=80?l.attendanceMax:null);if(score!=null)merged[`${week}_attend`]=score;}
   if(l.reflection?.score!=null&&hw!=null)merged[`${week}_attend`]=cwRevisedAttendance(l)?Math.max(merged[`${week}_attend`]??0,l.reflection.score):l.reflection.score;
   merged[`${week}_disc`]=l.discussion?.score??l.recordedGrades?.disc??null;
  }
