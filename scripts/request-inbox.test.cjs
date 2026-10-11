@@ -1,0 +1,26 @@
+const assert=require('node:assert/strict'),{chromium}=require('playwright');
+(async()=>{
+ const browser=await chromium.launch({channel:'msedge',headless:true}),page=await browser.newPage({viewport:{width:1250,height:900}});
+ await page.setContent('<html dir="rtl"><body style="font-family:Arial;background:#f3f6fc;padding:20px"><div id="studentRequestsAlertsContent"></div></body></html>');
+ await page.evaluate(()=>{
+  window.isAdminRole=()=>true;window.escapeHtml=v=>String(v||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+  window.getRequestAdminNoteInputId=k=>'request_admin_note_'+k;window.getStudentFullName=s=>s.name;window.getStudentRequestTypeLabel=t=>({leave:'طلب إجازة',academic_support:'دعم أكاديمي',exam_postponement:'تأجيل اختبار'})[t]||'طلب عام';
+  window.students=[{_fbKey:'s',name:'طالبة الاختبار',id:'S1',batch:'Q1'}];window.lecturerLeaveRequestsData=[];
+  window.studentRequestsData=[{_fbKey:'pending',studentKey:'s',type:'academic_support',title:'طلب دعم',status:'pending',createdAt:'2026-10-11'},{_fbKey:'done',studentKey:'s',type:'leave',title:'إجازة سابقة',status:'completed',adminNote:'تعليق خاص',createdAt:'2026-10-10'},{_fbKey:'approved',studentKey:'s',type:'exam_postponement',title:'تأجيل',status:'approved',createdAt:'2026-10-09'},{_fbKey:'draft',studentKey:'s',type:'certificate_request',title:'إفادة',status:'awaiting_stamp',createdAt:'2026-10-08'}];
+  window.renderAlertsPage=()=>{document.getElementById('studentRequestsAlertsContent').innerHTML='<div class="request-board">'+studentRequestsData.map(r=>`<article class="request-card"><header class="request-card-head"><strong>طالبة الاختبار</strong><span>${getStudentRequestTypeLabel(r.type)}</span><span>${r.status}</span></header><div class="request-card-body"><div>${r.title}</div><textarea id="${getRequestAdminNoteInputId(r._fbKey)}">${r.adminNote||''}</textarea></div><footer class="request-card-actions"><button onclick="window.saved=true">الإجراء الأصلي</button></footer></article>`).join('')+'</div>';};
+ });
+ await page.addStyleTag({path:'request-inbox.css'});await page.addScriptTag({path:'request-inbox.js'});await page.evaluate(()=>renderAlertsPage());
+ assert.equal(await page.locator('.request-inbox-group').first().locator('.request-card').count(),2);
+ assert.equal(await page.locator('.request-inbox-group').last().locator('.request-card').count(),2);
+ assert.equal(await page.locator('details[open]').count(),0);
+ assert.equal(await page.locator('[data-inbox-request="done"] textarea').count(),0);
+ assert.equal(await page.locator('[data-inbox-request="done"] .request-card-actions').count(),0);
+ await page.locator('[data-inbox-request="pending"] summary').click();await page.locator('#request_admin_note_pending').fill('ملاحظة جديدة');
+ await page.locator('[data-inbox-request="pending"] button').click();assert(await page.evaluate(()=>saved));
+ await page.locator('[data-request-search]').fill('إجازة');assert.equal(await page.locator('.request-card:visible').count(),1);
+ await page.locator('[data-request-search]').fill('');await page.locator('[data-request-type]').selectOption('exam_postponement');assert.equal(await page.locator('.request-card:visible').count(),1);
+ await page.locator('[data-inbox-request="approved"] summary').click();assert.equal(await page.locator('[data-inbox-request="approved"] button:visible').count(),1);
+ await page.locator('[data-request-type]').selectOption('');await page.screenshot({path:'.tools/request-inbox-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'.tools/request-inbox-mobile.png',fullPage:true});
+ await browser.close();console.log('PASS request grouping, collapsed decisions, preserved pending forms and follow-up actions, search/type filtering, mobile layout');
+})().catch(e=>{console.error(e);process.exitCode=1});
