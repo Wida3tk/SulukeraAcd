@@ -2464,7 +2464,7 @@ function renderLecturerCoursesTab(){
 
 
 function getLecturerGradeReviewRequests(subjectKey='', batchName=''){
-  const lecturerSubjectKeys=new Set(getLecturerSubjects().map(subject=>subject.key));
+  const lecturerSubjectKeys=new Set(getLecturerSubjects(true).map(subject=>subject.key));
   return Object.entries(dbData.studentRequests||{})
     .map(([key,request])=>({key,...request}))
     .filter(request=>request.type==='grade_review'&&request.status==='awaiting_lecturer_review')
@@ -3062,6 +3062,8 @@ window.addEventListener('load', initFB);
 <script src="lecturer-grading.js?v=20261011"></script>
 <script src="faculty-evaluation.js?v=20261011"></script>
 <script src="faculty-courses.js?v=20261011-periods"></script>
+<script src="faculty-pending-grades.js?v=20261011"></script>
+<link rel="stylesheet" href="faculty-pending-grades.css?v=20261011">
 <link rel="stylesheet" href="faculty-evaluation.css?v=20261011">
 <script src="student-account-live.js?v=20261006-status"></script>
 <script src="lecturer-survey-model.js?v=20261008-student-survey"></script>
