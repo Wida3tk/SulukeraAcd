@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261011-exception-term"></script>
-<script src="grade-result-policy.js?v=20261008-pending-results"></script>
+<script src="grade-result-policy.js?v=20261011-unrecorded-cards"></script>
 <script src="student-account-policy.js?v=20261006-status"></script>
 <script src="productivity-ledger.js?v=20261006-meetings"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -4869,6 +4869,7 @@ function renderProfileGrades(stdIdx, mySubjs) {
   return mySubjs.map(subj=>{
     const g=grades[subj.idx]?.[stdIdx]; if(!g) return '';
     const total=calcTotal(g); const display=getGradeDisplay(g); const gr=display.letter;
+    const hasRecordedGrade=hasRecordedCourseGrade(g);
     const examDone=isGradeComplete(g);
     const currentProgress=examDone?total:(courseworkMax?Math.min(100,Math.round((total/courseworkMax)*100)):0);
     return `<div class="subject-grade-card">
@@ -4878,14 +4879,14 @@ function renderProfileGrades(stdIdx, mySubjs) {
       </div>
       <div class="subject-grade-body">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;padding:10px 14px;background:var(--bg);border-radius:var(--radius)">
-          <div style="text-align:center"><div style="font-size:44px;font-weight:800;color:${!examDone?'var(--primary)':total>=settings.gradeA?'#1a7a3c':total>=settings.gradeFail?'var(--primary)':'#c0392b'};line-height:1">${total}</div><div style="font-size:11px;color:var(--text-muted)">${examDone?'من 100':`المجموع الحالي من ${courseworkMax}`}</div></div>
+          <div style="text-align:center"><div style="font-size:${hasRecordedGrade?'44':'20'}px;font-weight:800;color:${!examDone?'var(--primary)':total>=settings.gradeA?'#1a7a3c':total>=settings.gradeFail?'var(--primary)':'#c0392b'};line-height:1">${hasRecordedGrade?total:'لم تُرصد'}</div><div style="font-size:11px;color:var(--text-muted)">${hasRecordedGrade?(examDone?'من 100':`المجموع الحالي من ${courseworkMax}`):'لا توجد درجات مرصودة بعد'}</div></div>
           <div style="flex:1"><div class="progress" style="height:12px;margin-bottom:6px"><div class="progress-fill ${pc(currentProgress)}" style="width:${currentProgress}%"></div></div>${!examDone?'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">النتيجة النهائية لم تُرصد حتى اكتمال جميع الدرجات</div>':''}</div>
         </div>
         <div class="week-breakdown">
-          ${['w1','w2','w3','w4'].map((w,i)=>{const wg=g[w];const wt=(wg.attend||0)+(wg.hw||0)+(wg.disc||0);return `<div class="week-box"><div class="week-box-label">أسبوع ${i+1}</div><div class="week-box-val">${wt}</div><div class="week-box-max">/${wkMax}</div></div>`;}).join('')}
+          ${['w1','w2','w3','w4'].map((w,i)=>{const wt=gradeWeekDisplay(g,w);return `<div class="week-box"><div class="week-box-label">أسبوع ${i+1}</div><div class="week-box-val">${wt}</div><div class="week-box-max">${wt==='لم تُرصد'?'الرصد غير مكتمل':`/${wkMax}`}</div><div style="font-size:10px;color:var(--text-muted);margin-top:6px">حضور: ${gradeFieldDisplay(g,w,'attend')} · واجب: ${gradeFieldDisplay(g,w,'hw')} · مناقشة: ${gradeFieldDisplay(g,w,'disc')}</div></div>`;}).join('')}
         </div>
         <div style="padding:10px 14px;background:${!isGradeComplete(g)?'var(--warn-light)':total>=settings.gradeFail?'var(--success-light)':'var(--danger-light)'};border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
-          <strong>📝 الاختبار النهائي</strong><span style="font-size:22px;font-weight:800">${g.exam??'—'}/${settings.exam}</span>
+          <strong>📝 الاختبار النهائي</strong><span style="font-size:22px;font-weight:800">${isExamEntered(g)?`${g.exam??0}/${settings.exam}`:'لم تُرصد'}</span>
         </div>
         ${canManageAcademicAdmin()?`<div style="margin-top:10px;text-align:left"><button class="btn btn-success btn-sm" onclick="openStudentGradeEditor(${stdIdx},${subj.idx})">✏️ تعديل درجات المقرر</button></div>`:''}
       </div>

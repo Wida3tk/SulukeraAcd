@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261011-exception-term"></script>
-<script src="grade-result-policy.js?v=20261008-pending-results"></script>
+<script src="grade-result-policy.js?v=20261011-unrecorded-cards"></script>
 <script src="student-account-policy.js?v=20261006-status"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
@@ -1451,7 +1451,7 @@ async function renderStudentGradesTab(){
           <div class="subject-card-body">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:0.8rem;padding:8px 12px;background:var(--bg);border-radius:8px;">
               <div>
-                <div style="font-size:32px;font-weight:900;color:${grColor};line-height:1">${total}</div>
+                <div style="font-size:${hasRecordedCourseGrade(g)?'32':'20'}px;font-weight:900;color:${grColor};line-height:1">${hasRecordedCourseGrade(g)?total:'لم تُرصد'}</div>
                 <div style="font-size:10px;color:var(--muted)">${examDone?'من 100':`المجموع الحالي من ${courseworkMax}`}</div>
               </div>
               <div style="flex:1">
