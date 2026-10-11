@@ -2729,6 +2729,7 @@ function renderSummaryTable(subjectKey){
 
 async function saveGrades(){
   const btn=document.getElementById('saveBtn');
+  if(!btn||btn.disabled)return;
   btn.textContent='⏳ جاري الحفظ...'; btn.disabled=true;
 
   try{
@@ -2741,7 +2742,9 @@ async function saveGrades(){
       if(!byStudent[stKey]) byStudent[stKey]={};
       // احفظ الحقل فقط إذا كان فيه قيمة
       if(raw!==''){
-        byStudent[stKey][field]=parseFloat(raw)||0;
+        const value=Number(raw);
+        if(!Number.isFinite(value)||value<0||!inp.checkValidity())throw new Error('أدخل درجة صحيحة ضمن الحد المحدد؛ الصفر مسموح.');
+        byStudent[stKey][field]=value;
         if(/^w[1-4]_(attend|hw|disc)$/.test(field))byStudent[stKey][field+'Entered']=true;
         if(field==='exam') byStudent[stKey].examEntered=true;
       }
@@ -2780,8 +2783,9 @@ async function saveGrades(){
       if(!tx.committed || !tx.snapshot.exists()) throw new Error('لم تؤكد قاعدة البيانات حفظ درجة أحد الطلاب');
       const merged=tx.snapshot.val();
       for(const [field,value] of Object.entries(newFields)){
-        if(field==='examEntered') continue;
-        if(Number(merged[field])!==Number(value)) throw new Error('فشل التحقق من الدرجة المحفوظة');
+        if(field.endsWith('Entered')){
+          if(merged[field]!==true)throw new Error('فشل تأكيد رصد الدرجة المحفوظة');
+        }else if(merged[field]===null||merged[field]===undefined||Number(merged[field])!==value)throw new Error('فشل التحقق من الدرجة المحفوظة');
       }
       if(newFields.exam!==undefined && (!isExamEntered(merged)||Number(merged.exam)!==Number(newFields.exam)))
         throw new Error('فشل التحقق من الاختبار النهائي المحفوظ');
@@ -2802,9 +2806,9 @@ async function saveGrades(){
   }catch(e){
     console.error('saveGrades error:',e);
     toast('❌ خطأ في الحفظ: '+e.message);
+  }finally{
+    btn.textContent='💾 حفظ الدرجات'; btn.disabled=false;
   }
-
-  btn.textContent='💾 حفظ الدرجات'; btn.disabled=false;
 }
 
 
