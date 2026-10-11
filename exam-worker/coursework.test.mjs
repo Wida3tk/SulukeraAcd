@@ -146,11 +146,17 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(80, 5), 5);
   assert.equal(attendanceGrade(97, 5), 5);
   assert.equal(attendanceGrade(0,3),0);
-  assert.equal(attendanceGrade(0.1,3),1);
-  assert.equal(attendanceGrade(49.99,3),1);
-  assert.equal(attendanceGrade(50,3),2);
-  assert.equal(attendanceGrade(79.99,3),2);
+  assert.equal(attendanceGrade(0.1,3),0);
+  assert.equal(attendanceGrade(9.99,3),0);
+  assert.equal(attendanceGrade(10,3),1);
+  assert.equal(attendanceGrade(19.99,3),1);
+  assert.equal(attendanceGrade(20,3),2);
+  assert.equal(attendanceGrade(49.99,3),2);
+  assert.equal(attendanceGrade(50,3),3);
+  assert.equal(attendanceGrade(79.99,3),3);
   assert.equal(attendanceGrade(80,3),3);
+  assert.equal(attendanceGrade(50,3,false),2);
+  assert.equal(attendanceGrade(0.1,3,false),1);
 });
 test("coursework home isolates selected batch and exposes four lecture cards with clear actions", () => {
   const host={innerHTML:''},context={currentUser:{role:'admin'},document:{getElementById:()=>host}};
@@ -285,11 +291,17 @@ test("grade sync preserves other weeks and exam while writing 6/6/3 components",
     assert.equal(grade.w1_hw,6);assert.equal(grade.w1_disc,6);assert.equal(grade.w1_attend,3);
     assert.equal(grade.exam,20);assert.equal(grade.w2_hw,5);assert.equal(writes,3);
     await f.call('admin','/attendance',{lessonId:id,sourceHash:'partial',rows:[{studentKey:'student',percent:60}]});
-    assert.equal(grade.w1_attend,2);
+    assert.equal(grade.w1_attend,3);
+    await assert.rejects(f.call('student','/reflection',{lessonId:id,answers:['أ','ب','ج']}),/REFLECTION_NOT_REQUIRED/);
+    await f.call('admin','/attendance',{lessonId:id,sourceHash:'partial-15',rows:[{studentKey:'student',percent:15}]});
     await f.call('student','/reflection',{lessonId:id,answers:['الأول','الثاني','الثالث']});
     await assert.rejects(f.call('teacher','/review',{lessonId:id,studentKey:'student',score:1.5}),/INVALID_SCORE/);
     await f.call('teacher','/review',{lessonId:id,studentKey:'student',score:1});
     assert.equal(grade.w1_attend,1);
+    grade.w1_hw=4;grade.w1_disc=5;
+    f.sql.prepare("UPDATE coursework_sync SET state='pending',error='attendance-policy-20261011' WHERE lesson_id=?").run(id);
+    await f.call('admin','/sync',{});
+    assert.equal(grade.w1_hw,4);assert.equal(grade.w1_disc,5);assert.equal(grade.w1_attend,1);assert.equal(grade.exam,20);
   }finally{globalThis.fetch=original;}
 });
 test("recorded attendance credit waits for completion of the basic homework without changing live attendance", async () => {
@@ -408,7 +420,7 @@ test("reflection only for attendance below threshold; lecturer reviews and atten
   const input = {
     lessonId: id,
     sourceHash: "hash",
-    rows: [{ studentKey: "student", percent: 57 }],
+    rows: [{ studentKey: "student", percent: 35 }],
   };
   await f.call("admin", "/attendance", input);
   await f.call("admin", "/attendance", input);

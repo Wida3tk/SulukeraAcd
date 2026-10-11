@@ -89,10 +89,11 @@ function cwStudentLessonOpen(l){return l.status==='published'&&Date.now()>=Date.
 function cwStudentLessonCard(l,week){
   if(!l||l.status!=='published')return '<article class="cw-student-lesson cw-student-upcoming"><header><span class="cw-lesson-number">'+String(week).padStart(2,'0')+'</span><span class="cw-status">قريبًا</span></header><h3>المحاضرة '+week+'</h3><p class="cw-muted">ستظهر تفاصيل المحاضرة ومتطلباتها عند إتاحتها.</p></article>';
   const open=cwStudentLessonOpen(l),upcoming=Date.now()<Date.parse(l.opens_at),attendance=l.attendance,reflection=l.reflection,homeworkScore=l.result?.score??l.recordedGrades?.hw;
-  const needsReflection=attendance&&attendance.percent<80,approved=reflection?.score!=null,applied=approved&&!!l.result;
-  const attendanceScore=applied?reflection.score:attendance?(attendance.score??cwAttendancePoints(attendance.percent,l.attendanceMax)):null;
-  const attendanceStatus=applied?'تم احتساب التعويض':!attendance?'بانتظار رصد الحضور':attendance.percent>=80?'تم الحضور':attendance.percent===0?'لم يتم الحضور':'حضور جزئي';
-  const attendanceNote=applied?'تم اعتماد واجب الحضور المسجل واحتساب درجته في الحضور.':!attendance?'ستظهر درجة حضورك بعد اعتماد تقرير المحاضرة.':attendance.percent>=80?'احتُسبت درجة حضورك للقاء المباشر.':approved?'تم اعتماد التعويض؛ أكمل الواجب الأساسي ليتم احتساب درجة حضورك.':reflection?'تم تسليم واجب الحضور المسجل، ودرجته قيد المراجعة لدى المحاضر.':'يرجى مشاهدة المحاضرة بشكل مسجل وحل واجب الحضور المسجل في المربع أدناه، ليتم احتساب درجة حضورك بعد اعتماد المحاضر وإكمال الواجب الأساسي.';
+  const needsReflection=cwNeedsReflection(attendance,l),approved=reflection?.score!=null,applied=approved&&!!l.result;
+  const originalAttendance=attendance?(attendance.score??cwAttendancePoints(attendance.percent,l.attendanceMax,l)):null;
+  const attendanceScore=applied?(cwRevisedAttendance(l)?Math.max(originalAttendance??0,reflection.score):reflection.score):originalAttendance;
+  const attendanceStatus=applied?'تم احتساب التعويض':!attendance?'بانتظار رصد الحضور':!cwNeedsReflection(attendance,l)?'تم الحضور':attendance.percent===0?'لم يتم الحضور':'حضور جزئي';
+  const attendanceNote=applied?'تم اعتماد واجب الحضور المسجل واحتساب درجته في الحضور.':!attendance?'ستظهر درجة حضورك بعد اعتماد تقرير المحاضرة.':!cwNeedsReflection(attendance,l)?'احتُسبت درجة حضورك للقاء المباشر.':approved?'تم اعتماد التعويض؛ أكمل الواجب الأساسي ليتم احتساب درجة حضورك.':reflection?'تم تسليم واجب الحضور المسجل، ودرجته قيد المراجعة لدى المحاضر.':'يرجى مشاهدة المحاضرة بشكل مسجل وحل واجب الحضور المسجل في المربع أدناه، ليتم احتساب درجة حضورك بعد اعتماد المحاضر وإكمال الواجب الأساسي.';
   const hwStatus=homeworkScore!=null?(l.result?'تم تسليم الواجب':'درجة مرصودة يدويًا'):upcoming?'لم يفتح بعد':open?'بانتظار التسليم':'لم يتم التسليم';
   const hwAction=l.result?'<button class="btn-out" onclick="cwViewAnswers(\''+l.id+'\')">الاطلاع على إجاباتي</button>':'';
   const solveAction=homeworkScore>=l.homeworkMax?'<p class="cw-perfect-score">✓ اكتمل الواجب بالدرجة الكاملة</p>':open?'<button class="btn-primary" onclick="cwSolve(\''+l.id+'\')">'+(l.result?'تحسين الدرجة':'حل واجب المحاضرة')+' ←</button>':'<p class="cw-muted">'+(upcoming?'يُتاح الحل في الموعد الموضح أعلاه.':'انتهت فترة تسليم الواجب.')+'</p>';
@@ -100,7 +101,7 @@ function cwStudentLessonCard(l,week){
   const reflectionAction=needsReflection&&!approved&&open?'<button class="btn-primary" onclick="cwReflection(\''+l.id+'\')">'+(reflection?'تعديل واجب الحضور المسجل':'حل واجب الحضور المسجل')+'</button>':'';
   const reflectionNote=approved?(applied?'احتُسبت الدرجة في الحضور.':'أكمل الواجب الأساسي لاحتساب درجة التعويض.'):reflection?'أرسلت إجاباتك بنجاح. تظهر الدرجة بعد اعتماد المحاضر.':needsReflection?(open?'شاهد التسجيل، ثم أجب عن الأسئلة الثلاثة.':upcoming?'يفتح هذا الواجب في موعد إتاحة المحاضرة.':'انتهت فترة التسليم؛ راجع المحاضر إذا احتجت متابعة.'):attendance?'حضورك المباشر مكتمل؛ لا يلزم تسليم هذا الواجب.':'يتحدد هذا المتطلب بعد اعتماد الحضور.';
   return '<article class="cw-student-lesson '+(open?'cw-student-open':'cw-student-upcoming')+'"><header><span class="cw-lesson-number">'+String(week).padStart(2,'0')+'</span><span class="cw-status">'+(open?'متاح الآن':upcoming?'لم يفتح بعد':'انتهى التسليم')+'</span></header><h3>المحاضرة '+week+'</h3><div class="cw-lesson-resources">'+cwLink(l.zoom_url,'دخول اللقاء')+cwLink(l.pdf_url,'ملف المحاضرة')+cwLink(l.recording_url,'مشاهدة التسجيل')+'</div><div class="cw-student-deadline"><span>آخر موعد للتسليم</span><strong>'+cwDate(l.closes_at)+'</strong><small>يفتح الواجب: '+cwDate(l.opens_at)+'</small></div><div class="cw-task-grid">'+
-  '<section class="cw-task-box cw-task-attendance"><div class="cw-task-heading"><span class="cw-task-symbol" aria-hidden="true">◷</span><h4>الحضور</h4></div><span class="cw-task-state '+(applied||attendance?.percent>=80?'cw-state-done':needsReflection?'cw-state-action':'cw-state-wait')+'">'+attendanceStatus+'</span><div class="cw-task-score"><span>درجة الحضور</span><strong>'+(attendanceScore!=null?attendanceScore+'/'+l.attendanceMax:'—')+'</strong></div><p>'+attendanceNote+'</p></section>'+
+  '<section class="cw-task-box cw-task-attendance"><div class="cw-task-heading"><span class="cw-task-symbol" aria-hidden="true">◷</span><h4>الحضور</h4></div><span class="cw-task-state '+(applied||attendance&&!cwNeedsReflection(attendance,l)?'cw-state-done':needsReflection?'cw-state-action':'cw-state-wait')+'">'+attendanceStatus+'</span><div class="cw-task-score"><span>درجة الحضور</span><strong>'+(attendanceScore!=null?attendanceScore+'/'+l.attendanceMax:'—')+'</strong></div><p>'+attendanceNote+'</p></section>'+
   '<section class="cw-task-box cw-task-homework"><div class="cw-task-heading"><span class="cw-task-symbol" aria-hidden="true">✓</span><h4>الواجب الأساسي</h4></div><span class="cw-task-state '+(homeworkScore!=null?'cw-state-done':'cw-state-wait')+'">'+hwStatus+'</span><div class="cw-task-score"><span>درجة الواجب</span><strong>'+(homeworkScore!=null?homeworkScore+'/'+l.homeworkMax:'— / '+l.homeworkMax)+'</strong></div><div class="cw-task-date"><span>تاريخ تسليم الواجب</span><strong>'+(l.result?.submittedAt?cwDate(l.result.submittedAt):homeworkScore!=null?'لا يوجد تسليم إلكتروني':'لم يتم التسليم بعد')+'</strong></div><div class="cw-student-actions">'+hwAction+solveAction+'</div></section>'+
   '<section class="cw-task-box cw-task-reflection"><div class="cw-task-heading"><span class="cw-task-symbol" aria-hidden="true">▷</span><h4>واجب الحضور المسجل</h4></div><span class="cw-task-state '+(approved?'cw-state-done':reflection?'cw-state-wait':needsReflection?'cw-state-action':'cw-state-neutral')+'">'+reflectionStatus+'</span>'+(reflection?'<div class="cw-task-score"><span>درجة التعويض</span><strong>'+(approved?reflection.score+'/'+l.attendanceMax:'قيد المراجعة')+'</strong></div>':'')+'<p>'+reflectionNote+'</p>'+(reflection?.submitted_at?'<div class="cw-task-date"><span>تاريخ التسليم</span><strong>'+cwDate(reflection.submitted_at)+'</strong></div>':'')+'<div class="cw-student-actions">'+(needsReflection?cwLink(l.recording_url,'مشاهدة التسجيل'):'')+reflectionAction+'</div>'+(reflection?.feedback?'<p class="cw-task-feedback">ملاحظة المحاضر: '+cwEscape(reflection.feedback)+'</p>':'')+'</section>'+
   (l.discussionPrompt?'<section class="cw-task-box cw-task-discussion"><div class="cw-task-heading"><span class="cw-task-symbol" aria-hidden="true">≡</span><h4>مناقشة المحاضرة</h4></div>'+cwDiscussionCard(l,open).replace('<span>مناقشة المحاضرة</span>','<span>السؤال وإجابتي</span>')+'</section>':'')+'</div></article>';
@@ -238,7 +239,10 @@ function cwReflection(id) {
     answers = l.reflection ? JSON.parse(l.reflection.answers_json) : [];
   cwHost().innerHTML = `<div class="cw-assignment-page"><header class="cw-assignment-hero cw-recorded-hero"><span>شاهد · تأمل · طبّق</span><h2>واجب الحضور المسجل</h2><p>${cwEscape(l.title)}</p>${cwLink(l.recording_url,'مشاهدة التسجيل')}</header><section class="cw-recorded-intro"><p>أثناء الاستماع إلى محاضرة هذا الأسبوع المسجلة، يرجى إكمال الإجابة على الأسئلة أدناه.<br>يمكنك تقديم الواجب بصيغة نقاط أو في مقالة قصيرة، حسب ما تراه مناسبًا.</p><aside class="cw-recorded-notice"><strong>تنويه مهم:</strong><ul><li><strong>في حال كان حضورك للمحاضرة مسجلًا</strong>، فإن تعبئة هذا النموذج <strong>وإكمال الواجب الأساسي شرط أساسي لاحتساب درجة الحضور.</strong></li><li>عدم تسليم الواجب يعني أن الحضور المسجّل <strong>لن يُحتسب</strong> ضمن درجة الحضور.</li></ul></aside><p class="cw-recorded-deadline">آخر موعد للتسليم: <strong>${cwDate(l.closes_at)}</strong> · بتوقيت السعودية</p></section><div class="cw-question-stack">${CW_REFLECTION_QUESTIONS.map((q,i)=>`<section class="cw-written-card"><span class="cw-question-tag">السؤال ${String(i+1).padStart(2,'0')}</span><label class="cw-question-title" for="cwReflection${i}">${q}</label><textarea id="cwReflection${i}" placeholder="اكتب إجابتك هنا، بصيغة نقاط أو فقرة قصيرة…">${cwEscape(answers[i]||'')}</textarea></section>`).join('')}</div><footer class="cw-assignment-footer"><button class="btn-primary" onclick="cwSendReflection('${id}',this)">تسليم واجب الحضور المسجل ←</button><button class="btn-out" onclick="renderAcademicCoursework()">العودة إلى مقرراتي</button></footer></div>`;
 }
-function cwAttendancePoints(percent,max){return max===3?(percent>=80?3:percent>=50?2:percent>0?1:0):percent>=80?max:0;}
+function cwRevisedAttendance(l){return l.attendanceMax===3&&String(l.opens_at||'').slice(0,10)>='2026-10-04';}
+function cwAttendanceThreshold(l){return cwRevisedAttendance(l)?50:80;}
+function cwNeedsReflection(a,l){return !!a&&(a.score!=null?a.score<l.attendanceMax:a.percent<cwAttendanceThreshold(l));}
+function cwAttendancePoints(percent,max,l){return max===3?(!l||cwRevisedAttendance(l)?(percent>=50?3:percent>=20?2:percent>=10?1:0):(percent>=80?3:percent>=50?2:percent>0?1:0)):percent>=80?max:0;}
 async function cwSendReflection(id, button) {
   try {
     button.disabled = true;
@@ -267,7 +271,7 @@ async function cwOpenReport(id) {
 function cwStudentReportState(s){
   if(s.reflection?.score!=null&&s.result)return 'reviewed';
   if(!s.attendance)return 'unrecorded';
-  return s.attendance.percent>=80?'live':s.attendance.percent>0?'partial':'absent';
+  return !cwNeedsReflection(s.attendance,cwReport?.lesson||{attendanceMax:3})?'live':s.attendance.percent>0?'partial':'absent';
 }
 function cwStudentNeedsAction(s){
   const discussion=cwReport.discussions?.find(d=>d.student_key===s.key);
@@ -297,8 +301,8 @@ function cwReportDiscussionSummary(){
   return `<section class="card cw-discussion-hub"><details class="cw-student-discussion"><summary><span>سؤال مناقشة المحاضرة</span><span class="cw-discussion-label">${cwReport.lesson.discussionMax} درجات</span><span class="cw-fold-arrow">⌄</span></summary><div class="cw-student-discussion-body"><div class="cw-discussion-question"><p>${cwEscape(cwReport.lesson.discussionPrompt||'لم يُضف سؤال المناقشة لهذه المحاضرة بعد.')}</p></div></div></details><div class="cw-discussion-stats"><span>المشاركات المستلمة: <strong>${submissions.length}</strong></span><span>بانتظار التقييم: <strong>${pending}</strong></span><span>تم التقييم: <strong>${submissions.length-pending}</strong></span></div><div class="cw-discussion-hub-actions"><button class="btn-primary" onclick="cwReportFilter='discussions';cwDiscussionPage=1;cwReportOnlyActions=false;cwRenderReport()">عرض إجابات المناقشة</button><button class="btn-out" onclick="cwReportFilter='discussionPending';cwDiscussionPage=1;cwReportOnlyActions=false;cwRenderReport()">مناقشات تحتاج تقييمًا</button></div></section>`;
 }
 function cwReportTotals(s,l,discussion){
-  const original=s.attendance?(s.attendance.score??cwAttendancePoints(s.attendance.percent,l.attendanceMax)):null;
-  const attendance=s.result?(s.reflection?.score??original):original,homework=s.result?.score??s.recordedGrades?.hw??null,disc=discussion?.score??s.recordedGrades?.disc??null;
+  const original=s.attendance?(s.attendance.score??cwAttendancePoints(s.attendance.percent,l.attendanceMax,l)):null;
+  const attendance=s.result&&s.reflection?.score!=null?(cwRevisedAttendance(l)?Math.max(original??0,s.reflection.score):s.reflection.score):original,homework=s.result?.score??s.recordedGrades?.hw??null,disc=discussion?.score??s.recordedGrades?.disc??null;
   return {original,attendance,homework,disc,total:attendance!=null&&homework!=null&&disc!=null?attendance+homework+disc:null};
 }
 function cwReportStudentCard(s,i){
@@ -565,8 +569,8 @@ function cwMergeStudentGrade(grade,subjectKey){
  for(const l of rows){
   const week=`w${l.week}`,hw=l.result?.score??l.recordedGrades?.hw;
   if(hw!=null)merged[`${week}_hw`]=hw;
-  if(l.attendance){const a=l.attendance;const score=a.score??(l.attendanceMax===3?(a.percent>=80?3:a.percent>=50?2:a.percent>0?1:0):a.percent>=80?l.attendanceMax:null);if(score!=null)merged[`${week}_attend`]=score;}
-  if(l.reflection?.score!=null&&hw!=null)merged[`${week}_attend`]=l.reflection.score;
+  if(l.attendance){const a=l.attendance;const score=a.score??cwAttendancePoints(a.percent,l.attendanceMax,l);if(score!=null)merged[`${week}_attend`]=score;}
+  if(l.reflection?.score!=null&&hw!=null)merged[`${week}_attend`]=cwRevisedAttendance(l)?Math.max(merged[`${week}_attend`]??0,l.reflection.score):l.reflection.score;
   merged[`${week}_disc`]=l.discussion?.score??l.recordedGrades?.disc??null;
  }
  return merged;

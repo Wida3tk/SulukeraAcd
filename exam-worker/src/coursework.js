@@ -22,10 +22,11 @@ export function gradeHomework(questions, answers, max) {
   );
   return Math.round((correct / questions.length) * max * 100) / 100;
 }
-export function attendanceGrade(percent, max) {
-  if(max===3)return percent>=80?3:percent>=50?2:percent>0?1:0;
+export function attendanceGrade(percent, max, revised=true) {
+  if(max===3)return revised?(percent>=50?3:percent>=20?2:percent>=10?1:0):(percent>=80?3:percent>=50?2:percent>0?1:0);
   return percent >= 80 ? max : null;
 }
+export function revisedAttendancePolicy(lesson,max){return max===3&&String(lesson.opens_at||'').slice(0,10)>='2026-10-04';}
 function isProfessional(s) {
   return (
     s?.planType === "PROFESSIONAL" ||
@@ -136,7 +137,7 @@ async function serviceFetch(env, ctx, path, options = {}) {
   if (!response.ok) reject(`GRADE_SYNC_READ_${response.status}`, 503);
   return response;
 }
-async function synchronize(env, ctx, l, studentKey, actor) {
+async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false) {
   const now = new Date().toISOString();
   await env.DB.prepare(
     "INSERT INTO coursework_sync VALUES (?,?,'pending',NULL,?) ON CONFLICT(lesson_id,student_key) DO UPDATE SET state='pending',updated_at=excluded.updated_at",
@@ -165,13 +166,13 @@ async function synchronize(env, ctx, l, studentKey, actor) {
       assessment = await assessmentFor(env,l,settings),
       maxAttend = assessment.attendanceMax;
     const fields = {};
-    if (best?.score != null){fields[`w${l.week}_hw`] = best.score;fields[`w${l.week}_hwEntered`]=true;}
+    if (!attendanceOnly&&best?.score != null){fields[`w${l.week}_hw`] = best.score;fields[`w${l.week}_hwEntered`]=true;}
     const discussion = await env.DB.prepare("SELECT score FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,studentKey).first();
-    if(discussion?.score!=null){fields[`w${l.week}_disc`]=discussion.score;fields[`w${l.week}_discEntered`]=true;fields[`w${l.week}_discApproved`]=true;}
+    if(!attendanceOnly&&discussion?.score!=null){fields[`w${l.week}_disc`]=discussion.score;fields[`w${l.week}_discEntered`]=true;fields[`w${l.week}_discApproved`]=true;}
     const attend = attendance
-      ? attendanceGrade(attendance.percent, maxAttend)
+      ? attendanceGrade(attendance.percent, maxAttend,revisedAttendancePolicy(l,maxAttend))
       : null;
-    if (best?.score != null && reflection?.score != null) fields[`w${l.week}_attend`]=reflection.score;
+    if (best?.score != null && reflection?.score != null) fields[`w${l.week}_attend`]=revisedAttendancePolicy(l,maxAttend)?Math.max(attend??0,reflection.score):reflection.score;
     else if (attend != null) fields[`w${l.week}_attend`]=attend;
     else if (attendance) fields[`w${l.week}_attend`] = null;
     if(fields[`w${l.week}_attend`]!=null)fields[`w${l.week}_attendEntered`]=true;
@@ -223,7 +224,7 @@ async function synchronize(env, ctx, l, studentKey, actor) {
     await env.DB.prepare(
       "UPDATE coursework_sync SET state='pending',error=?,updated_at=? WHERE lesson_id=? AND student_key=?",
     )
-      .bind(error.message + ":" + (()=>{try{return JSON.parse(env.FIREBASE_SERVICE_ACCOUNT).client_email||"unknown"}catch{return "unknown"}})(), now, l.id, studentKey)
+      .bind((attendanceOnly?'attendance-policy-20261011:':'')+error.message + ":" + (()=>{try{return JSON.parse(env.FIREBASE_SERVICE_ACCOUNT).client_email||"unknown"}catch{return "unknown"}})(), now, l.id, studentKey)
       .run();
     return false;
   }
@@ -484,7 +485,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
         .bind(l.id, key)
         .first();
     const a=recordedAttendance||attendanceFromGrades(l,key,await scopedGrades(s,auth,ctx),(await assessmentFor(env,l,s.settings)).attendanceMax);
-    if (!a || a.percent >= 80) reject("REFLECTION_NOT_REQUIRED", 403);
+    const max=(await assessmentFor(env,l,s.settings)).attendanceMax;
+    if (!a || (a.source==='firebase_grade'?a.score>=max:a.percent >= (revisedAttendancePolicy(l,max)?50:80))) reject("REFLECTION_NOT_REQUIRED", 403);
     if (
       l.status !== "published" ||
       Date.now() < Date.parse(l.opens_at) ||
@@ -716,7 +718,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       if (
         l &&
         s.allowed.includes(l.subject_key) &&
-        (await synchronize(env, ctx, l, row.student_key, auth.uid))
+        (await synchronize(env, ctx, l, row.student_key, auth.uid,String(row.error||'').startsWith('attendance-policy-20261011')))
       )
         synced++;
     }
@@ -730,7 +732,7 @@ export async function retryPendingCoursework(env,ctx){
  let synced=0;
  for(const row of rows){
   const lesson=await env.DB.prepare("SELECT * FROM course_lessons WHERE id=?").bind(row.lesson_id).first();
-  if(lesson&&await synchronize(env,ctx,lesson,row.student_key,'automatic-coursework-sync'))synced++;
+  if(lesson&&await synchronize(env,ctx,lesson,row.student_key,'automatic-coursework-sync',String(row.error||'').startsWith('attendance-policy-20261011')))synced++;
  }
  return {attempted:rows.length,synced};
 }
