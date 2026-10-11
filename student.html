@@ -2666,7 +2666,7 @@ function renderWeekTable(w){
         <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong>${getActiveExamException(st.fbKey,currentSubjectKey)?'<div><span class="badge badge-warn" style="margin-top:4px">استثناء اختبار</span></div>':''}</td>
         <td class="mono">${st.id}</td>
         <td><input class="grade-input" type="number" min="0" max="${settings.exam}"
-          value="${g?.exam??''}" data-stkey="${st.fbKey}" data-field="exam"></td>
+          value="${isExamEntered(g)?(g.exam??0):''}" placeholder="لم تُرصد" data-stkey="${st.fbKey}" data-field="exam"></td>
         <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
         <td><span class="badge badge-${display.className}">${gr}</span></td>
         <td><span class="badge ${!isGradeComplete(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
@@ -2684,11 +2684,11 @@ function renderWeekTable(w){
         <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong>${getActiveExamException(st.fbKey,currentSubjectKey)?'<div><span class="badge badge-warn" style="margin-top:4px">استثناء اختبار</span></div>':''}</td>
         <td class="mono">${st.id}</td>
         <td><input class="grade-input" type="number" min="0" max="${settings.attend}"
-          value="${wa||''}" data-stkey="${st.fbKey}" data-field="w${w}_attend"></td>
+          value="${isCourseworkFieldEntered(g,'w'+w,'attend')?wa:''}" placeholder="لم تُرصد" data-stkey="${st.fbKey}" data-field="w${w}_attend"></td>
         <td><input class="grade-input" type="number" min="0" max="${settings.hw}"
-          value="${wh||''}" data-stkey="${st.fbKey}" data-field="w${w}_hw"></td>
+          value="${isCourseworkFieldEntered(g,'w'+w,'hw')?wh:''}" placeholder="لم تُرصد" data-stkey="${st.fbKey}" data-field="w${w}_hw"></td>
         <td><input class="grade-input" type="number" min="0" max="${settings.disc}"
-          value="${wd||''}" data-stkey="${st.fbKey}" data-field="w${w}_disc"></td>
+          value="${isCourseworkFieldEntered(g,'w'+w,'disc')?wd:''}" placeholder="لم تُرصد" data-stkey="${st.fbKey}" data-field="w${w}_disc"></td>
         <td>${wt}/${wkMax}</td><td>${tot}/100</td>
       </tr>`;
     }).join('');
