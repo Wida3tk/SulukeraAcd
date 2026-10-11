@@ -1,0 +1,16 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync('professional-attendance-history.js','utf8');
+const context={renderProfessionalAttendanceImporter:()=>'',approveProfessionalAttendance:()=>{}};vm.createContext(context);vm.runInContext(source,context);
+const session={attendanceSourceHash:'bad',attendancePercent:90,attended:true,percent:85,examPassed:true};
+const record={unitId:'u',sessionKey:'session_4',meetingStart:'2026-10-01T10:00:00Z',meetingEnd:'2026-10-01T12:00:00Z'};
+const root={professionalPrograms:{obm:{attendanceImports:{bad:record}}},professionalProgress:{a:{obm:{units:{u:{sessions:{session_4:session,session_3:{attendancePercent:100}}}}}},b:{obm:{units:{u:{sessions:{session_4:{attendanceSourceHash:'newer',attendancePercent:70}}}}}}},lecturerProductivity:{'2026-10':{teacher:{meetings:{m:{programId:'obm',sourceHash:'bad',startsAt:record.meetingStart,endsAt:record.meetingEnd}}}}}};
+const run=()=>context.professionalAttendanceRemovalPlan(root,'bad','obm','admin','2026-10-11T10:00:00Z');
+let p=run();assert.equal(p.count,1);assert.equal(p.updates['professionalProgress/a/obm/units/u/attendancePercent'],20);
+assert.equal(p.updates['professionalProgress/a/obm/units/u/sessions/session_4/attendancePercent'],null);
+assert(!Object.keys(p.updates).some(k=>k.includes('/b/')||k.endsWith('/percent')||k.endsWith('/examPassed')));
+assert.equal(p.updates['lecturerProductivity/2026-10/teacher/meetings/m'],null);
+assert(Object.keys(p.updates).some(k=>k.includes('/attendanceImportArchive/')));
+root.professionalPrograms.obm.attendanceImports.good={...record,sessionKey:'session_3'};
+p=run();assert(!Object.keys(p.updates).some(k=>k.startsWith('lecturerProductivity/')));
+assert.throws(()=>context.professionalAttendanceRemovalPlan(root,'missing','obm','admin','2026-10-11T10:00:00Z'));
+console.log('PASS archive, owned attendance removal, aggregate recalculation, learning preservation, newer import preservation, shared productivity preservation');
