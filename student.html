@@ -2742,6 +2742,7 @@ async function saveGrades(){
       // احفظ الحقل فقط إذا كان فيه قيمة
       if(raw!==''){
         byStudent[stKey][field]=parseFloat(raw)||0;
+        if(/^w[1-4]_(attend|hw|disc)$/.test(field))byStudent[stKey][field+'Entered']=true;
         if(field==='exam') byStudent[stKey].examEntered=true;
       }
     });
@@ -2761,6 +2762,7 @@ async function saveGrades(){
       const tx=await fbRef('grades/'+gradeKey).transaction(current=>{
         const existing=current||fallback;
         return {
+          ...existing,
           studentKey:stKey,
           subjectKey:currentSubjectKey,
           w1_attend:existing.w1_attend||0, w1_hw:existing.w1_hw||0, w1_disc:existing.w1_disc||0,
@@ -3062,7 +3064,8 @@ window.addEventListener('load', initFB);
 <script src="lecturer-grading.js?v=20261011"></script>
 <script src="faculty-evaluation.js?v=20261011"></script>
 <script src="faculty-courses.js?v=20261011-periods"></script>
-<script src="faculty-pending-grades.js?v=20261011"></script>
+<script src="faculty-pending-grades.js?v=20261011-archive"></script>
+<script src="faculty-grading-archive.js?v=20261011"></script>
 <link rel="stylesheet" href="faculty-pending-grades.css?v=20261011">
 <link rel="stylesheet" href="faculty-evaluation.css?v=20261011">
 <script src="student-account-live.js?v=20261006-status"></script>

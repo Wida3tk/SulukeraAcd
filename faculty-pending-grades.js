@@ -31,8 +31,5 @@ renderLecturerHomeTab=function(){
 function facultyOpenPastGrades(encodedKey){
  const key=decodeURIComponent(encodedKey),alert=facultyPreviousGradeAlerts().find(a=>a.subject.key===key);
  if(!alert||currentUser?.role!=='lecturer'){toast('تمت معالجة التنبيه أو لم يعد المقرر متاحًا.');renderLecturerHomeTab();return;}
- currentAppTab='grades';document.querySelectorAll('.app-tab').forEach(b=>b.classList.toggle('active',b===getAppTabButtonById('grades')));
- currentSubjectKey=key;currentBatchName=null;
- document.getElementById('mainContent').innerHTML=`<section class="card"><div class="card-title">استكمال رصد الفصل السابق — ${cwEscape(alert.subject.name)}</div><p>انتهى الفصل بتاريخ <b dir="ltr">${cwEscape(alert.term.endDate)}</b>. يمكنك رصد البنود الناقصة ومعالجة طلبات المراجعة أدناه.</p><button class="btn-out" onclick="switchAppTab('home',getAppTabButtonById('home'))">العودة إلى الرئيسية</button></section><div id="lecSubjContent"></div>`;
- renderGradeInput(key,null);
+ facultyOpenArchivedGrade(key);
 }
