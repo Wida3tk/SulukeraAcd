@@ -3,8 +3,13 @@ const context={console,Date,Set,Number,users:[{_fbKey:'l1',username:'lecturer',r
 context.isExamEntered=g=>g?.examEntered===true||Number(g?.exam)>0;
 vm.createContext(context);vm.runInContext(fs.readFileSync('grade-result-policy.js','utf8'),context);vm.runInContext(fs.readFileSync('lecturer-performance.js','utf8'),context);
 vm.runInContext(`lpExtra={lessons:[{subject_key:'new',week:1,status:'published',opens_at:'2020-01-01',closes_at:'2020-01-02'},{subject_key:'new',week:2,status:'published',opens_at:'2099-01-01',closes_at:'2099-01-02'}],reviews:[]}`,context);
-const rows=vm.runInContext('lpRows()',context);assert.equal(rows.length,1);assert.equal(rows[0].students,2);assert.equal(rows[0].total,29);assert.equal(rows[0].graded,1);assert.equal(rows[0].remaining,28);assert.equal(rows[0].overdue,28);assert.equal(rows[0].last,undefined);
-vm.runInContext("lpMode='current'",context);const current=vm.runInContext('lpRows()[0]',context);assert.equal(current.total,3);assert.equal(current.courses.length,1);
-vm.runInContext("lpMode='finished'",context);assert.equal(vm.runInContext('lpRows()[0].total',context),26);
+const rows=vm.runInContext('lpRows()',context);assert.equal(rows.length,1);assert.equal(rows[0].students,2);assert.equal(rows[0].total,3);assert.equal(rows[0].graded,0);assert.equal(rows[0].remaining,3);assert.equal(rows[0].overdue,3);assert.equal(rows[0].last,undefined);
+vm.runInContext("lpMode='current'",context);const current=vm.runInContext('lpRows()[0]',context);assert.equal(current.total,1);assert.equal(current.courses.length,1);
+assert.equal(current.remaining,1); // Three missing components are one student record.
+vm.runInContext("lpMode='finished'",context);assert.equal(vm.runInContext('lpRows()[0].total',context),2);
+const eighty=vm.runInContext('lpRecordCount(Array.from({length:80},()=>({total:13,remaining:13,overdue:13})))',context);
+assert.equal(eighty.remaining,80);assert.equal(eighty.overdue,80);assert.equal(eighty.total,80);
+vm.runInContext('grades[1]={0:{w1_attend:0,w1_attendEntered:true,w1_hw:0,w1_hwEntered:true,w1_disc:0,w1_discEntered:true}};lpMode="current"',context);
+assert.equal(vm.runInContext('lpRows()[0].graded',context),1);assert.equal(vm.runInContext('lpRows()[0].remaining',context),0);
 assert.equal(vm.runInContext("lpDate('invalid')",context),'غير متوفرة');
 console.log('Lecturer performance: explicit zero, future lessons, unique students, attribution and term filters passed.');
