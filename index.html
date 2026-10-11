@@ -385,7 +385,8 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
       </div>
 
       <!-- LECTURER PRODUCTIVITY (ADMIN ONLY) -->
-      <div class="page" id="page-performance"><div id="performanceContent"></div></div>
+  <div class="page" id="page-performance"><div id="performanceContent"></div></div>
+  <div class="page" id="page-lecturerperformance"><div id="lecturerPerformanceContent"></div></div>
       <div class="page" id="page-revenue"><div id="revenueContent"></div></div>
       <div class="page" id="page-productivity"><div id="lecturerProductivityContent"></div></div>
 
@@ -2667,6 +2668,7 @@ const EXAM_API_BASE='https://sulukera-exams.ro7e-entaa.workers.dev';
 const adminNavGroups=[
   {id:'followup',icon:'🔎',label:'الرئيسية والمتابعة',items:[
     {id:'performance',icon:'📊',label:'الأداء والتقدم'},
+    {id:'lecturerperformance',icon:'🎯',label:'أداء المحاضرين'},
     {id:'revenue',icon:'💰',label:'الإيرادات وأهداف المنتجات'},
     {id:'alerts',icon:'🔔',label:'الطلبات والتنبيهات'},
     {id:'academicadvisor',icon:'🧭',label:'المرشد الأكاديمي'},
@@ -2735,6 +2737,7 @@ function updateStudentRequestsNavBadge(){
   if(count) item.insertAdjacentHTML('beforeend',`<span class="nav-count-badge" id="studentRequestsNavBadge">${count}</span>`);
 }
 const pageTitles={
+  lecturerperformance:'أداء المحاضرين',
   revenue:'الإيرادات وأهداف المنتجات',
   coursework:'المحاضرات والواجبات',
   performance:'الأداء والتقدم',dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
@@ -2777,6 +2780,7 @@ function renderTopbarActions(pageId) {
 function refreshPage(p) {
   if (p==='revenue') renderRevenue();
   if (p==='performance') renderPerformance();
+  if (p==='lecturerperformance') renderLecturerPerformance();
   if (p==='dashboard') renderDashboard();
   if (p==='productivity') renderLecturerProductivity();
   if (p==='subjects') renderSubjectsTable();
@@ -8709,6 +8713,8 @@ async function cleanDuplicateStudents(){
 <script src="coursework-ui.js?v=20261011-attendance-bands-2"></script>
 <script src="student-status-ui.js?v=20261006-status"></script>
 <script src="performance.js?v=20261006-meetings"></script>
+<link rel="stylesheet" href="lecturer-performance.css?v=20261011">
+<script src="lecturer-performance.js?v=20261011"></script>
 <script src="performance-review.js?v=20261008-survey"></script>
 <script src="performance-obm.js?v=20261007-obm-count-correction"></script>
 <script src="performance-aba-recorded.js?v=20261007-aba-recorded-graduates"></script>

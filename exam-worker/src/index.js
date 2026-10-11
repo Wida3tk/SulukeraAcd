@@ -1085,6 +1085,24 @@ export default {
       if (path === "/health")
         return reply(request, { ok: true, service: "sulukera-exams" });
       const auth = await authenticate(request);
+      if(path==='/admin/lecturer-performance' && request.method==='GET'){
+        requireRole(auth,'admin');
+        const profiles=await firebaseRead('users',auth.token);
+        const lecturers=Object.entries(profiles||{}).filter(([,u])=>u.role==='lecturer');
+        const ids=lecturers.map(([key,u])=>u.authUid||key);
+        let logins={},loginAvailable=true;
+        try{
+          const token=await firebaseAdminToken(env);
+          for(let offset=0;offset<ids.length;offset+=100){
+            const response=await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({localId:ids.slice(offset,offset+100)})});
+            if(!response.ok)throw Error('AUTH_LOOKUP_FAILED');
+            for(const user of (await response.json()).users||[])if(Number(user.lastLoginAt)>0)logins[user.localId]=new Date(Number(user.lastLoginAt)).toISOString();
+          }
+        }catch{loginAvailable=false;}
+        const lessons=(await env.DB.prepare('SELECT id,subject_key,week,opens_at,closes_at,status FROM course_lessons').all()).results;
+        const reviews=(await env.DB.prepare("SELECT d.lesson_id,d.student_key,d.reviewed_by,d.reviewed_at,d.score,'discussion' AS kind,l.subject_key,l.week FROM academic_discussions d JOIN course_lessons l ON l.id=d.lesson_id WHERE d.reviewed_at IS NOT NULL UNION ALL SELECT r.lesson_id,r.student_key,r.reviewed_by,r.reviewed_at,r.score,'reflection' AS kind,l.subject_key,l.week FROM attendance_reflections r JOIN course_lessons l ON l.id=r.lesson_id WHERE r.reviewed_at IS NOT NULL ORDER BY reviewed_at DESC").all()).results;
+        const response=reply(request,{logins,loginAvailable,lessons,reviews});response.headers.set('Cache-Control','private, no-store');return response;
+      }
       const lecturerSurvey=await handleLecturerSurvey(request,env,auth,path,{firebaseRead});
       if(lecturerSurvey){const response=reply(request,lecturerSurvey.data);response.headers.set('Cache-Control','private, no-store');return response;}
       const revenue=await handleRevenue(request,env,auth,path);
