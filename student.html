@@ -929,7 +929,7 @@ function stopProfessionalLiveUpdates(){
 //  STUDENT VIEW
 // ══════════════════════════════════════════════
 function showStudentView(){
-  document.getElementById('appTabs').classList.remove('faculty-nav');
+  document.getElementById('appTabs').classList.add('faculty-nav');
   if(!SulukeraStudentAccount.isActive(currentUser?.data)){disableInactiveStudent();return;}
   startStudentAccountLiveUpdates();
   document.getElementById('loginScreen').style.display='none';
