@@ -1,5 +1,12 @@
 /* Presentation only: retain the existing request handlers and their form IDs. */
 function requestInboxResolved(status){return ['approved','completed','rejected','issued'].includes(status);}
+function requestInboxAge(createdAt,now=Date.now()){
+  if(!createdAt)return {days:null,level:'unknown',label:'تاريخ الرفع غير متوفر'};
+  const text=String(createdAt),stamp=Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)?text:`${text}${text.length===10?'T00:00:00':''}+03:00`);
+  if(!Number.isFinite(stamp))return {days:null,level:'unknown',label:'تاريخ الرفع غير متوفر'};
+  const days=Math.floor(Math.max(0,now-stamp)/86400000),level=days>=7?'urgent':days>=3?'delayed':'normal';
+  return {days,level,label:days===0?'منذ رفع الطلب: أقل من يوم':`منذ رفع الطلب: ${days} يوم${level==='urgent'?' · أولوية عالية':level==='delayed'?' · يحتاج متابعة':''}`};
+}
 function requestInboxFilter(){
   const host=document.getElementById('studentRequestsAlertsContent');if(!host)return;
   const search=(host.querySelector('[data-request-search]')?.value||'').trim().toLowerCase();
@@ -24,6 +31,7 @@ function organizeRequestInbox(){
     const head=card.querySelector('.request-card-head'),body=card.querySelector('.request-card-body'),actions=card.querySelector('.request-card-actions');
     const detail=document.createElement('details');detail.className='request-inbox-detail';
     const summary=document.createElement('summary');summary.append(head);
+    if(!resolved){const age=requestInboxAge(request.createdAt);const badge=document.createElement('span');badge.className=`request-inbox-age request-inbox-age-${age.level}`;badge.textContent=age.label;summary.append(badge);card.classList.add(`request-inbox-age-card-${age.level}`);}
     const brief=document.createElement('div');brief.className='request-inbox-brief';brief.textContent=request.title||request.reason||request.details||getStudentRequestTypeLabel(request.type);summary.append(brief);
     const hint=document.createElement('span');hint.className='request-inbox-hint';hint.textContent=resolved?'عرض الطلب والقرار والتعليق':'فتح الطلب لاتخاذ الإجراء';summary.append(hint);
     detail.append(summary);if(body)detail.append(body);
@@ -44,7 +52,7 @@ function organizeRequestInbox(){
   for(const [title,group,resolved] of [['طلبات معلقة — تحتاج إجراء',pending,false],['طلبات تم الرد عليها',done,true]]){
     const section=document.createElement('section');section.className='request-inbox-group';section.innerHTML=`<h3>${title} <span data-visible-count>${group.length}</span></h3><p class="request-inbox-empty" ${group.length?'hidden':''}>لا توجد طلبات في هذه القائمة.</p>`;
     const board=document.createElement('div');board.className='request-inbox-list';
-    group.sort((a,b)=>String(resolved?b.request.reviewedAt||b.request.createdAt:b.request.createdAt).localeCompare(String(resolved?a.request.reviewedAt||a.request.createdAt:a.request.createdAt))).forEach(i=>board.append(i.card));
+    group.sort((a,b)=>resolved?String(b.request.reviewedAt||b.request.createdAt||'').localeCompare(String(a.request.reviewedAt||a.request.createdAt||'')):(requestInboxAge(b.request.createdAt).days??-1)-(requestInboxAge(a.request.createdAt).days??-1)||String(a.request.createdAt||'').localeCompare(String(b.request.createdAt||''))).forEach(i=>board.append(i.card));
     section.append(board);shell.append(section);
   }
   host.replaceChildren(shell);
