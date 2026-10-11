@@ -51,3 +51,16 @@
 .cw-task-grid{align-items:start}.cw-task-score strong{direction:ltr;unicode-bidi:isolate}
 
 .cw-task-box button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid #cbd9ee}.cw-task-box .btn-primary{background:#1244f3;color:white;border-color:#1244f3;font-weight:600}.cw-task-box .btn-out{background:white;color:#244b8c}
+
+/* Shared coursework actions, including not-yet-prepared lecture cards. */
+:is(#academicCourseworkContent,.cw-report-shell) :is(button,a):is(.btn-primary,.btn-out){box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:11px 20px;border:1px solid transparent;border-radius:12px;font-family:inherit;font-size:13px;font-weight:700;line-height:1.6;text-decoration:none;cursor:pointer;transition:background .18s,box-shadow .18s,transform .18s,border-color .18s}
+:is(#academicCourseworkContent,.cw-report-shell) .btn-primary{background:linear-gradient(135deg,#1954ff,#123dea);color:#fff;border-color:#1849eb;box-shadow:0 4px 12px #1749ef20}
+:is(#academicCourseworkContent,.cw-report-shell) .btn-out{background:#fff;color:#244b8c;border-color:#d7e2f6;box-shadow:0 2px 6px #102a6006}
+:is(#academicCourseworkContent,.cw-report-shell) .btn-primary:not(:disabled):hover{background:linear-gradient(135deg,#1246eb,#1032c7);box-shadow:0 6px 16px #1749ef30;transform:translateY(-1px)}
+:is(#academicCourseworkContent,.cw-report-shell) .btn-out:not(:disabled):hover{background:#edf3ff;border-color:#a9bff1;transform:translateY(-1px)}
+:is(#academicCourseworkContent,.cw-report-shell) :is(.btn-primary,.btn-out):not(:disabled):active{transform:translateY(0);box-shadow:none}
+:is(#academicCourseworkContent,.cw-report-shell) :is(.btn-primary,.btn-out):focus-visible{outline:3px solid #8fafff;outline-offset:3px}
+:is(#academicCourseworkContent,.cw-report-shell) button:disabled{cursor:not-allowed;opacity:.6;box-shadow:none}
+.cw-lesson-card>.btn-primary{width:100%;margin-top:auto}
+.cw-home-footer .btn-out{flex-shrink:0}
+@media(prefers-reduced-motion:reduce){:is(#academicCourseworkContent,.cw-report-shell) :is(.btn-primary,.btn-out){transition:none;transform:none!important}}
