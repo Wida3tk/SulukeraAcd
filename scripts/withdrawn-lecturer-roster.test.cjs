@@ -1,0 +1,11 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+require('../student-account-policy.js');const policy=global.SulukeraStudentAccount;
+const students={active:{id:'S1',accountStatus:'active'},withdrawn:{accountStatus:'withdrawn'},sheet:{accountStatus:'active'},account:{accountStatus:'active'},legacy:{accountStatus:'إنسحاب'},frozen:{accountStatus:'frozen'}};
+const dbData={students,subjects:{course:{}},enrollments:Object.fromEntries(Object.keys(students).map(k=>[k,{studentKey:k,subjectKey:'course'}])),users:{u:{role:'student',studentKey:'account',accountStatus:'withdrawn'}},studentAdminSheets:{s:{studentKey:'sheet',traineeStatus:'انسحاب'}},professionalEnrollments:{},grades:{history:{studentKey:'withdrawn',exam:40,w1_hw:6}}};
+const before=JSON.stringify(dbData),html=fs.readFileSync('student.html','utf8'),start=html.indexOf('function getSubjectStudents('),end=html.indexOf('\nfunction ',start+1);
+const context={dbData,SulukeraStudentAccount:policy,normalizeBatchName:v=>v,isStudentEligibleForSubject:()=>true};vm.createContext(context);vm.runInContext(html.slice(start,end),context);
+assert.deepEqual(Array.from(context.getSubjectStudents('course'),s=>s.fbKey),['active']);
+assert.equal(JSON.stringify(dbData),before);assert.equal(dbData.grades.history.exam,40);
+for(const state of ['withdrawn','withdraw','withdrawal','منسحب','انسحاب','إنسحاب'])assert.equal(policy.status(state),'withdrawn');
+assert.equal(policy.isActiveInRoot('missing',dbData),false);
+console.log('PASS lecturer roster excludes withdrawal from student, account, administrative sheet and legacy labels; inactive students excluded; grade history unchanged');

@@ -558,6 +558,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     const b = await json(request),
       l = await lessonFor(env, b.lessonId, s),
       enrollments = await ctx.firebaseRead("enrollments", auth.token),
+      statusSources = s.role==='lecturer'?await Promise.all(['users','studentAdminSheets','professionalEnrollments'].map(p=>ctx.firebaseRead(p,auth.token))):[],
+      rosterData = {students:s.students,users:statusSources[0]||{},studentAdminSheets:statusSources[1]||{},professionalEnrollments:statusSources[2]||{}},
       keys = [
         ...new Set(
           Object.values(enrollments || {})
@@ -565,7 +567,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
               (e) =>
                 e.subjectKey === l.subject_key &&
                 s.students[e.studentKey] &&
-                SulukeraStudentAccount.isActive(s.students[e.studentKey]),
+                (s.role==='lecturer'?SulukeraStudentAccount.isActiveInRoot(e.studentKey,rosterData):SulukeraStudentAccount.isActive(s.students[e.studentKey])),
             )
             .map((e) => e.studentKey),
         ),

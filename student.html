@@ -9,7 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261011-exception-term"></script>
 <script src="grade-result-policy.js?v=20261011-unrecorded-cards"></script>
-<script src="student-account-policy.js?v=20261006-status"></script>
+<script src="student-account-policy.js?v=20261012-withdrawn-roster"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root{
@@ -2210,7 +2210,7 @@ function getSubjectStudents(subjectFbKey){
   const addStudent=(studentKey)=>{
     const student=dbData.students?.[studentKey];
     if(subject?.excludedStudents?.[studentKey]) return;
-    if(student && SulukeraStudentAccount.isActive(student) && !result.find(r=>r.fbKey===studentKey))
+    if(student && SulukeraStudentAccount.isActiveInRoot(studentKey,dbData) && !result.find(r=>r.fbKey===studentKey))
       result.push({fbKey:studentKey,...student});
   };
 

@@ -1,7 +1,7 @@
 /* One account state, shared by administration, student portal and API. */
 (function(root){
   const labels={active:'نشط',suspended:'موقوف',frozen:'مجمّد',withdrawn:'منسحب'};
-  function status(value){const raw=typeof value==='object'?value?.accountStatus:value;return ({paused:'suspended',inactive:'suspended',stopped:'suspended',freeze:'frozen',منسحب:'withdrawn',موقوف:'suspended',مجمد:'frozen'})[raw]||(Object.hasOwn(labels,raw)?raw:'active');}
+  function status(value){const raw=String((typeof value==='object'?value?.accountStatus:value)||'').trim().toLowerCase();return ({paused:'suspended',inactive:'suspended',stopped:'suspended',freeze:'frozen',withdrawal:'withdrawn',withdraw:'withdrawn',انسحاب:'withdrawn',إنسحاب:'withdrawn',منسحب:'withdrawn',موقوف:'suspended',مجمد:'frozen'})[raw]||(Object.hasOwn(labels,raw)?raw:'active');}
   function isActive(value){return status(value)==='active';}
   function label(value){return labels[status(value)];}
   function matches(value,filter){return !filter||filter==='all'||(filter==='inactive'?!isActive(value):status(value)===filter);}
@@ -24,5 +24,6 @@
     }
     return out;
   }
-  root.SulukeraStudentAccount={status,isActive,label,matches,linked,resolve,updates,labels,sheetStatus};
+  function isActiveInRoot(key,data){const student=data.students?.[key];if(!student)return false;const accounts=Object.values(data.users||{}).filter(u=>linked(u,student,key)),sheets=Object.values(data.studentAdminSheets||{}).filter(s=>s.studentKey===key);return resolve(student,data.professionalEnrollments?.[key]||{},accounts,sheets)==='active'&&isActive(student.traineeStatus)&&isActive(student.status);}
+  root.SulukeraStudentAccount={status,isActive,isActiveInRoot,label,matches,linked,resolve,updates,labels,sheetStatus};
 })(globalThis);
