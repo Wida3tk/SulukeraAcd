@@ -1,0 +1,15 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync('student.html','utf8');
+const start=html.indexOf('function studentExamNeedsEvaluation('),end=html.indexOf('\nfunction closeStudentEvaluationReminder',start);
+const context={Date};vm.createContext(context);vm.runInContext(html.slice(start,end),context);
+const now=Date.parse('2026-10-12T12:00:00Z');
+const exam={maxAttempts:2,evaluated:false,closesAt:'2026-10-13T12:00:00Z',attempts:[{status:'submitted',wrongCount:3}]};
+const eligible=changes=>context.studentExamNeedsEvaluation({...exam,...changes},now);
+assert.equal(eligible({}),false,'remaining attempt during open exam');
+assert.equal(eligible({closesAt:'2026-10-11T12:00:00Z'}),true,'one submitted attempt after deadline');
+assert.equal(eligible({attempts:[...exam.attempts,{status:'submitted',wrongCount:2}]}),true,'attempts exhausted');
+assert.equal(eligible({attempts:[{status:'submitted',wrongCount:0}]}),true,'perfect attempt');
+assert.equal(eligible({attempts:[]}),false,'no submitted exam');
+assert.equal(eligible({evaluated:true,closesAt:'2026-10-11T12:00:00Z'}),false,'already evaluated');
+assert.equal(eligible({attempts:[...exam.attempts,{status:'in_progress'}],closesAt:'2026-10-11T12:00:00Z'}),false,'do not interrupt active attempt');
+console.log('PASS: evaluation reminder eligibility, including closed exams and active attempt exclusions.');

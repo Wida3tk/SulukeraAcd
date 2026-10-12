@@ -1113,6 +1113,7 @@ export default {
       if (coursework) return reply(request, coursework.data);
       const graduation = await handleGraduationProject(request, env, auth, path, {
         firebaseRead,
+        firebaseAdminToken,
         corsHeaders,
       });
       if (graduation)
