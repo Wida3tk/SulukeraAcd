@@ -1,4 +1,5 @@
 import { handleGraduationProject } from "./graduation-projects.js";
+import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
 import { handleLecturerSurvey } from "./lecturer-survey.js";
 import "../../academic-policy.js";
@@ -1113,6 +1114,8 @@ export default {
       if (coursework) return reply(request, coursework.data);
       const graduation = await handleGraduationProject(request, env, auth, path, {
         firebaseRead,
+        firebaseAdminToken,
+        firebaseAdminRead:async path=>readGraduationDirectory(FIREBASE_DB,path,await firebaseAdminToken(env)),
         corsHeaders,
       });
       if (graduation)
