@@ -17,8 +17,7 @@ export async function studentProject(env,auth,ctx){
  return {project,student,key};
 }
 export async function activeProjectStudents(env,project,auth,ctx){
- const token=auth.profile.role==='student'?await ctx.firebaseAdminToken(env):auth.token;
- const students=await ctx.firebaseRead('students',token),members=(await env.DB.prepare('SELECT student_key FROM graduation_project_students WHERE project_id=? AND eligible=1').bind(project.id).all()).results||[];
+ const students=auth.profile.role==='student'?await ctx.firebaseAdminRead('students'):await ctx.firebaseRead('students',auth.token),members=(await env.DB.prepare('SELECT student_key FROM graduation_project_students WHERE project_id=? AND eligible=1').bind(project.id).all()).results||[];
  return members.filter(row=>students?.[row.student_key]&&globalThis.SulukeraStudentAccount.isActive(students[row.student_key]));
 }
 export async function handleGraduationExperience(request,env,auth,path,ctx){

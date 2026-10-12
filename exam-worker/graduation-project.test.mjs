@@ -4,6 +4,18 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import '../student-account-policy.js';
 import {handleGraduationProject} from './src/graduation-projects.js';
+import {readGraduationDirectory} from './src/graduation-directory.js';
+test('directory service reads use OAuth Bearer headers rather than ID-token query authentication',async()=>{
+ const data=await readGraduationDirectory('https://database.test','students/member','test-oauth',async(url,options)=>{
+  assert.equal(url,'https://database.test/students/member.json');assert.equal(options.headers.Authorization,'Bearer test-oauth');
+  return Response.json({firstName:'عضو'});
+ });assert.equal(data.firstName,'عضو');
+});
+test('unpublished topics load without service directory credentials',async()=>{
+ const {env,auth,ctx}=fixture();ctx.firebaseAdminRead=async()=>{throw Error('service unavailable');};
+ const result=await handleGraduationProject(new Request('https://test/student/graduation-project'),env,auth('student'),'/student/graduation-project',ctx);
+ assert.equal(result.data.available,true);assert.equal(result.data.project.generalMeetings.length,4);assert.equal(result.data.topicOptions.length,0);
+});
 function fixture(){
  const sql=new DatabaseSync(':memory:');for(const file of ['graduation_projects.sql','graduation-experience.sql'])sql.exec(readFileSync(new URL(file,import.meta.url),'utf8'));
  const statement=(query,args=[])=>({bind(...values){return statement(query,values);},first:async()=>sql.prepare(query).get(...args)||null,all:async()=>({results:sql.prepare(query).all(...args)}),run:async()=>({meta:{changes:sql.prepare(query).run(...args).changes}}),execute:()=>sql.prepare(query).run(...args)});
@@ -13,7 +25,7 @@ function fixture(){
  for(const key of Object.keys(students))sql.prepare('INSERT INTO graduation_project_students VALUES (?,?,1,?)').run('project',key,'2026-10-01');
  const env={sql,DB:{prepare:statement,batch:async commands=>{sql.exec('BEGIN');try{const result=commands.map(command=>command.execute());sql.exec('COMMIT');return result;}catch(error){sql.exec('ROLLBACK');throw error;}}},GRADUATION_PROJECT_FILES:{put:async()=>{env.uploaded=true;}}};
  const root={students,semesters:{term:{batches:['Q1-26'],semesterNo:4,endDate:'2026-09-24',subjects:['last']}},subjects:{last:{courseKey:'course_12',semesterNo:4}},packages:{}};
- const ctx={firebaseRead:async(path,token)=>{if(token.startsWith('student:')&&(path==='students'||path.startsWith('students/')&&path!=='students/'+token.split(':')[1]))throw Object.assign(Error('PROFILE_ACCESS_DENIED'),{status:403});return path.split('/').reduce((value,key)=>value?.[key],root);},firebaseAdminToken:async()=> 'admin-token',corsHeaders:()=>({})};
+ const ctx={firebaseRead:async(path,token)=>{if(token.startsWith('student:')&&(path==='students'||path.startsWith('students/')&&path!=='students/'+token.split(':')[1]))throw Object.assign(Error('PROFILE_ACCESS_DENIED'),{status:403});return path.split('/').reduce((value,key)=>value?.[key],root);},firebaseAdminToken:async()=> 'admin-token',firebaseAdminRead:async path=>path.split('/').reduce((value,key)=>value?.[key],root),corsHeaders:()=>({})};
  const auth=(role,key='s0')=>({uid:key,token:role+':'+key,profile:{role,studentKey:key}});
  const call=(path,value,role='student',key='s0')=>handleGraduationProject(new Request('https://test'+path,{method:value?'POST':'GET',...(value?{body:JSON.stringify(value)}:{})}),env,auth(role,key),path,ctx);
  return {env,call,auth,ctx,students};
