@@ -2,6 +2,7 @@
   "name": "sulukera-exams",
   "main": "src/index.js",
   "compatibility_date": "2026-09-18",
+  "vars": { "DRIVE_RECORDING_FOLDER_ID": "1-BRS05bBFJhX8GlW9o3ECxZaJ2UnFi-N" },
   "triggers": { "crons": ["* * * * *"] },
   "d1_databases": [
     {

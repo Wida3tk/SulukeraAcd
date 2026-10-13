@@ -1,3 +1,4 @@
+import { handleProfessionalRecordings, handleProfessionalRecordingMedia } from "./professional-recordings.js";
 import { handleGraduationProject } from "./graduation-projects.js";
 import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
@@ -1085,7 +1086,11 @@ export default {
         path = url.pathname.replace(/\/+$/, "") || "/";
       if (path === "/health")
         return reply(request, { ok: true, service: "sulukera-exams" });
+      const media = await handleProfessionalRecordingMedia(request,env,path,{corsHeaders});
+      if(media)return media;
       const auth = await authenticate(request);
+      const recording = await handleProfessionalRecordings(request,env,auth,path,{firebaseRead});
+      if(recording)return reply(request,recording.data);
       if(path==='/admin/lecturer-performance' && request.method==='GET'){
         requireRole(auth,'admin');
         const profiles=await firebaseRead('users',auth.token);
