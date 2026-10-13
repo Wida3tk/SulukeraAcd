@@ -30,6 +30,9 @@ async function request(path,method,data,uid){
  assert.equal((await request('','PATCH',{'professionalDiscussions/s/obm/u':{q1:'answer',q2:'answer'},[path+'/discussionSubmitted']:true,[path+'/completed']:false,[path+'/completedAt']:null},'student')).status,200);
  assert.equal((await request(path+'/sessions/session_1','PATCH',{attendancePercent:0,attended:false},'admin')).status,200);
  assert.equal((await request('grades/g','PATCH',{w1_hw:0,w1_hwEntered:true},'lecturer')).status,200);
+ assert.equal((await request('grades/g','PATCH',{exam:0},'lecturer')).status,401);
+ assert.equal((await request('grades/g','DELETE',undefined,'lecturer')).status,401);
+ assert.equal((await request('grades/g','PATCH',{secureExamId:'forged'},'lecturer')).status,401);
  assert.equal((await request('grades/g','PATCH',{w1_disc:0,w1_discEntered:true},'admin')).status,200);
  const grade=(await request('grades/g','GET',undefined,'lecturer')).data;assert.equal(grade.exam,20);assert.equal(grade.w1_hw,0);assert.equal(grade.w1_hwEntered,true);
  assert.equal((await request('grades/g','PATCH',{exam:40},'student')).status,401);

@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS academic_exam_grade_sync (subject_key TEXT NOT NULL,student_key TEXT NOT NULL,exam_id TEXT NOT NULL,score REAL NOT NULL,synced_at TEXT NOT NULL,PRIMARY KEY(subject_key,student_key));
+-- Do not retroactively overwrite other courses in this repair; new best results will sync normally.
+INSERT INTO academic_exam_grade_sync SELECT e.subject_key,a.student_key,e.id,MAX(a.score),strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM exams e JOIN attempts a ON a.exam_id=e.id WHERE a.status='submitted' AND a.score IS NOT NULL AND e.subject_key NOT LIKE '%course_04' AND e.subject_key NOT LIKE 'professional_%' AND e.batch NOT LIKE 'PRO-%' GROUP BY e.subject_key,a.student_key ON CONFLICT DO NOTHING;

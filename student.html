@@ -1816,7 +1816,7 @@ function showStudentEvaluationReminder(){
 }
 function mergeSecureExamGrades(){
   if(!dbData.grades) dbData.grades={};
-  secureExamList.filter(exam=>exam.evaluated).forEach(exam=>{
+  secureExamList.filter(exam=>!String(exam.subjectKey||'').startsWith('professional_')).forEach(exam=>{
     const submitted=exam.attempts.filter(attempt=>attempt.status==='submitted'&&attempt.score!==null);
     if(!submitted.length||!exam.subjectKey) return;
     const best20=Math.max(...submitted.map(attempt=>Number(attempt.score)||0));
@@ -1839,11 +1839,11 @@ function renderSecureExamCards(){
     const inProgress=exam.attempts.find(attempt=>attempt.status==='in_progress');
     const remaining=Math.max(0,exam.maxAttempts-exam.attempts.length);
     const canEvaluate=studentExamNeedsEvaluation(exam,now);
-    const best=exam.evaluated?Math.max(...submitted.map(attempt=>Number(attempt.score)||0)):null;
+const best=(exam.evaluated||!String(exam.subjectKey||'').startsWith('professional_'))?Math.max(...submitted.map(attempt=>Number(attempt.score)||0)):null;
     const resultTone=best>=16?'high':best>=12?'mid':'low';
     const resultLabel=best>=16?'نتيجة متميزة':best>=12?'نتيجة جيدة':'تحتاج إلى مزيد من المراجعة';
     return `<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:white"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName)}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">متاح: ${new Date(exam.opensAt).toLocaleString('ar-SA')} — ${new Date(exam.closesAt).toLocaleString('ar-SA')}</div><div style="font-size:12px;color:var(--muted);margin-top:5px">مدة المحاولة ${exam.durationMinutes} دقيقة · ${exam.maxAttempts} محاولات</div></div><span class="badge ${isOpen?'badge-pass':'badge-warn'}">${isOpen?'متاح الآن':now<opens?'لم يبدأ':'انتهى'}</span></div>
-      ${submitted.length?exam.evaluated?`<div class="secure-result secure-result-${resultTone}"><div><strong>${resultLabel}</strong><div class="secure-result-copy">الدرجة النهائية المعتمدة للاختبار الإلكتروني</div></div><div class="secure-result-score">${best}/20</div></div>`:`<div class="alert alert-info" style="margin-top:12px">${submitted.map(attempt=>`المحاولة ${attempt.attemptNo}: ${attempt.wrongCount} إجابات خاطئة`).join(' · ')}</div>`:''}
+${submitted.length?(exam.evaluated||!String(exam.subjectKey||'').startsWith('professional_'))?`<div class="secure-result secure-result-${resultTone}"><div><strong>${resultLabel}</strong><div class="secure-result-copy">الدرجة النهائية المعتمدة للاختبار الإلكتروني</div></div><div class="secure-result-score">${best}/20</div></div>`:`<div class="alert alert-info" style="margin-top:12px">${submitted.map(attempt=>`المحاولة ${attempt.attemptNo}: ${attempt.wrongCount} إجابات خاطئة`).join(' · ')}</div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${isOpen&&(inProgress||remaining>0)&&!exam.evaluated?`<button class="btn btn-primary" onclick="startSecureExam('${exam.id}')">${inProgress?`متابعة المحاولة ${inProgress.attemptNo}`:submitted.length?'بدء المحاولة الثانية':'بدء الاختبار'}</button>`:''}${canEvaluate&&!exam.evaluated?`<button class="btn btn-success" onclick="renderSecureEvaluation('${exam.id}')">تقييم المقرر وإظهار الدرجة</button>`:''}${remaining===0&&!inProgress&&!exam.evaluated?'<span class="badge badge-warn">استُنفدت المحاولات — يرجى إكمال التقييم لإظهار الدرجة</span>':''}</div></div>`;
   }).join('')}</div>`;
 }
@@ -2521,7 +2521,7 @@ function gradeReviewInputId(prefix,requestKey){ return `${prefix}_${requestKey}`
 function renderLecturerGradeReviewPanel(subjectKey,batchName){
   const requests=getLecturerGradeReviewRequests(subjectKey,batchName);
   if(!requests.length) return '';
-  const fields=['w1_attend','w1_hw','w1_disc','w2_attend','w2_hw','w2_disc','w3_attend','w3_hw','w3_disc','w4_attend','w4_hw','w4_disc','exam'];
+  const fields=['w1_attend','w1_hw','w1_disc','w2_attend','w2_hw','w2_disc','w3_attend','w3_hw','w3_disc','w4_attend','w4_hw','w4_disc'];
   return `<div class="card" style="border-right:4px solid var(--warning);margin-bottom:1rem;">
     <div class="card-title">طلبات مراجعة الدرجات</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">اعتمد التعديل بعد التحقق من الطلب، أو أعده إلى الإدارة مع توضيح السبب.</div>
@@ -2556,13 +2556,14 @@ async function approveStudentGradeReview(requestKey){
   const raw=document.getElementById(gradeReviewInputId('gradeReviewValue',requestKey))?.value.trim()||'';
   const note=document.getElementById(gradeReviewInputId('gradeReviewNote',requestKey))?.value.trim()||'';
   const meta=getGradeReviewFieldMeta(field), value=Number(raw);
+  if(field==='exam')return toast('درجة الاختبار النهائي تُزامن إلكترونيًا؛ يرجى إعادة طلب المراجعة للإدارة.');
   if(raw===''||!Number.isFinite(value)||value<0||value>meta.max) return toast(`أدخل درجة صحيحة من 0 إلى ${meta.max}`);
-  const gradeKey=('grade_'+request.studentKey+'_'+request.subjectKey).replace(/[.#$[\]]/g,'_');
+  const gradeKey=Object.entries(dbData.grades||{}).find(([,g])=>g.studentKey===request.studentKey&&g.subjectKey===request.subjectKey)?.[0]||('grade_'+request.studentKey+'_'+request.subjectKey).replace(/[.#$[\]]/g,'_');
   try{
     const fallback=getGrade_data(request.studentKey,request.subjectKey)||{};
     const tx=await fbRef('grades/'+gradeKey).transaction(current=>{
       const existing=current||fallback;
-      return {studentKey:request.studentKey,subjectKey:request.subjectKey,w1_attend:existing.w1_attend||0,w1_hw:existing.w1_hw||0,w1_disc:existing.w1_disc||0,w2_attend:existing.w2_attend||0,w2_hw:existing.w2_hw||0,w2_disc:existing.w2_disc||0,w3_attend:existing.w3_attend||0,w3_hw:existing.w3_hw||0,w3_disc:existing.w3_disc||0,w4_attend:existing.w4_attend||0,w4_hw:existing.w4_hw||0,w4_disc:existing.w4_disc||0,exam:isExamEntered(existing)?(existing.exam||0):null,examEntered:isExamEntered(existing),[field]:value,...(field==='exam'?{examEntered:true}:{}),updatedAt:new Date().toISOString()};
+return {...existing,studentKey:request.studentKey,subjectKey:request.subjectKey,w1_attend:existing.w1_attend||0,w1_hw:existing.w1_hw||0,w1_disc:existing.w1_disc||0,w2_attend:existing.w2_attend||0,w2_hw:existing.w2_hw||0,w2_disc:existing.w2_disc||0,w3_attend:existing.w3_attend||0,w3_hw:existing.w3_hw||0,w3_disc:existing.w3_disc||0,w4_attend:existing.w4_attend||0,w4_hw:existing.w4_hw||0,w4_disc:existing.w4_disc||0,exam:isExamEntered(existing)?(existing.exam||0):null,examEntered:isExamEntered(existing),[field]:value,...(field==='exam'?{examEntered:true}:{}),updatedAt:new Date().toISOString()};
     });
     const now=new Date().toISOString(), reviewer=currentUser.data?.name||'عضو هيئة التدريس';
     const update={status:'completed',lecturerNote:note,lecturerReviewedAt:now,lecturerReviewedBy:reviewer,gradeReviewField:field,gradeReviewValue:value,reviewedAt:now,reviewedBy:reviewer};
@@ -2699,8 +2700,7 @@ function renderWeekTable(w){
       return `<tr data-stkey="${st.fbKey}" data-original-index="${rowIndex}">
         <td><strong>${[st.firstName,st.midName,st.lastName].filter(Boolean).join(' ')}</strong>${getActiveExamException(st.fbKey,currentSubjectKey)?'<div><span class="badge badge-warn" style="margin-top:4px">استثناء اختبار</span></div>':''}</td>
         <td class="mono">${st.id}</td>
-        <td><input class="grade-input" type="number" min="0" max="${settings.exam}"
-          value="${isExamEntered(g)?(g.exam??0):''}" placeholder="لم تُرصد" data-stkey="${st.fbKey}" data-field="exam"></td>
+        <td><strong>${isExamEntered(g)?`${g.exam??0} / ${settings.exam}`:'لم تُرصد'}</strong><div style="font-size:10px;color:var(--muted)">تُزامن من الاختبار الإلكتروني — غير قابلة للتعديل</div></td>
         <td><strong>${isExamEntered(g)?tot:'—'}</strong>${isExamEntered(g)?'/100':''}</td>
         <td><span class="badge badge-${display.className}">${gr}</span></td>
         <td><span class="badge ${!isGradeComplete(g)?'badge-warn':tot>=settings.gradeFail?'badge-pass':'badge-fail'}">${status}</span></td>
@@ -2772,6 +2772,7 @@ async function saveGrades(){
     document.querySelectorAll('#gradeTableBody .grade-input').forEach(inp=>{
       const stKey=inp.dataset.stkey;
       const field=inp.dataset.field;
+      if(field==='exam'&&currentUser?.role==='lecturer')return;
       const raw=inp.value.trim();
       if(!byStudent[stKey]) byStudent[stKey]={};
       // احفظ الحقل فقط إذا كان فيه قيمة
@@ -2794,7 +2795,7 @@ async function saveGrades(){
     let savedCount=0;
     for(const [stKey, newFields] of Object.entries(byStudent)){
       if(!Object.keys(newFields).length) continue;
-      const gradeKey=('grade_'+stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
+      const gradeKey=Object.entries(dbData.grades||{}).find(([,g])=>g.studentKey===stKey&&g.subjectKey===currentSubjectKey)?.[0]||('grade_'+stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
       const fallback=getGrade_data(stKey,currentSubjectKey)||{};
       const tx=await fbRef('grades/'+gradeKey).transaction(current=>{
         const existing=current||fallback;
@@ -2824,7 +2825,7 @@ async function saveGrades(){
       if(newFields.exam!==undefined && (!isExamEntered(merged)||Number(merged.exam)!==Number(newFields.exam)))
         throw new Error('فشل التحقق من الاختبار النهائي المحفوظ');
       const legacyKey=(stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
-      if(legacyKey!==gradeKey) legacyDeletes['grades/'+legacyKey]=null;
+      if(legacyKey!==gradeKey&&currentUser?.role==='admin') legacyDeletes['grades/'+legacyKey]=null;
       // حدّث dbData المحلي فوراً
       if(!dbData.grades) dbData.grades={};
       dbData.grades[gradeKey] = merged;

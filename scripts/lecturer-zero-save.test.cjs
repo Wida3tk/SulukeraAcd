@@ -7,7 +7,7 @@ async function scenario(existing,inputs){
 }
 (async()=>{
  const a=await scenario({exam:38,examEntered:true,w2_hw:6},[['w1_disc','0'],['w1_attend',''],['w1_hw','']]);assert.equal(a.stored.w1_disc,0);assert.equal(a.stored.w1_discEntered,true);assert.equal(a.stored.w1_hwEntered,undefined);assert.equal(a.stored.exam,38);assert.equal(a.stored.w2_hw,6);assert.match(a.messages.join(' '),/تم حفظ/);assert.equal(a.button.disabled,false);
- const b=await scenario(null,[['exam','0']]);assert.equal(b.stored.exam,0);assert.equal(b.stored.examEntered,true);assert.match(b.messages.join(' '),/تم حفظ/);
+ const b=await scenario(null,[['exam','0']]);assert.equal(b.writeCount,0);assert.equal(b.stored,null);
  for(const field of ['w1_attend','w1_hw','w1_disc']){const result=await scenario(null,[[field,'0']]);assert.equal(result.stored[field],0);assert.equal(result.stored[field+'Entered'],true);assert.match(result.messages.join(' '),/تم حفظ/);}
  const blank=await scenario(null,[['w1_disc','']]);assert.equal(blank.writeCount,0);assert.equal(blank.button.disabled,false);
  const invalid=await scenario(null,[['w1_disc','invalid']]);assert.equal(invalid.writeCount,0);assert.equal(invalid.button.disabled,false);assert.match(invalid.messages.join(' '),/خطأ في الحفظ/);

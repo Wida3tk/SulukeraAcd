@@ -22,7 +22,10 @@
       ".indexOn": [
         "studentKey"
       ],
-      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'lecturer')"
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$gradeKey": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'lecturer' && newData.exists() && newData.child('exam').val() === data.child('exam').val() && newData.child('secureExamScore20').val() === data.child('secureExamScore20').val() && newData.child('secureExamId').val() === data.child('secureExamId').val() && newData.child('secureExamSyncedAt').val() === data.child('secureExamSyncedAt').val() && (newData.child('examEntered').val() === data.child('examEntered').val() || (!data.child('examEntered').exists() && ((data.child('exam').val() > 0 && newData.child('examEntered').val() === true) || (!data.child('exam').exists() && newData.child('examEntered').val() === false))))"
+      }
     },
     "enrollments": {
       ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'student' && query.orderByChild === 'studentKey' && query.equalTo === root.child('users').child(auth.uid).child('studentKey').val()",

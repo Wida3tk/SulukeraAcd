@@ -1,5 +1,6 @@
 import { handleProfessionalRecordings, handleProfessionalRecordingMedia } from "./professional-recordings.js";
 import { handleGraduationProject } from "./graduation-projects.js";
+import {syncAcademicExamGrades} from './exam-grade-sync.js';
 import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
 import { handleLecturerSurvey } from "./lecturer-survey.js";
@@ -872,7 +873,7 @@ async function studentExams(env, auth) {
         attemptNo: attempt.attempt_no,
         status: attempt.status,
         wrongCount: attempt.wrong_count,
-        score: evaluated ? attempt.score : null,
+        score: evaluated || !String(exam.subject_key).startsWith('professional_') ? attempt.score : null,
       })),
       evaluated,
     };
@@ -1076,6 +1077,7 @@ async function submitEvaluation(request, env, auth, examId) {
 
 export default {
   scheduled(event,env,ctx){
+    ctx.waitUntil(syncAcademicExamGrades(env,firebaseAdminToken));
     ctx.waitUntil(retryPendingCoursework(env,{firebaseAdminToken}).then(result=>{if(result.attempted)console.log("coursework_sync_retry",result);}));
   },
   async fetch(request, env) {

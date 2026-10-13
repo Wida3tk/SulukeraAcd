@@ -791,7 +791,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
           <button class="workspace-tab" data-exam-tab="schedule" onclick="showExamWorkspaceTab('schedule',this)">الموعد والإعدادات</button>
         </div>
         <div class="workspace-panel active" data-exam-panel="overview"><div id="examDashboardCharts"><div class="empty">اختاري اختبارًا لعرض التحليل.</div></div></div>
-        <div class="workspace-panel" data-exam-panel="results"><div class="card card-accent"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">نتائج الاختبار المختار</div><div style="font-size:12px;color:var(--text-muted)">بحث وتصفية حسب المشاركة والنجاح والاستثناء.</div></div><div style="display:flex;gap:8px"><button class="btn" onclick="loadExamAdminResults()">تحديث</button><button class="btn btn-success" onclick="syncEvaluatedExamResults()">مزامنة النتائج المقيمة</button></div></div><div id="examAdminResults" style="margin-top:14px"><div class="empty">اختاري اختبارًا أولًا.</div></div></div></div>
+<div class="workspace-panel" data-exam-panel="results"><div class="card card-accent"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">نتائج الاختبار المختار</div><div style="font-size:12px;color:var(--text-muted)">بحث وتصفية حسب المشاركة والنجاح والاستثناء.</div></div><div style="display:flex;gap:8px"><button class="btn" onclick="loadExamAdminResults()">تحديث</button><button class="btn btn-success" onclick="syncEvaluatedExamResults()">مزامنة درجات الاختبارات</button></div></div><div id="examAdminResults" style="margin-top:14px"><div class="empty">اختاري اختبارًا أولًا.</div></div></div></div>
         <div class="workspace-panel" data-exam-panel="questions"><div class="card card-accent">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div class="card-title" style="margin-bottom:5px">بنك أسئلة الاختبار</div><div style="font-size:12px;color:var(--text-muted)">الأسئلة والإجابات محفوظة في الخادم المحمي، ومجموع الدرجات 20.</div></div><a class="btn btn-primary" href="templates/%D9%86%D9%85%D9%88%D8%B0%D8%AC%20%D8%A7%D8%B3%D8%AA%D9%8A%D8%B1%D8%A7%D8%AF%20%D8%A3%D8%B3%D8%A6%D9%84%D8%A9%20%D8%A7%D9%84%D8%A7%D8%AE%D8%AA%D8%A8%D8%A7%D8%B1%D8%A7%D8%AA.xlsx" download>تحميل نموذج Excel</a></div>
           <div style="display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end;margin-top:14px"><div class="form-group" style="margin:0"><label>الاختبار</label><select id="examBuilderSchedule" onchange="loadExamQuestionDraft()"><option value="">-- اختاري اختبارًا --</option></select></div><label class="btn btn-primary" style="cursor:pointer;text-align:center">استيراد Excel<input type="file" id="examQuestionsFile" accept=".xlsx,.xls" onchange="importExamQuestionsFile(this)" style="display:none"></label></div>
@@ -5191,6 +5191,7 @@ function loadGradesTable() {
 }
 
 function updateGrade(si,stdIdx,week,field,val) {
+  if(week==='exam'&&currentUser?.role==='lecturer')return showToast('درجة الاختبار النهائي للقراءة فقط وتُزامن إلكترونيًا.');
   if (!grades[si]) grades[si]={};
   if (!grades[si][stdIdx]) grades[si][stdIdx]=makeEmptyGrade();
   const v=val===''?null:Math.max(0,parseFloat(val)||0);
@@ -5198,6 +5199,7 @@ function updateGrade(si,stdIdx,week,field,val) {
   else {grades[si][stdIdx][week][field]=v;grades[si][stdIdx][week+'_'+field+'Entered']=val!=='';}
 }
 async function saveGrades() {
+  if(currentWeek===0&&currentUser?.role==='lecturer')return showToast('درجة الاختبار النهائي للقراءة فقط.');
   const selectedValue=document.getElementById('gradeSubjectSelect').value;
   if(selectedValue==='') return showToast('⚠️ لا يوجد مقرر محدد');
   const si=Number(selectedValue);
@@ -5226,7 +5228,7 @@ async function saveGrades() {
             [`${weekKey}_discEntered`]:g[weekKey]?.disc!==null&&g[weekKey]?.disc!==undefined,
             [`${weekKey}_discApproved`]:currentUser?.role==='lecturer'
           };
-      if(legacyKey!==gradeKey) updates[`grades/${legacyKey}`]=null;
+      if(legacyKey!==gradeKey&&currentUser?.role==='admin') updates[`grades/${legacyKey}`]=null;
       return fbRef('grades/'+gradeKey).transaction(current=>({
         ...current,
         studentKey:st._fbKey,
@@ -5296,6 +5298,7 @@ function getCurrentGradeReviewValue(si,stdIdx,field){
 function syncGradeReviewValue(requestKey){
   const request=studentRequestsData.find(item=>item._fbKey===requestKey);
   const field=document.getElementById(getGradeReviewInputId('field',requestKey))?.value||'exam';
+  if(field==='exam'&&currentUser?.role==='lecturer')return showToast('درجة النهائي تُزامن إلكترونيًا؛ أعيدي الطلب للإدارة.');
   const input=document.getElementById(getGradeReviewInputId('value',requestKey));
   const meta=getGradeReviewFieldMeta(field);
   if(!request||!input) return;
@@ -5343,6 +5346,7 @@ function renderLecturerGradeReviewPanel(si){
   </div>`;
 }
 async function approveGradeReviewRequest(requestKey){
+  if(currentUser?.role==='lecturer'&&(document.getElementById(getGradeReviewInputId('field',requestKey))?.value||'exam')==='exam')return showToast('مراجعة درجة الاختبار النهائي من صلاحية الإدارة؛ أعيدي الطلب للإدارة.');
   const request=studentRequestsData.find(item=>item._fbKey===requestKey);
   if(!request||request.status!=='awaiting_lecturer_review') return showToast('⚠️ الطلب غير متاح للمعالجة');
   const si=subjects.findIndex(subject=>subject._fbKey===request.subjectKey);
@@ -6823,8 +6827,8 @@ async function loadLecturerEvaluationReports(){
 async function syncEvaluatedExamResults(options={}){
   if(currentUser?.role!=='admin') return;
   if(!examAdminResultsData.length) await loadExamAdminResults();
-  const rows=examAdminResultsData.filter(row=>Number(row.evaluated)===1&&row.best_score!==null);
-  if(!rows.length){if(!options.silent)showToast('لا توجد نتائج مقيمة جاهزة للمزامنة');return 0;}
+  const rows=examAdminResultsData.filter(row=>row.best_score!==null&&Number.isFinite(Number(row.best_score))&&!String(row.subject_key).startsWith('professional_'));
+  if(!rows.length){if(!options.silent)showToast('لا توجد نتائج اختبار جاهزة للمزامنة');return 0;}
   if(!options.silent&&!confirm(`مزامنة ${rows.length} نتيجة إلى سجل الدرجات؟`)) return 0;
   if(!options.silent)showLoader(true);
   try{

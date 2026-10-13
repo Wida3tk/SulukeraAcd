@@ -9,5 +9,5 @@ for(const name of ['calcTotal','getGrade','getStatus','isExamEntered','getGradeS
 const inputValue=field=>{const match=elements.gradeTableBody.innerHTML.match(new RegExp('value="([^"]*)"[^>]*data-field="'+field+'"'));assert.ok(match);return match[1];};
 context.renderWeekTable(1);assert.equal(inputValue('w1_attend'),'0');assert.equal(inputValue('w1_hw'),'');assert.equal(inputValue('w1_disc'),'');
 grade.w1_hw=6;context.renderWeekTable(1);assert.equal(inputValue('w1_hw'),'6');
-context.renderWeekTable(0);assert.equal(inputValue('exam'),'0');delete grade.examEntered;context.renderWeekTable(0);assert.equal(inputValue('exam'),'');
+context.renderWeekTable(0);assert.match(elements.gradeTableBody.innerHTML,/0 \/ 40/);assert(!elements.gradeTableBody.innerHTML.includes('data-field="exam"'));delete grade.examEntered;context.renderWeekTable(0);assert.match(elements.gradeTableBody.innerHTML,/لم تُرصد/);
 console.log('PASS: saved explicit zero visible; legacy unrecorded zero and cleared positive grades blank; positive coursework retained; exam zero distinguished.');
