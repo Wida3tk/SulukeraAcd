@@ -1494,6 +1494,7 @@ async function ensureOctober2026AcademicFoundation(root){
   const lecturerMatches=Object.values(root.users||{}).filter(user=>user?.role==='lecturer'&&String(user.name||user.username||'').includes('نوف'));
   const noufUsername=lecturerMatches.length===1?(lecturerMatches[0].username||lecturerMatches[0].id||''):'';
   const existingPairs=new Set(Object.values(liveEnrollments).map(item=>`${item.studentKey}|${item.subjectKey}`));
+  const existingCoursePairs=new Set(Object.values(liveEnrollments).map(item=>`${item.studentKey}|${liveSubjects[item.subjectKey]?.courseKey||item.subjectKey}`));
   const cohorts=[{batch:q1Batch,cohort:'q1',semesterNo:5},{batch:q2Batch,cohort:'q2',semesterNo:3},{batch:q3Batch,cohort:'q3',semesterNo:3}].filter(item=>item.batch);
   cohorts.forEach(({batch,cohort,semesterNo})=>{
     const semesterKey=`sem_2026_10_${cohort}`,semesterSubjectKeys=[];
@@ -1502,10 +1503,11 @@ async function ensureOctober2026AcademicFoundation(root){
       semesterSubjectKeys.push(offeringKey);
       if(JSON.stringify(oldOffering)!==JSON.stringify(offering))updates[`subjects/${offeringKey}`]=offering;
       Object.entries(liveStudents).forEach(([studentKey,student])=>{
-        if(!SulukeraStudentAccount.isActive(student)||!sameBatchName(student.batch,batch)||!course.eligiblePlans.includes(getExplicitStudentPlan(student))||existingPairs.has(`${studentKey}|${offeringKey}`))return;
+        if(!SulukeraStudentAccount.isActive(student)||!sameBatchName(student.batch,batch)||!course.eligiblePlans.includes(getExplicitStudentPlan(student))||existingPairs.has(`${studentKey}|${offeringKey}`)||existingCoursePairs.has(`${studentKey}|${course.key}`))return;
         const enrollmentKey=(`enr_${studentKey}_${offeringKey}`).replace(/[.#$[\]]/g,'_');
         updates[`enrollments/${enrollmentKey}`]={studentKey,subjectKey:offeringKey,sourceType:'october_2026_foundation',status:'active'};
         existingPairs.add(`${studentKey}|${offeringKey}`);
+        existingCoursePairs.add(`${studentKey}|${course.key}`);
       });
     });
     const oldSemester=liveSemesters[semesterKey]||{},semesterSubjects=[...new Set([...(oldSemester.subjects||[]),...semesterSubjectKeys])],nextSemester={...oldSemester,name:`${batch} — الفصل ${semesterNo} — أكتوبر 2026`,startDate,endDate,batches:[batch],subjects:semesterSubjects,status:'active'};
@@ -2511,6 +2513,8 @@ async function syncMissingSemesterEnrollments(studentIdx=null){
         const si=subjects.findIndex(s=>s._fbKey===subjKey);
         if(si<0) return;
         if(!studentEligibleForOffering(st,subjects[si])) return;
+        // A historical semester can point to another batch's offering of an already registered course.
+        if(subjects[si].courseKey&&subjects.some(subject=>subject.courseKey===subjects[si].courseKey&&subject.students?.includes(idx))) return;
         if(!subjects[si].students.includes(idx)){
           subjects[si].students.push(idx);
           if(!grades[si]) grades[si]={};
@@ -4266,7 +4270,12 @@ async function saveStudent() {
         }
       });
     }
-    const crossBatchOfferingIdxs = chosenCrossBatchSubjs.filter(si=>!isNaN(si) && subjects[si]);
+    const registeredCourseKeys=new Set(defaultOfferingIdxs.map(si=>subjects[si].courseKey).filter(Boolean));
+    const crossBatchOfferingIdxs = chosenCrossBatchSubjs.filter(si=>{
+      const subject=subjects[si];if(isNaN(si)||!subject)return false;
+      if(subject.courseKey&&registeredCourseKeys.has(subject.courseKey))return false;
+      if(subject.courseKey)registeredCourseKeys.add(subject.courseKey);return true;
+    });
     crossBatchOfferingIdxs.forEach(si=>{
       if(!subjects[si].students.includes(idx2)) subjects[si].students.push(idx2);
       if(!grades[si]) grades[si]={};
