@@ -41,3 +41,11 @@ test('real-player setup is optional, scoped to folder, and admin preview gives n
  const start=await handleProfessionalRecordings(request(),f.env,{uid:'student',token:'token',profile:{role:'student',studentKey:'student'}},'/student/professional-recordings/start',ctx);assert.equal(start.data.duration,100);assert.equal(start.data.seconds,0);assert.equal(f.sql.prepare('SELECT count(*) AS n FROM professional_recording_assignments').get().n,0);assert.ok(!JSON.stringify(start).includes('fixture-token'));
  }finally{globalThis.fetch=originalFetch;}
 });
+test('public metadata alone does not claim a recording connection; nested listed videos are accepted',async()=>{
+ const {checkedVideo,connection}=await import('./src/drive-recordings.js'),originalFetch=globalThis.fetch,env={FIREBASE_SERVICE_ACCOUNT:JSON.stringify({client_email:'fixture@example.invalid'}),DRIVE_RECORDING_FOLDER_ID:'empty-folder'};
+ globalThis.fetch=async url=>String(url).includes('/files?')?Response.json({files:[]}):Response.json({id:'empty-folder',name:'empty',mimeType:'application/vnd.google-apps.folder'});
+ try{assert.equal((await connection(env)).ready,false);
+ env.DRIVE_RECORDING_FOLDER_ID='nested-folder';globalThis.fetch=async url=>{const u=new URL(url);if(u.pathname.endsWith('/files'))return Response.json({files:u.searchParams.get('q').includes('nested-folder')?[{id:'child',mimeType:'application/vnd.google-apps.folder'}]:[{id:'nested-video',mimeType:'video/mp4'}]});return Response.json({id:'nested-video',name:'video',mimeType:'video/mp4',parents:[],videoMediaMetadata:{durationMillis:100000}});};
+ assert.equal((await checkedVideo(env,{id:'nested-video'})).duration,100);await assert.rejects(checkedVideo(env,{id:'outside-video'}),/DRIVE_FOLDER_MISMATCH/);
+ }finally{globalThis.fetch=originalFetch;}
+});
