@@ -1,8 +1,8 @@
-let recordingStudentData={assignments:[],progress:[]},recordingPlayer=null,recordingAdminData={assignments:[],progress:[]};
+let recordingStudentOwner=null,recordingStudentData={assignments:[],progress:[]},recordingPlayer=null,recordingAdminData={assignments:[],progress:[]};
 function recordingDriveId(url){try{const parsed=new URL(url);return parsed.hostname==='drive.google.com'?(parsed.pathname.match(/\/file\/d\/([\w-]+)/)?.[1]||parsed.searchParams.get('id')):null;}catch{return null;}}
 function recordingMinutes(seconds){return `${Math.floor((Number(seconds)||0)/60)}:${String(Math.floor((Number(seconds)||0)%60)).padStart(2,'0')}`;}
 function recordingPercent(progress){return progress?.duration_seconds>0?Math.floor(progress.watched_seconds/progress.duration_seconds*100):0;}
-async function recordingLoadStudent(){const user=currentUser;if(user?.role!=='student')return;try{const data=await secureExamRequest('/student/professional-recordings');if(currentUser!==user)return;recordingStudentData=data;recordingDecorateStudent();}catch(error){console.warn('Optional recording state unavailable',error);}}
+async function recordingLoadStudent(){const user=currentUser;if(user?.role!=='student')return;if(recordingStudentOwner!==user.fbKey){recordingStudentOwner=user.fbKey;recordingStudentData={assignments:[],progress:[]};}try{const data=await secureExamRequest('/student/professional-recordings');if(currentUser!==user)return;recordingStudentData=data;recordingDecorateStudent();}catch(error){console.warn('Optional recording state unavailable',error);}}
 function recordingDecorateStudent(){
  const context=getStudentProfessionalContext();if(!context)return;
  document.querySelectorAll('[data-recording-unit]').forEach(card=>{
