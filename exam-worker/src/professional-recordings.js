@@ -39,6 +39,12 @@ export async function handleProfessionalRecordings(request,env,auth,path,ctx){
  if(!path.startsWith('/student/professional-recordings')&&!path.startsWith('/admin/professional-recordings'))return null;
  const admin=path.startsWith('/admin/');role(auth,...(admin?['admin','academic_admin']:['student']));const key=auth.profile.studentKey;
  if(path==='/admin/professional-recordings/connection')return {data:await connection(env)};
+ if(path==='/admin/professional-recordings/preview'&&request.method==='POST'){
+  const value=await json(request),program=await ctx.firebaseRead('professionalPrograms/'+programId,auth.token),session=sessionFor(program,{selectedTracks:{track_1:true,track_2:true,track_3:true}},value.unitId,value.sessionKey),file=driveFile(session.recordingUrl);if(!file)fail('RECORDING_NOT_CONFIGURED',404);
+  const video=await checkedVideo(env,file),id=crypto.randomUUID(),now=Date.now();
+  await env.DB.prepare('INSERT INTO professional_recording_runs VALUES (?,?,?,?,?,?,?,?,0,0,?,0)').bind(id,'admin-preview:'+auth.uid,file.id,value.unitId,value.sessionKey,file.resourceKey,video.duration,now+15*60000,now).run();
+  return {data:{title:video.name,duration:video.duration,mediaPath:'/professional-recordings/media/'+id}};
+ }
  if(path==='/admin/professional-recordings'&&request.method==='GET')return {data:{assignments:(await env.DB.prepare('SELECT * FROM professional_recording_assignments').all()).results||[],progress:(await env.DB.prepare('SELECT student_key,video_key,watched_seconds,duration_seconds,last_position,updated_at FROM professional_recording_progress').all()).results||[]}};
  if(path==='/admin/professional-recordings/assignment'&&request.method==='POST'){
   const value=await json(request);if(!['optional','recorded'].includes(value.mode))fail('INVALID_MODE');const scoped=await context(ctx,auth,value.studentKey);sessionFor(scoped.program,scoped.enrollment,value.unitId,value.sessionKey);

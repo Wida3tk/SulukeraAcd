@@ -30,3 +30,14 @@ test('recorded assignment and approval preserve attendance and enrollment',async
  await assert.rejects(handleProfessionalRecordings(req(),f.env,{profile:{role:'student'}},'/admin/professional-recordings/assignment',ctx),/FORBIDDEN/);
 });
 test('live attendance takes priority; optional watching never becomes required',()=>{const policy=globalThis.SulukeraRecordingPolicy;assert.equal(policy.status({},null,{percent:100}).mode,'optional');assert.equal(policy.status({attendancePercent:90},{mode:'recorded',approved:1},{percent:100}).mode,'live');assert.equal(policy.status({}, {mode:'recorded',approved:0},{percent:80}).approved,false);});
+test('real-player setup is optional, scoped to folder, and admin preview gives no student credit',async()=>{
+ const f=fixture(),keys=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']),pem='-----BEGIN PRIVATE KEY-----\n'+Buffer.from(await crypto.subtle.exportKey('pkcs8',keys.privateKey)).toString('base64')+'\n-----END PRIVATE KEY-----';
+ f.env.DRIVE_SERVICE_ACCOUNT=JSON.stringify({client_email:'fixture@example.invalid',private_key:pem});f.env.DRIVE_RECORDING_FOLDER_ID='folder';
+ const program={tracks:{track_1:{units:{unit_1:{status:'published',sessions:{session_1:{recordingUrl:'https://drive.google.com/file/d/video/view'}}}}}}},ctx={firebaseRead:async path=>path.startsWith('professionalPrograms/')?program:path.startsWith('students/')?{planType:'PROFESSIONAL'}:{status:'active',selectedTracks:{track_1:true}}},originalFetch=globalThis.fetch;
+ globalThis.fetch=async url=>String(url).includes('oauth2.googleapis.com')?Response.json({access_token:'fixture-token',expires_in:3600}):Response.json({id:'video',mimeType:'video/mp4',name:'fixture video',parents:['folder'],videoMediaMetadata:{durationMillis:100000},capabilities:{canDownload:true}});
+ const request=()=>new Request('https://test',{method:'POST',body:JSON.stringify({unitId:'track_1_unit_1',sessionKey:'session_1'})});
+ try{
+ const preview=await handleProfessionalRecordings(request(),f.env,{uid:'admin',token:'token',profile:{role:'admin'}},'/admin/professional-recordings/preview',ctx);assert.equal(preview.data.duration,100);assert.equal(f.sql.prepare('SELECT count(*) AS n FROM professional_recording_progress').get().n,0);
+ const start=await handleProfessionalRecordings(request(),f.env,{uid:'student',token:'token',profile:{role:'student',studentKey:'student'}},'/student/professional-recordings/start',ctx);assert.equal(start.data.duration,100);assert.equal(start.data.seconds,0);assert.equal(f.sql.prepare('SELECT count(*) AS n FROM professional_recording_assignments').get().n,0);assert.ok(!JSON.stringify(start).includes('fixture-token'));
+ }finally{globalThis.fetch=originalFetch;}
+});
