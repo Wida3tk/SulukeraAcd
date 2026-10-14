@@ -2,6 +2,7 @@ import { handleProfessionalRecordings, handleProfessionalRecordingMedia } from "
 import { handleGraduationProject } from "./graduation-projects.js";
 import {syncAcademicExamGrades} from './exam-grade-sync.js';
 import {unlimitedExam,remainingAttempts,attemptExpiry} from './exam-attempt-policy.js';
+import {syncProfessionalExamResults} from './professional-exam-results.js';
 import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
 import { handleLecturerSurvey } from "./lecturer-survey.js";
@@ -842,7 +843,7 @@ async function studentExams(env, auth) {
   );
   const attempts = (
     await env.DB.prepare(
-      "SELECT exam_id,attempt_no,status,wrong_count,score FROM attempts WHERE student_key=?",
+      "SELECT exam_id,attempt_no,status,wrong_count,score FROM attempts WHERE student_key=? ORDER BY exam_id,attempt_no",
     )
       .bind(studentKey)
       .all()
@@ -874,7 +875,7 @@ async function studentExams(env, auth) {
         attemptNo: attempt.attempt_no,
         status: attempt.status,
         wrongCount: attempt.wrong_count,
-        score: evaluated || !String(exam.subject_key).startsWith('professional_') ? attempt.score : null,
+        score: attempt.score,
       })),
       evaluated,
     };
@@ -1015,7 +1016,7 @@ async function submitAttempt(request, env, auth, attemptId) {
       attemptId,
     )
     .run();
-  const exam = await env.DB.prepare("SELECT max_attempts FROM exams WHERE id=?")
+  const exam = await env.DB.prepare("SELECT max_attempts,subject_key FROM exams WHERE id=?")
       .bind(attempt.exam_id)
       .first(),
     exception = await env.DB.prepare(
@@ -1028,8 +1029,10 @@ async function submitAttempt(request, env, auth, attemptId) {
     )
       .bind(attempt.exam_id, studentKey)
       .first();
+  if(exam.subject_key==='professional_organizational_behavior_final')await syncProfessionalExamResults(env,firebaseAdminToken,{studentKey,examId:attempt.exam_id}).catch(error=>console.error('professional_result_retry_pending',error.message));
   return {
     submitted: true,
+    score,
     wrongCount: wrong,
     perfect: wrong === 0,
     attemptsRemaining:remainingAttempts(exam,count.count,exception?.extra_attempts),
@@ -1072,11 +1075,13 @@ async function submitEvaluation(request, env, auth, examId) {
   )
     .bind(examId, studentKey)
     .first();
+  await syncProfessionalExamResults(env,firebaseAdminToken,{studentKey,examId}).catch(error=>console.error('professional_result_retry_pending',error.message));
   return { evaluated: true, bestScore: best.score };
 }
 
 export default {
   scheduled(event,env,ctx){
+    ctx.waitUntil(syncProfessionalExamResults(env,firebaseAdminToken));
     ctx.waitUntil(syncAcademicExamGrades(env,firebaseAdminToken));
     ctx.waitUntil(retryPendingCoursework(env,{firebaseAdminToken}).then(result=>{if(result.attempted)console.log("coursework_sync_retry",result);}));
   },

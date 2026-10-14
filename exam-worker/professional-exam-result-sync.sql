@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS professional_exam_result_sync (exam_id TEXT NOT NULL,student_key TEXT NOT NULL,score REAL NOT NULL,evaluated_at TEXT NOT NULL,synced_at TEXT NOT NULL,PRIMARY KEY(exam_id,student_key));
