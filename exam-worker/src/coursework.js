@@ -264,7 +264,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       ).results;
       attendance = (
         await env.DB.prepare(
-          "SELECT * FROM course_attendance WHERE student_key=?",
+          "SELECT a.*,m.duration_minutes meeting_minutes FROM course_attendance a LEFT JOIN attendance_meeting_imports m ON m.lesson_id=a.lesson_id AND m.source_hash=a.source_hash WHERE a.student_key=?",
         )
           .bind(key)
           .all()

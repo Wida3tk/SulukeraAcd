@@ -262,6 +262,20 @@ test("fifth semester roster and attendance exclude QASP-S even with stale enroll
   assert.equal(f.sql.prepare('SELECT COUNT(*) count FROM course_attendance').get().count,0);
 });
 
+test('student attendance minutes use the matching Zoom import and never infer time from grades',async()=>{
+  const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+  f.sql.prepare('INSERT INTO attendance_meeting_imports VALUES (?,?,?,?,?,?,?)').run(id,'minutes-test','2026-10-06T15:00:00Z','2026-10-06T17:00:00Z',120,'admin','2026-10-06');
+  f.sql.prepare('INSERT INTO course_attendance VALUES (?,?,?,?,?,?)').run(id,'student',100/6,'minutes-test','admin','2026-10-06');
+  const lesson=(await f.call('student','')).data.lessons.find(l=>l.id===id);
+  assert.equal(lesson.attendance.meeting_minutes,120);
+  const context={Intl};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+  const html=context.cwAttendanceMinutesMarkup(lesson.attendance);
+  assert.match(html,/>20<\/strong>/);assert.match(html,/>120<\/strong>/);
+  assert.match(context.cwAttendanceMinutesMarkup({score:3,percent:100,source:'firebase_grade',meeting_minutes:120}),/غير متاحة/);
+  assert.match(context.cwAttendanceMinutesMarkup({percent:0,provisional:true}),/الصفر مؤقت/);
+  assert.match(context.cwAttendanceMinutesMarkup({...lesson.attendance,percent:0}),/>0<\/strong>/);
+});
+
 test("every inactive account state blocks coursework without removing academic records", async () => {
   for(const status of ['suspended','frozen','withdrawn','paused']){
     const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
