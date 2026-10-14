@@ -248,6 +248,20 @@ test("admin attendance uses authenticated ledger fallback when service credentia
     assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE lesson_id=?').get(id).percent,90);
   }finally{globalThis.fetch=originalFetch;}
 });
+test("fifth semester roster and attendance exclude QASP-S even with stale enrollments", async () => {
+  const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+  f.records.subjects.course.semesterNo=5;
+  f.records.students.qasp={id:'SUL-2',batch:'Q1-26',planType:'QASP-S',accountStatus:'active'};
+  f.records.enrollments.two={studentKey:'qasp',subjectKey:'course'};
+  for(const role of ['admin','teacher']){
+    const report=(await f.call(role,'/report',{lessonId:id})).data;
+    assert.deepEqual(report.students.map(s=>s.key),['student']);
+  }
+  await assert.rejects(f.call('admin','/attendance',{lessonId:id,sourceHash:'wrong-plan',rows:[{studentKey:'qasp',percent:90}]}),/INVALID_ATTENDANCE_ROW/);
+  assert.ok(f.records.enrollments.two);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) count FROM course_attendance').get().count,0);
+});
+
 test("every inactive account state blocks coursework without removing academic records", async () => {
   for(const status of ['suspended','frozen','withdrawn','paused']){
     const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
@@ -578,4 +592,4 @@ test('students review only their submitted answers, including after closing',asy
  await assert.rejects(f.call('student','/answers',{lessonId:id}),/HOMEWORK_NOT_SUBMITTED/);
 });
 
-test('complete Zoom report records unlinked students absent only in the chosen course',async()=>{const f=fixtures();f.records.enrollments.missing={studentKey:'missing',subjectKey:'course'};f.records.enrollments.outside={studentKey:'outside',subjectKey:'different'};const id=(await f.call('admin','/lesson',f.config)).data.id;await f.call('admin','/attendance',{lessonId:id,sourceHash:'full-roster',completeRoster:true,rows:[{studentKey:'student',percent:90}]});assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE student_key=?').get('missing').percent,0);assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE student_key=?').get('student').percent,90);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM course_attendance WHERE student_key=?').get('outside').n,0);});
+test('complete Zoom report records unlinked students absent only in the chosen course',async()=>{const f=fixtures();f.records.students.missing={...f.records.students.student,id:'SUL-2'};f.records.enrollments.missing={studentKey:'missing',subjectKey:'course'};f.records.enrollments.outside={studentKey:'outside',subjectKey:'different'};const id=(await f.call('admin','/lesson',f.config)).data.id;await f.call('admin','/attendance',{lessonId:id,sourceHash:'full-roster',completeRoster:true,rows:[{studentKey:'student',percent:90}]});assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE student_key=?').get('missing').percent,0);assert.equal(f.sql.prepare('SELECT percent FROM course_attendance WHERE student_key=?').get('student').percent,90);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM course_attendance WHERE student_key=?').get('outside').n,0);});

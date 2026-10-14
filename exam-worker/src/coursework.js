@@ -1,5 +1,6 @@
 import '../../productivity-ledger.js';
 import '../../student-account-policy.js';
+import '../../academic-policy.js';
 const reject = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -561,6 +562,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     const b = await json(request),
       l = await lessonFor(env, b.lessonId, s),
       enrollments = await ctx.firebaseRead("enrollments", auth.token),
+      packages = await ctx.firebaseRead("packages", auth.token),
       statusSources = s.role==='lecturer'?await Promise.all(['users','studentAdminSheets','professionalEnrollments'].map(p=>ctx.firebaseRead(p,auth.token))):[],
       rosterData = {students:s.students,users:statusSources[0]||{},studentAdminSheets:statusSources[1]||{},professionalEnrollments:statusSources[2]||{}},
       keys = [
@@ -570,6 +572,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
               (e) =>
                 e.subjectKey === l.subject_key &&
                 s.students[e.studentKey] &&
+                SulukeraAcademicPolicy.subjectAllowed(s.students[e.studentKey],s.subjects[l.subject_key],packages||{}) &&
                 (s.role==='lecturer'?SulukeraStudentAccount.isActiveInRoot(e.studentKey,rosterData):SulukeraStudentAccount.isActive(s.students[e.studentKey])),
             )
             .map((e) => e.studentKey),
@@ -637,9 +640,10 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     const b = await json(request),
       l = await lessonFor(env, b.lessonId, s),
       enrollments = await ctx.firebaseRead("enrollments", auth.token),
+      packages = await ctx.firebaseRead("packages", auth.token),
       eligible = new Set(
         Object.values(enrollments || {})
-          .filter((e) => e.subjectKey === l.subject_key)
+          .filter((e) => e.subjectKey === l.subject_key && s.students[e.studentKey] && SulukeraAcademicPolicy.subjectAllowed(s.students[e.studentKey],s.subjects[l.subject_key],packages||{}))
           .map((e) => e.studentKey),
       );
     if (!Array.isArray(b.rows) || !b.sourceHash) reject("INVALID_IMPORT");
