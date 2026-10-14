@@ -92,9 +92,9 @@ function cwStudentLessonCard(l,week){
   const needsReflection=cwNeedsReflection(attendance,l),approved=reflection?.score!=null,applied=approved&&!!l.result;
   const originalAttendance=attendance?(attendance.score??cwAttendancePoints(attendance.percent,l.attendanceMax,l)):null;
   const attendanceScore=applied?(cwRevisedAttendance(l)?Math.max(originalAttendance??0,reflection.score):reflection.score):originalAttendance;
-  const attendanceStatus=applied?'تم احتساب التعويض':!attendance?'بانتظار رصد الحضور':!cwNeedsReflection(attendance,l)?'تم الحضور':attendance.percent===0?'لم يتم الحضور':'حضور جزئي';
+  const attendanceStatus=applied?'تم احتساب التعويض':attendance?.provisional?'صفر مؤقت بانتظار رفع سجل الحضور':!attendance?'بانتظار رصد الحضور':!cwNeedsReflection(attendance,l)?'تم الحضور':attendance.percent===0?'لم يتم الحضور':'حضور جزئي';
   const attendanceNote=applied?'تم اعتماد واجب الحضور المسجل واحتساب درجته في الحضور.':!attendance?'ستظهر درجة حضورك بعد اعتماد تقرير المحاضرة.':!cwNeedsReflection(attendance,l)?'احتُسبت درجة حضورك للقاء المباشر.':approved?'تم اعتماد التعويض؛ أكمل الواجب الأساسي ليتم احتساب درجة حضورك.':reflection?'تم تسليم واجب الحضور المسجل، ودرجته قيد المراجعة لدى المحاضر.':'يرجى مشاهدة المحاضرة بشكل مسجل وحل واجب الحضور المسجل في المربع أدناه، ليتم احتساب درجة حضورك بعد اعتماد المحاضر وإكمال الواجب الأساسي.';
-  const hwStatus=homeworkScore!=null?(l.result?'تم تسليم الواجب':'درجة مرصودة يدويًا'):upcoming?'لم يفتح بعد':open?'بانتظار التسليم':'لم يتم التسليم';
+  const hwStatus=l.recordedGrades?.hwAutoMissed===true&&!l.result?'لم يتم تسليم الواجب':homeworkScore!=null?(l.result?'تم تسليم الواجب':'درجة مرصودة يدويًا'):upcoming?'لم يفتح بعد':open?'بانتظار التسليم':'لم يتم التسليم';
   const hwAction=l.result?'<button class="btn-out" onclick="cwViewAnswers(\''+l.id+'\')">الاطلاع على إجاباتي</button>':'';
   const solveAction=homeworkScore>=l.homeworkMax?'<p class="cw-perfect-score">✓ اكتمل الواجب بالدرجة الكاملة</p>':open?'<button class="btn-primary" onclick="cwSolve(\''+l.id+'\')">'+(l.result?'تحسين الدرجة':'حل واجب المحاضرة')+' ←</button>':'<p class="cw-muted">'+(upcoming?'يُتاح الحل في الموعد الموضح أعلاه.':'انتهت فترة تسليم الواجب.')+'</p>';
   const reflectionStatus=approved?'تم الاعتماد':reflection?'قيد المراجعة':needsReflection?'مطلوب لتعويض الحضور':attendance?'غير مطلوب':'بانتظار رصد الحضور';
@@ -568,9 +568,11 @@ function cwMergeStudentGrade(grade,subjectKey){
  const merged={...grade};
  for(const l of rows){
   const week=`w${l.week}`,hw=l.result?.score??l.recordedGrades?.hw;
-  if(hw!=null)merged[`${week}_hw`]=hw;
+  if(hw!=null){merged[`${week}_hw`]=hw;merged[`${week}_hwEntered`]=true;}
   if(l.attendance){const a=l.attendance;const score=a.score??(l.attendanceMax===3?cwAttendancePoints(a.percent,l.attendanceMax,l):a.percent>=80?l.attendanceMax:null);if(score!=null)merged[`${week}_attend`]=score;}
-  if(l.reflection?.score!=null&&hw!=null)merged[`${week}_attend`]=cwRevisedAttendance(l)?Math.max(merged[`${week}_attend`]??0,l.reflection.score):l.reflection.score;
+  if(l.reflection?.score!=null&&l.result!=null)merged[`${week}_attend`]=cwRevisedAttendance(l)?Math.max(merged[`${week}_attend`]??0,l.reflection.score):l.reflection.score;
+  if(merged[`${week}_attend`]!=null)merged[`${week}_attendEntered`]=true;
+  for(const name of ['hwNote','attendNote','hwAutoMissed','attendProvisional'])if(l.recordedGrades?.[name]!=null)merged[`${week}_${name}`]=l.recordedGrades[name];
   merged[`${week}_disc`]=l.discussion?.score??l.recordedGrades?.disc??null;
  }
  return merged;

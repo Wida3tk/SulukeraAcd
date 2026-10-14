@@ -34,7 +34,7 @@ function isProfessional(s) {
     String(s?.program || "").includes("السلوك التنظيمي")
   );
 }
-function isCurrent(subject, semesters, key) {
+export function isCurrent(subject, semesters, key) {
   const todaySaudi = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
   const currentTerms = Object.entries(semesters || {}).filter(([,t]) => t.startDate && t.endDate && t.startDate <= todaySaudi && t.endDate >= todaySaudi && !["inactive","finished","completed","archived"].includes(t.status));
   const matching = currentTerms.find(([k,t]) => (k === subject.semesterKey || (t.batches || []).includes(subject.batch)) && (t.subjects || []).includes(key));
@@ -57,7 +57,7 @@ export function attendanceFromGrades(lesson,studentKey,grades,max){
   if(raw===null||raw===undefined||raw==='')return null;
   const score=Number(raw),recorded=grade[`w${lesson.week}_attendEntered`]===true;
   if(!Number.isFinite(score)||score<0||score>max||(!recorded&&score===0))return null;
-  return {lesson_id:lesson.id,student_key:studentKey,percent:Math.round(score/max*10000)/100,source:'firebase_grade',score};
+  return {lesson_id:lesson.id,student_key:studentKey,percent:Math.round(score/max*10000)/100,source:'firebase_grade',score,provisional:grade[`w${lesson.week}_attendProvisional`]===true};
 }
 export function componentsFromGrades(lesson,studentKey,grades,assessment){
  const grade=Object.values(grades||{}).filter(g=>g.studentKey===studentKey&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];
@@ -68,7 +68,7 @@ export function componentsFromGrades(lesson,studentKey,grades,assessment){
  }
  return output;
 }
-function studentComponentsFromGrades(lesson,key,grades,assessment){const result=componentsFromGrades(lesson,key,grades,assessment),grade=Object.values(grades||{}).filter(g=>g.studentKey===key&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];if(grade?.[`w${lesson.week}_discApproved`]!==true)result.disc=null;return result;}
+function studentComponentsFromGrades(lesson,key,grades,assessment){const result=componentsFromGrades(lesson,key,grades,assessment),grade=Object.values(grades||{}).filter(g=>g.studentKey===key&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];if(grade?.[`w${lesson.week}_discApproved`]!==true)result.disc=null;for(const field of ['hwNote','attendNote','hwAutoMissed','attendProvisional'])if(grade?.[`w${lesson.week}_${field}`]!==undefined)result[field]=grade[`w${lesson.week}_${field}`];return result;}
 export function studentReviewedRecord(record){return record&&record.reviewed_at?record:record?{...record,score:null,feedback:''}:null;}
 async function scopedGrades(s,auth,ctx){return s.role==='student'?ctx.firebaseStudentGrades(auth.profile.studentKey,auth.token):ctx.firebaseRead('grades',auth.token);}
 async function scope(auth, ctx) {
@@ -166,7 +166,7 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
       assessment = await assessmentFor(env,l,settings),
       maxAttend = assessment.attendanceMax;
     const fields = {};
-    if (!attendanceOnly&&best?.score != null){fields[`w${l.week}_hw`] = best.score;fields[`w${l.week}_hwEntered`]=true;}
+    if (!attendanceOnly&&best?.score != null){fields[`w${l.week}_hw`] = best.score;fields[`w${l.week}_hwEntered`]=true;fields[`w${l.week}_hwNote`]='';fields[`w${l.week}_hwAutoMissed`]=false;}
     const discussion = await env.DB.prepare("SELECT score FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,studentKey).first();
     if(!attendanceOnly&&discussion?.score!=null){fields[`w${l.week}_disc`]=discussion.score;fields[`w${l.week}_discEntered`]=true;fields[`w${l.week}_discApproved`]=true;}
     const attend = attendance
@@ -198,6 +198,9 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
         updatedBy: actor,
         updatedRole: "coursework",
       };
+      if((attendance||(best?.score!=null&&reflection?.score!=null))&&fields[`w${l.week}_attend`]!=null)payload[`w${l.week}_attendProvisional`]=false;
+      const attendanceValue=payload[`w${l.week}_attend`];
+      if(attendanceValue!=null)payload[`w${l.week}_attendNote`]=Number(attendanceValue)<maxAttend?'يرجى مشاهدة المحاضرة بشكل مسجل وحل واجب الحضور المسجل ليتم احتساب درجة الحضور، بعد اعتماد المحاضر وإكمال الواجب الأساسي.':'';
       const token = await ctx.firebaseAdminToken(env),
         write = await fetch(`${dbUrl}/grades/${key}.json`, {
           method: "PUT",

@@ -3,6 +3,7 @@ import { handleGraduationProject } from "./graduation-projects.js";
 import {syncAcademicExamGrades} from './exam-grade-sync.js';
 import {unlimitedExam,remainingAttempts,attemptExpiry} from './exam-attempt-policy.js';
 import {syncProfessionalExamResults} from './professional-exam-results.js';
+import {finalizeAutomaticCoursework} from './coursework-auto-grades.js';
 import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
 import { handleLecturerSurvey } from "./lecturer-survey.js";
@@ -1081,6 +1082,7 @@ async function submitEvaluation(request, env, auth, examId) {
 
 export default {
   scheduled(event,env,ctx){
+    ctx.waitUntil(finalizeAutomaticCoursework(env,firebaseAdminToken));
     ctx.waitUntil(syncProfessionalExamResults(env,firebaseAdminToken));
     ctx.waitUntil(syncAcademicExamGrades(env,firebaseAdminToken));
     ctx.waitUntil(retryPendingCoursework(env,{firebaseAdminToken}).then(result=>{if(result.attempted)console.log("coursework_sync_retry",result);}));

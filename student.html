@@ -337,7 +337,7 @@ tr:hover td{background:#f8faff;}
 .secure-result{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-radius:15px;padding:15px 17px;margin-top:14px;border:1px solid}.secure-result-copy{font-size:12px;line-height:1.7}.secure-result-score{font-size:25px;font-weight:950;direction:ltr}.secure-result-high{background:#ecfdf3;border-color:#86d7a3;color:#126334}.secure-result-mid{background:#fff8e6;border-color:#efcd73;color:#7a5600}.secure-result-low{background:#fff0f1;border-color:#efadb4;color:#8d2430}
 @media(max-width:600px){.secure-exam-shell,.evaluation-shell{padding:14px;border-radius:16px}.secure-question{padding:16px}.secure-question-list{gap:18px}.evaluation-score{min-width:43px;padding:8px 10px}}
 </style>
-<link rel="stylesheet" href="coursework.css?v=20261011-polished-buttons">
+<link rel="stylesheet" href="coursework.css?v=20261014-auto-grades">
 <link rel="stylesheet" href="lecturer-survey.css?v=20261008-student-survey">
 </head>
 <body>
@@ -1479,6 +1479,8 @@ async function renderStudentGradesTab(){
                   <div class="week-box-val">${wt}</div>
                   <div class="week-box-max">/${wkMax}</div>
                   <div class="week-detail">ح${wa}·و${wh}·م${wd}</div>
+                  ${g?.[w+'_hwNote']&&Number(g[w+'_hw'])===0?`<p class="cw-grade-note">${escapeHtml(g[w+'_hwNote'])}</p>`:''}
+                  ${g?.[w+'_attendNote']?`<p class="cw-grade-note">${g[w+'_attendProvisional']?'صفر مؤقت يُصحح بعد رفع سجل الحضور. ':''}${escapeHtml(g[w+'_attendNote'])}</p>`:''}
                 </div>`;
               }).join('')}
             </div>
@@ -3098,7 +3100,7 @@ window.addEventListener('load', initFB);
 
 
 </script>
-<script src="coursework-ui.js?v=20261011-attendance-bands-2"></script>
+<script src="coursework-ui.js?v=20261014-auto-grades"></script>
 <link rel="stylesheet" href="lecturer-grading.css?v=20261011">
 <script src="lecturer-grading.js?v=20261011"></script>
 <script src="faculty-evaluation.js?v=20261011"></script>

@@ -64,3 +64,4 @@
 .cw-lesson-card>.btn-primary{width:100%;margin-top:auto}
 .cw-home-footer .btn-out{flex-shrink:0}
 @media(prefers-reduced-motion:reduce){:is(#academicCourseworkContent,.cw-report-shell) :is(.btn-primary,.btn-out){transition:none;transform:none!important}}
+.cw-grade-note{font-size:10px!important;line-height:1.8;text-align:start;padding:7px 9px;margin:7px 0 0;border-radius:8px;background:#fff5e4;color:#875c19;white-space:normal}
