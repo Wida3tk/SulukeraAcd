@@ -1,6 +1,7 @@
 import { handleProfessionalRecordings, handleProfessionalRecordingMedia } from "./professional-recordings.js";
 import { handleGraduationProject } from "./graduation-projects.js";
 import {syncAcademicExamGrades} from './exam-grade-sync.js';
+import {unlimitedExam,remainingAttempts,attemptExpiry} from './exam-attempt-policy.js';
 import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
 import { handleLecturerSurvey } from "./lecturer-survey.js";
@@ -360,12 +361,13 @@ async function saveExam(request, env, auth) {
       question.choiceC,
       question.choiceD,
     ].map((value) => String(value || "").trim());
+    while(choices.length&&choices[choices.length-1]==='')choices.pop();
     const correct = answerIndex(question.answer),
       points = Number(question.points);
     if (
       !String(question.text || "").trim() ||
       choices.some((value) => !value) ||
-      correct < 0 ||
+      choices.length<2 || correct < 0 || correct>=choices.length ||
       !(points > 0)
     )
       fail(`INVALID_QUESTION_${index + 1}`);
@@ -402,7 +404,7 @@ async function saveExam(request, env, auth) {
       opensAt,
       closesAt,
       Number(body.durationMinutes) || 120,
-      Number(body.maxAttempts) || 2,
+      body.maxAttempts===0?0:(Number(body.maxAttempts)||2),
       body.status === "published" ? "published" : "draft",
       auth.uid,
       existing?.created_at || now,
@@ -866,9 +868,8 @@ async function studentExams(env, auth) {
       durationMinutes: exam.exception_active
         ? exam.exception_duration || exam.duration_minutes
         : exam.duration_minutes,
-      maxAttempts:
-        exam.max_attempts +
-        (exam.exception_active ? exam.extra_attempts || 0 : 0),
+      maxAttempts:unlimitedExam(exam)?null:exam.max_attempts+(exam.exception_active?exam.extra_attempts||0:0),
+      unlimitedAttempts:unlimitedExam(exam),
       attempts: mine.map((attempt) => ({
         attemptNo: attempt.attempt_no,
         status: attempt.status,
@@ -929,13 +930,11 @@ async function startAttempt(request, env, auth, examId) {
     const max =
       exam.max_attempts +
       (exam.exception_active ? exam.extra_attempts || 0 : 0);
-    if (count.count >= max) fail("NO_ATTEMPTS_REMAINING", 403);
+    if (!unlimitedExam(exam)&&count.count >= max) fail("NO_ATTEMPTS_REMAINING", 403);
     const duration = exam.exception_active
         ? exam.exception_duration || exam.duration_minutes
         : exam.duration_minutes,
-      expires = new Date(
-        Math.min(closes.getTime(), now.getTime() + duration * 60000),
-      );
+      expires = attemptExpiry(now,closes,duration);
     attempt = {
       id: crypto.randomUUID(),
       attempt_no: count.count + 1,
@@ -969,6 +968,9 @@ async function startAttempt(request, env, auth, examId) {
   }));
   return {
     attemptId: attempt.id,
+    subjectKey:exam.subject_key,
+    durationMinutes:exam.exception_active?exam.exception_duration||exam.duration_minutes:exam.duration_minutes,
+    unlimitedAttempts:unlimitedExam(exam),
     attemptNo: attempt.attempt_no,
     expiresAt: attempt.expires_at,
     questions,
@@ -1030,10 +1032,8 @@ async function submitAttempt(request, env, auth, attemptId) {
     submitted: true,
     wrongCount: wrong,
     perfect: wrong === 0,
-    attemptsRemaining: Math.max(
-      0,
-      exam.max_attempts + (exception?.extra_attempts || 0) - count.count,
-    ),
+    attemptsRemaining:remainingAttempts(exam,count.count,exception?.extra_attempts),
+    unlimitedAttempts:unlimitedExam(exam),
   };
 }
 async function submitEvaluation(request, env, auth, examId) {
