@@ -43,6 +43,10 @@ function lpRows(){
 async function renderLecturerPerformance(force=false){
  const host=document.getElementById('lecturerPerformanceContent');if(!host)return;
  if(currentUser?.role!=='admin'){host.innerHTML='<div class="card">هذه الصفحة للإدارة فقط.</div>';return;}
+ if(force&&typeof loadAllFromFirebase==='function'){
+   // The secure exam worker writes grades outside this page; refresh the local grade model first.
+   try{await loadAllFromFirebase();lpExtra=null;}catch(error){lpError='تعذر جلب أحدث سجل الدرجات';}
+ }
  if((!lpExtra||force)&&!lpLoading){lpLoading=true;lpPaint();try{
    const token=await firebase.auth().currentUser.getIdToken();
    const response=await fetch(EXAM_API_BASE+'/admin/lecturer-performance',{headers:{Authorization:'Bearer '+token}});

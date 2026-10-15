@@ -12,4 +12,5 @@ assert.equal(eighty.remaining,80);assert.equal(eighty.overdue,80);assert.equal(e
 vm.runInContext('grades[1]={0:{w1_attend:0,w1_attendEntered:true,w1_hw:0,w1_hwEntered:true,w1_disc:0,w1_discEntered:true}};lpMode="current"',context);
 assert.equal(vm.runInContext('lpRows()[0].graded',context),1);assert.equal(vm.runInContext('lpRows()[0].remaining',context),0);
 assert.equal(vm.runInContext("lpDate('invalid')",context),'غير متوفرة');
+assert.match(fs.readFileSync('lecturer-performance.js','utf8'),/await loadAllFromFirebase\(\);lpExtra=null/);
 console.log('Lecturer performance: explicit zero, future lessons, unique students, attribution and term filters passed.');
