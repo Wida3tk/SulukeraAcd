@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261011-exception-term"></script>
-<script src="grade-result-policy.js?v=20261011-unrecorded-cards"></script>
+<script src="grade-result-policy.js?v=20261015-unrecorded-attendance"></script>
 <script src="student-account-policy.js?v=20261012-withdrawn-roster"></script>
 <script src="productivity-ledger.js?v=20261006-meetings"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -4892,7 +4892,7 @@ function renderProfileGrades(stdIdx, mySubjs) {
           <div style="flex:1"><div class="progress" style="height:12px;margin-bottom:6px"><div class="progress-fill ${pc(currentProgress)}" style="width:${currentProgress}%"></div></div>${!examDone?'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">النتيجة النهائية لم تُرصد حتى اكتمال جميع الدرجات</div>':''}</div>
         </div>
         <div class="week-breakdown">
-          ${['w1','w2','w3','w4'].map((w,i)=>{const wt=gradeWeekDisplay(g,w);return `<div class="week-box"><div class="week-box-label">أسبوع ${i+1}</div><div class="week-box-val">${wt}</div><div class="week-box-max">${wt==='لم تُرصد'?'الرصد غير مكتمل':`/${wkMax}`}</div><div style="font-size:10px;color:var(--text-muted);margin-top:6px">حضور: ${gradeFieldDisplay(g,w,'attend')} · واجب: ${gradeFieldDisplay(g,w,'hw')} · مناقشة: ${gradeFieldDisplay(g,w,'disc')}</div>${g[w+'_hwNote']&&Number(g[w+'_hw'])===0?`<p class="cw-grade-note">${escapeHtml(g[w+'_hwNote'])}</p>`:''}${g[w+'_attendNote']?`<p class="cw-grade-note">${g[w+'_attendProvisional']?'صفر مؤقت يُصحح بعد رفع سجل الحضور. ':''}${escapeHtml(g[w+'_attendNote'])}</p>`:''}</div>`;}).join('')}
+          ${['w1','w2','w3','w4'].map((w,i)=>{const wt=gradeWeekDisplay(g,w);return `<div class="week-box"><div class="week-box-label">أسبوع ${i+1}</div><div class="week-box-val">${wt}</div><div class="week-box-max">${wt==='لم تُرصد'?'الرصد غير مكتمل':`/${wkMax}`}</div><div style="font-size:10px;color:var(--text-muted);margin-top:6px">حضور: ${gradeFieldDisplay(g,w,'attend')} · واجب: ${gradeFieldDisplay(g,w,'hw')} · مناقشة: ${gradeFieldDisplay(g,w,'disc')}</div>${g[w+'_hwNote']&&Number(g[w+'_hw'])===0?`<p class="cw-grade-note">${escapeHtml(g[w+'_hwNote'])}</p>`:''}${g[w+'_attendNote']&&!g[w+'_attendProvisional']?`<p class="cw-grade-note">${escapeHtml(g[w+'_attendNote'])}</p>`:''}</div>`;}).join('')}
         </div>
         <div style="padding:10px 14px;background:${!isGradeComplete(g)?'var(--warn-light)':total>=settings.gradeFail?'var(--success-light)':'var(--danger-light)'};border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
           <strong>📝 الاختبار النهائي</strong><span style="font-size:22px;font-weight:800">${isExamEntered(g)?`${g.exam??0}/${settings.exam}`:'لم تُرصد'}</span>
@@ -8727,7 +8727,7 @@ async function cleanDuplicateStudents(){
 
 
 </script>
-<script src="coursework-ui.js?v=20261014-auto-grades"></script>
+<script src="coursework-ui.js?v=20261015-unrecorded-attendance"></script>
 <script src="student-status-ui.js?v=20261006-status"></script>
 <script src="performance.js?v=20261006-meetings"></script>
 <script src="professional-attendance-history.js?v=20261011-replace"></script>

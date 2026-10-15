@@ -272,7 +272,7 @@ test('student attendance minutes use the matching Zoom import and never infer ti
   const html=context.cwAttendanceMinutesMarkup(lesson.attendance);
   assert.match(html,/>20<\/strong>/);assert.match(html,/>120<\/strong>/);
   assert.match(context.cwAttendanceMinutesMarkup({score:3,percent:100,source:'firebase_grade',meeting_minutes:120}),/غير متاحة/);
-  assert.match(context.cwAttendanceMinutesMarkup({percent:0,provisional:true}),/الصفر مؤقت/);
+  assert.match(context.cwAttendanceMinutesMarkup({percent:0,provisional:true}),/بانتظار سجل Zoom/);
   assert.match(context.cwAttendanceMinutesMarkup({...lesson.attendance,percent:0}),/>0<\/strong>/);
 });
 
@@ -515,6 +515,8 @@ test('zero attendance needs explicit recording and stays isolated by student sub
  const lesson={id:'one',subject_key:'course',week:1};
  const grade={studentKey:'student',subjectKey:'course',w1_attend:0};
  assert.equal(attendanceFromGrades(lesson,'student',{g:grade},5),null);
+ assert.equal(attendanceFromGrades(lesson,'student',{g:{...grade,w1_attendEntered:true,w1_attendProvisional:true}},5),null);
+ assert.equal(attendanceFromGrades(lesson,'student',{g:{...grade,w1_attend:5,w1_attendEntered:true,w1_attendProvisional:true}},5).percent,100);
  assert.equal(attendanceFromGrades(lesson,'student',{g:{...grade,w1_attendEntered:true}},5).percent,0);
  assert.equal(attendanceFromGrades(lesson,'other',{g:{...grade,w1_attendEntered:true}},5),null);
  assert.equal(attendanceFromGrades({...lesson,week:2},'student',{g:{...grade,w1_attendEntered:true}},5),null);

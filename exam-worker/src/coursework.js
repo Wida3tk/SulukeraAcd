@@ -55,10 +55,10 @@ export function attendanceFromGrades(lesson,studentKey,grades,max){
   const candidates=Object.values(grades||{}).filter(g=>g.studentKey===studentKey&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
   const grade=candidates[0];if(!grade)return null;
   const raw=grade[`w${lesson.week}_attend`]??grade[`w${lesson.week}`]?.attend;
-  if(raw===null||raw===undefined||raw==='')return null;
+  if(raw===null||raw===undefined||raw===''||Number(raw)===0&&grade[`w${lesson.week}_attendProvisional`]===true)return null;
   const score=Number(raw),recorded=grade[`w${lesson.week}_attendEntered`]===true;
   if(!Number.isFinite(score)||score<0||score>max||(!recorded&&score===0))return null;
-  return {lesson_id:lesson.id,student_key:studentKey,percent:Math.round(score/max*10000)/100,source:'firebase_grade',score,provisional:grade[`w${lesson.week}_attendProvisional`]===true};
+  return {lesson_id:lesson.id,student_key:studentKey,percent:Math.round(score/max*10000)/100,source:'firebase_grade',score,provisional:grade[`w${lesson.week}_attendProvisional`]===true&&score===0};
 }
 export function componentsFromGrades(lesson,studentKey,grades,assessment){
  const grade=Object.values(grades||{}).filter(g=>g.studentKey===studentKey&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];

@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261011-exception-term"></script>
-<script src="grade-result-policy.js?v=20261011-unrecorded-cards"></script>
+<script src="grade-result-policy.js?v=20261015-unrecorded-attendance"></script>
 <script src="student-account-policy.js?v=20261012-withdrawn-roster"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
@@ -1480,7 +1480,7 @@ async function renderStudentGradesTab(){
                   <div class="week-box-max">/${wkMax}</div>
                   <div class="week-detail">ح${wa}·و${wh}·م${wd}</div>
                   ${g?.[w+'_hwNote']&&Number(g[w+'_hw'])===0?`<p class="cw-grade-note">${escapeHtml(g[w+'_hwNote'])}</p>`:''}
-                  ${g?.[w+'_attendNote']?`<p class="cw-grade-note">${g[w+'_attendProvisional']?'صفر مؤقت يُصحح بعد رفع سجل الحضور. ':''}${escapeHtml(g[w+'_attendNote'])}</p>`:''}
+                  ${g?.[w+'_attendNote']&&!g[w+'_attendProvisional']?`<p class="cw-grade-note">${escapeHtml(g[w+'_attendNote'])}</p>`:''}
                 </div>`;
               }).join('')}
             </div>
@@ -3100,7 +3100,7 @@ window.addEventListener('load', initFB);
 
 
 </script>
-<script src="coursework-ui.js?v=20261014-attendance-minutes"></script>
+<script src="coursework-ui.js?v=20261015-unrecorded-attendance"></script>
 <link rel="stylesheet" href="lecturer-grading.css?v=20261011">
 <script src="lecturer-grading.js?v=20261011"></script>
 <script src="faculty-evaluation.js?v=20261011"></script>

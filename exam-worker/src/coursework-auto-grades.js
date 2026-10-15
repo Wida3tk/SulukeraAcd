@@ -11,12 +11,14 @@ export function automaticCourseworkFields(l,g={},sources={},now=Date.now()){
  if(best?.score!=null&&(!hwRecorded||(g[w+'_hwAutoMissed']===true&&Number(g[w+'_hw'])===0))){out[w+'_hw']=best.score;out[w+'_hwEntered']=true;out[w+'_hwAutoMissed']=false;out[w+'_hwNote']='';}
  else if(!hwRecorded&&now>Date.parse(l.closes_at)){out[w+'_hw']=0;out[w+'_hwEntered']=true;out[w+'_hwAutoMissed']=true;out[w+'_hwNote']='لم يتم تسليم الواجب';}
  else if(now<=Date.parse(l.closes_at)&&g[w+'_hwAutoMissed']===true&&Number(g[w+'_hw'])===0){out[w+'_hw']=null;out[w+'_hwEntered']=false;out[w+'_hwAutoMissed']=false;out[w+'_hwNote']='';}
- if(!attRecorded||((attendance||(best?.score!=null&&sources.reflection?.score!=null))&&g[w+'_attendProvisional']===true&&Number(g[w+'_attend'])===0)){
-  let score=attendance?attendanceGrade(attendance.percent,max,String(l.opens_at).slice(0,10)>='2026-10-04'):0;
+ const provisionalZero=g[w+'_attendProvisional']===true&&Number(g[w]?.attend??g[w+'_attend'])===0;
+ if(provisionalZero){out[w+'_attend']=null;out[w+'_attendEntered']=false;out[w+'_attendProvisional']=false;out[w+'_attendNote']='';}
+ if(!attRecorded||provisionalZero){
+  let score=attendance?attendanceGrade(attendance.percent,max,String(l.opens_at).slice(0,10)>='2026-10-04'):null;
   if(best?.score!=null&&sources.reflection?.score!=null)score=Math.max(score??0,sources.reflection.score);
-  if(score!=null){out[w+'_attend']=score;out[w+'_attendEntered']=true;out[w+'_attendProvisional']=!attendance&&!(best?.score!=null&&sources.reflection?.score!=null);}
+  if(score!=null){out[w+'_attend']=score;out[w+'_attendEntered']=true;out[w+'_attendProvisional']=false;}
  }
- const value=out[w+'_attend']??(attRecorded?Number(g[w]?.attend??g[w+'_attend']):null);
+ const value=Object.hasOwn(out,w+'_attend')?out[w+'_attend']:(attRecorded?Number(g[w]?.attend??g[w+'_attend']):null);
  if(value!=null)out[w+'_attendNote']=value<max?ATTENDANCE_FOLLOWUP:'';
  if(g[w+'_hwAutoMissed']===true&&Number(g[w+'_hw'])>0){out[w+'_hwNote']='';out[w+'_hwAutoMissed']=false;}
  return Object.fromEntries(Object.entries(out).filter(([k,v])=>g[k]!==v));
