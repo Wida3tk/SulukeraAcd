@@ -1088,7 +1088,7 @@ export default {
   scheduled(event,env,ctx){
     ctx.waitUntil(finalizeAutomaticCoursework(env,firebaseAdminToken));
     ctx.waitUntil(syncProfessionalExamResults(env,firebaseAdminToken));
-    ctx.waitUntil(syncAcademicExamGrades(env,firebaseAdminToken));
+    ctx.waitUntil(syncAcademicExamGrades(env,firebaseAdminToken,{limit:20}));
     ctx.waitUntil(retryPendingCoursework(env,{firebaseAdminToken}).then(result=>{if(result.attempted)console.log("coursework_sync_retry",result);}));
   },
   async fetch(request, env) {

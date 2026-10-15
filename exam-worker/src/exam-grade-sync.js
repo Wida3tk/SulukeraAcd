@@ -3,9 +3,9 @@ export function examGradeFields(row,now){
  const score=Number(row.score);if(row.score===null||!Number.isFinite(score)||score<0||score>20)throw Error('INVALID_EXAM_SCORE');
  return {studentKey:row.student_key,subjectKey:row.subject_key,exam:Math.round(score*200)/100,examEntered:true,secureExamScore20:score,secureExamId:row.exam_id,secureExamSyncedAt:now,updatedAt:now,updatedBy:'secure_exam_service',updatedRole:'system'};
 }
-export async function syncAcademicExamGrades(env,tokenProvider,{studentKey=''}={}){
- const oneStudent=String(studentKey||''),studentFilter=oneStudent?' AND a.student_key=?':'';
- let statement=env.DB.prepare(`WITH results AS (SELECT e.subject_key,a.student_key,e.id exam_id,MAX(a.score) score FROM exams e JOIN attempts a ON a.exam_id=e.id WHERE a.status='submitted' AND a.score IS NOT NULL AND e.subject_key NOT LIKE 'professional_%' AND e.batch NOT LIKE 'PRO-%'${studentFilter} GROUP BY e.subject_key,a.student_key) SELECT r.* FROM results r LEFT JOIN academic_exam_grade_sync j ON j.subject_key=r.subject_key AND j.student_key=r.student_key WHERE j.score IS NULL OR j.score<>r.score OR j.exam_id<>r.exam_id LIMIT 5`);
+export async function syncAcademicExamGrades(env,tokenProvider,{studentKey='',limit=5}={}){
+ const oneStudent=String(studentKey||''),studentFilter=oneStudent?' AND a.student_key=?':'',batchLimit=Math.max(1,Math.min(25,Math.floor(Number(limit)||5)));
+ let statement=env.DB.prepare(`WITH results AS (SELECT e.subject_key,a.student_key,e.id exam_id,MAX(a.score) score FROM exams e JOIN attempts a ON a.exam_id=e.id WHERE a.status='submitted' AND a.score IS NOT NULL AND e.subject_key NOT LIKE 'professional_%' AND e.batch NOT LIKE 'PRO-%'${studentFilter} GROUP BY e.subject_key,a.student_key) SELECT r.* FROM results r LEFT JOIN academic_exam_grade_sync j ON j.subject_key=r.subject_key AND j.student_key=r.student_key WHERE j.score IS NULL OR j.score<>r.score OR j.exam_id<>r.exam_id LIMIT ${batchLimit}`);
  if(oneStudent)statement=statement.bind(oneStudent);
  const rows=(await statement.all()).results;
  if(!rows.length)return {synced:0};const token=await tokenProvider(env),headers={Authorization:'Bearer '+token,'Content-Type':'application/json'};let synced=0;
