@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const html=fs.readFileSync('index.html','utf8');
+const start=html.indexOf('function resolveSemesterOfferingKey('),end=html.indexOf('\nasync function ',start);
+const ctx={sameBatchName:(a,b)=>String(a).trim().toUpperCase()===String(b).trim().toUpperCase()};
+vm.createContext(ctx);vm.runInContext(html.slice(start,end),ctx);
+const catalog={q2:{courseKey:'course_04',batch:'Q2-26'},q3:{courseKey:'course_04',batch:'Q3-26'},other:{courseKey:'course_05',batch:'Q2-26'}};
+assert.equal(ctx.resolveSemesterOfferingKey('q2','Q3-26',catalog),'q3');
+assert.equal(ctx.resolveSemesterOfferingKey('q2','Q2-26',catalog),'q2');
+assert.equal(ctx.resolveSemesterOfferingKey('other','Q3-26',catalog),'other');
+assert.equal(ctx.resolveSemesterOfferingKey('missing','Q3-26',catalog),'missing');
+assert.equal(ctx.resolveSemesterOfferingKey('q2','Q3-26',{...catalog,ambiguous:catalog.q3}),'q2');
+assert.match(html,/archivedSlots\.map\(\(\[,slot\]\)=>resolveSemesterOfferingKey\(slot\.subjectKey,batch,liveSubjects\)\)/);
+console.log('PASS: historical schedule resolves to own cohort offering; unrelated and ambiguous offerings remain intact.');

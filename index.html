@@ -1483,6 +1483,12 @@ async function loadAllFromFirebase(){
   }
 }
 
+function resolveSemesterOfferingKey(key,batch,catalog){
+  const source=catalog?.[key];
+  if(!source?.courseKey||sameBatchName(source.batch,batch))return key;
+  const own=Object.entries(catalog||{}).filter(([,subject])=>subject.courseKey===source.courseKey&&sameBatchName(subject.batch,batch));
+  return own.length===1?own[0][0]:key;
+}
 async function ensureOctober2026AcademicFoundation(root){
   if(currentUser?.role!=='admin')return false;
   const startDate='2026-10-04',endDate='2026-11-05',previousStartDate='2026-08-23',previousEndDate='2026-09-24';
@@ -1514,7 +1520,7 @@ async function ensureOctober2026AcademicFoundation(root){
     if(JSON.stringify(oldSemester)!==JSON.stringify(nextSemester))updates[`semesters/${semesterKey}`]=nextSemester;
     const archivedSlots=Object.entries(root.schedule?.weekly||{}).filter(([,slot])=>sameBatchName(slot.batch,batch)&&!coursesForSemester(semesterNo).some(course=>slot.subjectKey===offeringKeyFor(batch,course.key)||normalizeLegacyText(slot.subject)===normalizeLegacyText(course.name)));
     if(archivedSlots.length){
-      const archiveSemesterKey=`sem_2026_08_${cohort}`,oldArchive=liveSemesters[archiveSemesterKey]||{},archiveSubjectKeys=[...new Set(archivedSlots.map(([,slot])=>slot.subjectKey).filter(Boolean))],previousSemesterNo=semesterNo-1,archiveSemester={...oldArchive,name:`${batch} — الفصل ${previousSemesterNo} — أغسطس 2026`,startDate:previousStartDate,endDate:previousEndDate,batches:[batch],subjects:archiveSubjectKeys,status:'inactive'};
+      const archiveSemesterKey=`sem_2026_08_${cohort}`,oldArchive=liveSemesters[archiveSemesterKey]||{},archiveSubjectKeys=[...new Set(archivedSlots.map(([,slot])=>resolveSemesterOfferingKey(slot.subjectKey,batch,liveSubjects)).filter(Boolean))],previousSemesterNo=semesterNo-1,archiveSemester={...oldArchive,name:`${batch} — الفصل ${previousSemesterNo} — أغسطس 2026`,startDate:previousStartDate,endDate:previousEndDate,batches:[batch],subjects:archiveSubjectKeys,status:'inactive'};
       if(JSON.stringify(oldArchive)!==JSON.stringify(archiveSemester))updates[`semesters/${archiveSemesterKey}`]=archiveSemester;
     }
   });
