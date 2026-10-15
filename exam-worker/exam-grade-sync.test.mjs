@@ -7,3 +7,7 @@ test('sync ignores evaluation gating and patches only exam fields across duplica
  try{assert.equal((await syncAcademicExamGrades(env,async()=> 'token')).synced,1);assert.equal(writes[0]['a/exam'],38);assert.equal(writes[0]['b/exam'],38);assert(!Object.keys(writes[0]).some(k=>k.includes('w1')||k.startsWith('other/')));assert.equal(journals.length,1);}finally{globalThis.fetch=fetchBefore;}
 });
 test('failed Firebase saves are not marked synchronized and remain retryable',async()=>{const before=globalThis.fetch;let journal=0;const env={DB:{prepare:()=>({all:async()=>({results:[{student_key:'s',subject_key:'c',exam_id:'e',score:0}]}),bind:()=>({run:async()=>journal++})})}};globalThis.fetch=async()=>new Response('{}',{status:503});try{assert.equal((await syncAcademicExamGrades(env,async()=> 'token')).synced,0);assert.equal(journal,0);}finally{globalThis.fetch=before;}});
+test('evaluation-triggered sync is limited to the evaluated student',async()=>{
+ const calls=[],before=globalThis.fetch,env={DB:{prepare:sql=>({all:async()=>{calls.push({sql,args:[]});return {results:[]};},bind:(...args)=>({all:async()=>{calls.push({sql,args});return {results:[]};}})})}};
+ globalThis.fetch=before;try{assert.deepEqual(await syncAcademicExamGrades(env,async()=> 'token',{studentKey:'s-1'}),{synced:0});assert.equal(calls.length,1);assert.match(calls[0].sql,/a\.student_key=\?/);assert.deepEqual(calls[0].args,['s-1']);}finally{globalThis.fetch=before;}
+});

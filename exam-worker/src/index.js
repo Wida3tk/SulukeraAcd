@@ -1076,7 +1076,11 @@ async function submitEvaluation(request, env, auth, examId) {
   )
     .bind(examId, studentKey)
     .first();
-  await syncProfessionalExamResults(env,firebaseAdminToken,{studentKey,examId}).catch(error=>console.error('professional_result_retry_pending',error.message));
+  const exam = await env.DB.prepare("SELECT subject_key FROM exams WHERE id=?").bind(examId).first();
+  if(exam?.subject_key==='professional_organizational_behavior_final')
+    await syncProfessionalExamResults(env,firebaseAdminToken,{studentKey,examId}).catch(error=>console.error('professional_result_retry_pending',error.message));
+  else
+    await syncAcademicExamGrades(env,firebaseAdminToken,{studentKey}).catch(error=>console.error('academic_result_retry_pending',error.message));
   return { evaluated: true, bestScore: best.score };
 }
 
