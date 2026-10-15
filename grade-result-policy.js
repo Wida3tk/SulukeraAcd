@@ -3,4 +3,5 @@ function isCourseworkFieldEntered(g,week,field){if(!g)return false;const key=wee
 function isGradeComplete(g){return isExamEntered(g)&&['w1','w2','w3','w4'].every(w=>['attend','hw','disc'].every(f=>isCourseworkFieldEntered(g,w,f)));}
 function gradeFieldDisplay(g,week,field){if(field==='attend'&&!isCourseworkFieldEntered(g,week,field))return 'لم يتم الرصد';return isCourseworkFieldEntered(g,week,field)?String(g[week]?.[field]??g[week+'_'+field]):'لم تُرصد';}
 function hasRecordedCourseGrade(g){return isExamEntered(g)||['w1','w2','w3','w4'].some(w=>['attend','hw','disc'].some(f=>isCourseworkFieldEntered(g,w,f)));}
+function normalizeCourseworkWeek(g,week){return {...g[week],...Object.fromEntries(['attend','hw','disc'].map(field=>[field,isCourseworkFieldEntered(g,week,field)?(g[week]?.[field]??g[week+'_'+field]):null]))};}
 function gradeWeekDisplay(g,week){return ['attend','hw','disc'].every(f=>isCourseworkFieldEntered(g,week,f))?String(['attend','hw','disc'].reduce((sum,f)=>sum+Number(g[week]?.[f]??g[week+'_'+f]),0)):'لم تُرصد';}

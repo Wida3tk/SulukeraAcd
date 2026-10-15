@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const html=fs.readFileSync('index.html','utf8');
+const original={studentKey:'s',subjectKey:'c',w1:{attend:0,attendEntered:true,hw:5,disc:4},w1_attendEntered:true,w2_hw:0,w2_hwEntered:true,w3_disc:6,w3_discEntered:false,w4_attend:0,w4_attendEntered:false,w4_attendProvisional:true,exam:38,examEntered:true,secureExamId:'exam-source',gradeMerge:{policy:'highest'}};
+let saved=structuredClone(original),field='w1_hw';
+const makeEmptyGrade=()=>({w1:{},w2:{},w3:{},w4:{}});
+const context={console,Date,currentUser:{role:'admin',username:'admin'},studentRequestsData:[{_fbKey:'r',status:'awaiting_lecturer_review',studentKey:'s',subjectKey:'c'}],subjects:[{_fbKey:'c',name:'Course'}],students:[{_fbKey:'s'}],grades:{},showToast:()=>{},getGradeReviewInputId:kind=>kind,getGradeReviewFieldMeta:()=>({max:6,label:'field'}),getStudentFullName:()=>'',makeEmptyGrade,saveActivityLog:async()=>{},loadGradesTable:()=>{},document:{getElementById:id=>({value:id==='field'?field:id==='value'?'3':''})},fbRef:path=>({transaction:async fn=>{saved=fn(saved);return {committed:true};},update:async()=>{}}),isExamEntered:g=>g.examEntered===true};
+vm.createContext(context);vm.runInContext(fs.readFileSync('grade-result-policy.js','utf8'),context);
+const nested=context.normalizeCourseworkWeek(original,'w1');
+assert.equal(nested.attend,0);assert.equal(nested.attendEntered,true);assert.equal(nested.hw,5);
+assert.equal(context.normalizeCourseworkWeek(original,'w3').disc,null);
+assert.equal(context.normalizeCourseworkWeek(original,'w4').attend,null);
+assert.equal(context.normalizeCourseworkWeek({w1_hw:0},'w1').hw,null);
+const start=html.indexOf('async function approveGradeReviewRequest('),end=html.indexOf('\nasync function ',start+1);vm.runInContext(html.slice(start,end),context);
+(async()=>{
+ await context.approveGradeReviewRequest('r');
+ assert.equal(saved.w1.hw,3);assert.equal(saved.w1_hw,3);assert.equal(saved.w1.hwEntered,true);
+ for(const key of ['w1_attendEntered','w2_hwEntered','w3_discEntered','exam','examEntered','secureExamId'])assert.deepEqual(saved[key],original[key],key+' retained');
+ assert.equal(saved.w1.attend,0);assert.equal(saved.w4_attendProvisional,true);assert.deepEqual(saved.gradeMerge,original.gradeMerge);
+ assert.equal(Object.hasOwn(saved,'w2_attend'),false,'review does not manufacture zeros for missing fields');
+ field='w4_attend';context.studentRequestsData[0].status='awaiting_lecturer_review';await context.approveGradeReviewRequest('r');
+ assert.equal(saved.w4_attend,3);assert.equal(saved.w4_attendEntered,true);assert.equal(saved.w4_attendProvisional,false);
+ console.log('PASS: legacy/nested values and explicit zero remain visible; single-field review preserves other scores, flags, exam provenance and merge metadata.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

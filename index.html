@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="academic-policy.js?v=20261011-exception-term"></script>
-<script src="grade-result-policy.js?v=20261015-unrecorded-attendance"></script>
+<script src="grade-result-policy.js?v=20261015-record-preservation"></script>
 <script src="student-account-policy.js?v=20261012-withdrawn-roster"></script>
 <script src="productivity-ledger.js?v=20261006-meetings"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1454,10 +1454,10 @@ async function loadAllFromFirebase(){
           grades[si][stdIdx]={
             ...g,
             _fbKey:`${g.studentKey}_${g.subjectKey}`,
-            w1:{attend:isCourseworkFieldEntered(g,'w1','attend')?g.w1_attend:null,hw:isCourseworkFieldEntered(g,'w1','hw')?g.w1_hw:null,disc:isCourseworkFieldEntered(g,'w1','disc')?g.w1_disc:null},
-            w2:{attend:isCourseworkFieldEntered(g,'w2','attend')?g.w2_attend:null,hw:isCourseworkFieldEntered(g,'w2','hw')?g.w2_hw:null,disc:isCourseworkFieldEntered(g,'w2','disc')?g.w2_disc:null},
-            w3:{attend:isCourseworkFieldEntered(g,'w3','attend')?g.w3_attend:null,hw:isCourseworkFieldEntered(g,'w3','hw')?g.w3_hw:null,disc:isCourseworkFieldEntered(g,'w3','disc')?g.w3_disc:null},
-            w4:{attend:isCourseworkFieldEntered(g,'w4','attend')?g.w4_attend:null,hw:isCourseworkFieldEntered(g,'w4','hw')?g.w4_hw:null,disc:isCourseworkFieldEntered(g,'w4','disc')?g.w4_disc:null},
+            w1:normalizeCourseworkWeek(g,'w1'),
+            w2:normalizeCourseworkWeek(g,'w2'),
+            w3:normalizeCourseworkWeek(g,'w3'),
+            w4:normalizeCourseworkWeek(g,'w4'),
             exam:(g.exam!==undefined&&g.exam!==null&&g.exam!=='')?g.exam:null,
             semesterKey:g.semesterKey||'',
             examEntered:g.examEntered===true || Number(g.exam)>0
@@ -5368,14 +5368,15 @@ async function approveGradeReviewRequest(requestKey){
   try{
     await fbRef('grades/'+gradeKey).transaction(current=>{
       const grade=current||{};
-      const next={studentKey:student._fbKey,subjectKey:subject._fbKey,
-        w1_attend:grade.w1_attend||0,w1_hw:grade.w1_hw||0,w1_disc:grade.w1_disc||0,
-        w2_attend:grade.w2_attend||0,w2_hw:grade.w2_hw||0,w2_disc:grade.w2_disc||0,
-        w3_attend:grade.w3_attend||0,w3_hw:grade.w3_hw||0,w3_disc:grade.w3_disc||0,
-        w4_attend:grade.w4_attend||0,w4_hw:grade.w4_hw||0,w4_disc:grade.w4_disc||0,
-        exam:grade.exam??null,examEntered:grade.examEntered===true,updatedAt:now};
+      const next={...grade,studentKey:student._fbKey,subjectKey:subject._fbKey,updatedAt:now,
+        updatedBy:currentUser?.username||currentUser?.id||'admin',updatedRole:currentUser?.role||'admin'};
       if(field==='exam'){ next.exam=value; next.examEntered=true; }
-      else {next[field]=value;next[field+'Entered']=true;}
+      else {
+        next[field]=value;next[field+'Entered']=true;
+        const [week,part]=field.split('_');
+        if(grade[week])next[week]={...grade[week],[part]:value,[part+'Entered']:true};
+        if(part==='attend'){next[week+'_attendProvisional']=false;next[week+'_attendNote']='';}
+      }
       return next;
     });
     const requestUpdate={status:'completed',lecturerNote,lecturerReviewedAt:now,lecturerReviewedBy:currentUser?.username||currentUser?.id||'lecturer',gradeReviewField:field,gradeReviewValue:value};
