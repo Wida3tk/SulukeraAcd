@@ -1,8 +1,14 @@
 let facultyCoursesTab='current';
+function facultySubjectInTerm(subject,term,catalog={}){
+ const normalize=value=>String(value||'').trim().toUpperCase(),batches=term.batches||[],scoped=batches.length&&subject.batch,ownBatch=!scoped||batches.some(batch=>normalize(batch)===normalize(subject.batch));
+ if((term.subjects||[]).includes(subject.key)&&ownBatch)return true;
+ return !!(scoped&&ownBatch&&subject.courseKey&&(term.subjects||[]).some(key=>catalog[key]?.courseKey===subject.courseKey));
+}
 function facultyCourseGroups(subjects,terms,today){
  const groups={current:[],finished:[],upcoming:[],unclassified:[]},linked=new Set();
  for(const [key,term] of Object.entries(terms||{})){
-  const rows=subjects.filter(s=>(term.subjects||[]).includes(s.key));if(!rows.length)continue;
+  const catalog=typeof dbData!=='undefined'?dbData.subjects||{}:{};
+  const rows=subjects.filter(s=>facultySubjectInTerm(s,term,catalog));if(!rows.length)continue;
   rows.forEach(s=>linked.add(s.key));const start=String(term.startDate||'').replace(/\//g,'-'),end=String(term.endDate||'').replace(/\//g,'-');
   const status=end&&end<today?'finished':start&&start>today?'upcoming':start&&end?'current':['inactive','completed','ended','archived'].includes(term.status)?'finished':'unclassified';
   groups[status].push({key,term,rows,start,end});

@@ -1,0 +1,9 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+(async()=>{
+ const writes=[],queries=[],user={role:'lecturer'},freshGrade={studentKey:'s',subjectKey:'q3',w1_hw:6},freshEnrollment={studentKey:'s',subjectKey:'q3'},snapshot=value=>({exists:()=>!!value,val:()=>value});
+ const context={currentUser:user,renderLecturerHomeTab(){},dbData:{subjects:{q3:{}},semesters:{},grades:{stale:{subjectKey:'q3'},other:{subjectKey:'other'}},enrollments:{stale:{subjectKey:'q3'},other:{subjectKey:'other'}}},getLecturerSubjects:()=>[{key:'q3'}],fbRef:path=>({set(){writes.push(path);},get:async()=>{queries.push(path);return snapshot(path==='subjects'?{q3:{courseKey:'course_04',batch:'Q3-26'}}:path==='grades'?{fresh:freshGrade,outside:{subjectKey:'outside'}}:path==='enrollments'?{fresh:freshEnrollment,outside:{subjectKey:'outside'}}:{});}})};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('faculty-pending-grades.js','utf8'),context);
+ await context.facultyRefreshGradeSnapshot();assert.deepEqual(Object.keys(context.dbData.grades).sort(),['fresh','other']);assert.deepEqual(Object.keys(context.dbData.enrollments).sort(),['fresh','other']);assert.equal(context.dbData.grades.fresh.w1_hw,6);assert.deepEqual(queries.sort(),['enrollments','grades','semesters','subjects']);assert.ok(!context.dbData.grades.outside);assert.ok(!context.dbData.enrollments.outside);assert.equal(writes.length,0);
+ const previous=context.dbData.grades;context.fbRef=()=>({get:async()=>{context.currentUser={role:'lecturer'};return snapshot({});}});await context.facultyRefreshGradeSnapshot();assert.equal(context.dbData.grades,previous);
+ console.log('PASS: alert refresh reads the current assigned ledger and enrollment only, retains unrelated records, writes no grades, and ignores a changed login.');
+})().catch(e=>{console.error(e);process.exitCode=1});
