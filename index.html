@@ -1383,6 +1383,7 @@ async function loadAllFromFirebase(){
         id:s.id||key, pkg:s.pkg||'full',
         planType:s.planType||'',
         allowedCourseKeys:Array.isArray(s.allowedCourseKeys)?s.allowedCourseKeys:undefined,
+        homeworkExtensions:s.homeworkExtensions||null,
         financeMode:s.financeMode||inferFinanceMode(s),
         totalAmount:parseFloat(s.totalAmount)||0, notes:s.notes||'',
         operCustomerId:s.operCustomerId||'',
@@ -1597,6 +1598,7 @@ async function saveStudentToFirebase(stdIdx, passw){
   };
   if(st.financeSnapshot) stdData.financeSnapshot = st.financeSnapshot;
   if(Array.isArray(st.allowedCourseKeys))stdData.allowedCourseKeys=st.allowedCourseKeys;
+  if(st.homeworkExtensions)stdData.homeworkExtensions=st.homeworkExtensions;
 
   // Save installments
   if(st.installments?.length){

@@ -156,10 +156,13 @@ textarea,input,select,button{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,san
   background:var(--bg);border-radius:8px;padding:8px 6px;
   text-align:center;border:1px solid var(--border);
 }
-.week-box-label{font-size:9px;color:var(--muted);font-weight:700;margin-bottom:4px;}
-.week-box-val{font-size:16px;font-weight:800;color:var(--primary);}
-.week-box-max{font-size:9px;color:var(--light);}
-.week-detail{font-size:9px;color:var(--muted);margin-top:3px;}
+.week-box-label{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px;}
+.week-box-val{font-size:16px;font-weight:800;color:var(--primary);line-height:1.7;}
+.week-box-max{font-size:11px;color:var(--light);margin:4px 0 8px;}
+.week-detail{font-size:11px;color:var(--muted);margin-top:5px;display:grid;gap:7px;text-align:right;line-height:1.7;}
+.week-detail>div{padding-top:5px;border-top:1px solid #dce5f5;display:grid;gap:2px;}
+.week-detail strong{font-size:11px;font-weight:600;}
+@media(max-width:600px){.weeks-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
 
 .exam-bar{
   display:flex;justify-content:space-between;align-items:center;
@@ -1479,7 +1482,7 @@ async function renderStudentGradesTab(){
                   <div class="week-box-label">أسبوع ${wi+1}</div>
                   <div class="week-box-val">${wt}</div>
                   <div class="week-box-max">/${wkMax}</div>
-                  <div class="week-detail">ح${wa}·و${wh}·م${wd}</div>
+                  <div class="week-detail"><div><span>الحضور</span><strong>${wa}</strong></div><div><span>الواجب</span><strong>${wh}</strong></div><div><span>المناقشة</span><strong>${wd}</strong></div></div>
                   ${g?.[w+'_hwNote']&&Number(g[w+'_hw'])===0?`<p class="cw-grade-note">${escapeHtml(g[w+'_hwNote'])}</p>`:''}
                   ${g?.[w+'_attendNote']&&!g[w+'_attendProvisional']?`<p class="cw-grade-note">${escapeHtml(g[w+'_attendNote'])}</p>`:''}
                 </div>`;

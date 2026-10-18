@@ -1,6 +1,7 @@
 import {isCurrent,attendanceGrade} from './coursework.js';
 import '../../student-account-policy.js';
 import '../../academic-policy.js';
+import {studentLessonDeadline} from './coursework-deadlines.js';
 const base='https://sulukeraacd-default-rtdb.firebaseio.com';
 export const ATTENDANCE_FOLLOWUP='يرجى مشاهدة المحاضرة بشكل مسجل وحل واجب الحضور المسجل ليتم احتساب درجة الحضور، بعد اعتماد المحاضر وإكمال الواجب الأساسي.';
 const recorded=(g,w,f)=>{const value=g[w]?.[f]??g[w+'_'+f],flag=g[w+'_'+f+'Entered']??g[w]?.[f+'Entered'];return flag!==false&&value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))&&(flag===true||Number(value)>0);};
@@ -44,7 +45,8 @@ export async function finalizeAutomaticCoursework(env,tokenProvider,{force=false
   const keys=new Set(Object.values(root.enrollments).filter(e=>e.subjectKey===l.subject_key).map(e=>e.studentKey));
   for(const key of keys){const student=root.students[key];if(!student||student.planType==='PROFESSIONAL'||String(student.batch||'').startsWith('PRO-')||!SulukeraStudentAccount.isActiveInRoot(key,root)||!SulukeraAcademicPolicy.subjectAllowed(student,subject,root.packages))continue;
    const canonical=('grade_'+key+'_'+l.subject_key).replace(/[.#$[\]]/g,'_'),gradeKey=root.grades[canonical]?canonical:Object.entries(root.grades).find(([,g])=>g.studentKey===key&&g.subjectKey===l.subject_key)?.[0]||canonical,sources=source(l,key);
-   if(Object.keys(automaticCourseworkFields(l,root.grades[gradeKey]||{},sources)).length)candidates.push({l,key,gradeKey,sources});
+   const effective=studentLessonDeadline(l,student);
+   if(Object.keys(automaticCourseworkFields(effective,root.grades[gradeKey]||{},sources)).length)candidates.push({l:effective,key,gradeKey,sources});
   }
  }
  if(dryRun)return {planned:candidates.length,missedHomework:candidates.filter(c=>automaticCourseworkFields(c.l,root.grades[c.gradeKey]||{},c.sources)['w'+c.l.week+'_hwAutoMissed']===true).length,provisionalAttendance:candidates.filter(c=>automaticCourseworkFields(c.l,root.grades[c.gradeKey]||{},c.sources)['w'+c.l.week+'_attendProvisional']===true).length};

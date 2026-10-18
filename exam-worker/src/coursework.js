@@ -1,6 +1,7 @@
 import '../../productivity-ledger.js';
 import '../../student-account-policy.js';
 import '../../academic-policy.js';
+import {studentLessonDeadline} from './coursework-deadlines.js';
 const reject = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -123,7 +124,7 @@ async function lessonFor(env, id, s) {
     .first();
   if (!l) reject("LESSON_NOT_FOUND", 404);
   allowed(s, l.subject_key);
-  return l;
+  return s.role==='student'?studentLessonDeadline(l,Object.values(s.students)[0]):l;
 }
 async function serviceFetch(env, ctx, path, options = {}) {
   const token = await ctx.firebaseAdminToken(env),
@@ -287,7 +288,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
             ([k, v]) => s.allowed.includes(k) && isCurrent(v, s.semesters, k),
           )
           .map(([key, v]) => ({ key, ...v })),
-        lessons: lessons.map((l) => {
+        lessons: lessons.map((original) => {
+          const l=s.role==='student'?studentLessonDeadline(original,s.students[key]):original;
           const qs = JSON.parse(l.questions_json);
           return {
             ...l,
