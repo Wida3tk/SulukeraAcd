@@ -61,7 +61,7 @@ export async function applyAttendanceReport(env,ctx,report,dryRun=false){
     if(previous.attendancePercent!==undefined&&previous.attendancePercent!==null){result.protected++;continue;}
     const record={...previous,attendancePercent:percent,attendanceMinutes:Math.round(minutes*100)/100,meetingDurationMinutes:duration,attendanceStatus:percent>=80?'complete':percent>=50?'partial':'incomplete',attended:percent>=80,present:percent>=50,attendanceImportedAt:new Date().toISOString(),attendanceSourceHash:sourceHash};
     const sessions={...unit.sessions,[target.session]:record},values=Object.values(sessions).filter(s=>s.attendancePercent!=null).map(s=>Number(s.attendancePercent));
-    const saved=await fb(env,ctx,path,{method:'PUT',headers:{'If-Match':response.headers.get('ETag')},body:JSON.stringify({...unit,sessions,attendancePercent:Math.round(values.reduce((a,b)=>a+b,0)/5),attendanceUpdatedAt:new Date().toISOString()})});if(saved.status===412){result.protected++;continue;}result.applied++;
+    const saved=await fb(env,ctx,path,{method:'PUT',headers:{'If-Match':response.headers.get('ETag')},body:JSON.stringify({...unit,sessions,attendancePercent:Math.round(values.reduce((a,b)=>a+b,0)/5),attendanceUpdatedAt:new Date().toISOString()})});if(saved.status===412){result.continuation=true;continue;}result.applied++;
    }else{
     const existing=await env.DB.prepare('SELECT percent FROM course_attendance WHERE lesson_id=? AND student_key=?').bind(target.id,key).first(),g=Object.values(grades||{}).filter(g=>g.studentKey===key&&g.subjectKey===target.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];
     if(existing||g?.[`w${target.week}_attendEntered`]===true&&g?.[`w${target.week}_attendProvisional`]!==true){result.protected++;continue;}
@@ -90,7 +90,7 @@ export async function runAttendanceSync(env,ctx,options={}){
  try{
   let discovered=null;if(options.host||slot%10===0){const host=options.host||HOSTS[Math.floor(slot/10)%3];discovered=await discoverAttendance(env,host);}
   const report=await env.DB.prepare("SELECT * FROM zoom_attendance_reports WHERE state='fetched' AND (? IS NULL OR host=?) ORDER BY starts_at LIMIT 1").bind(options.host||null,options.host||null).first();if(!report)return {discovered,processed:0};
-  let result;try{result=await applyAttendanceReport(env,ctx,report,options.preview===true);}catch(error){result={state:'review',reason:error.message};}
+  let result;try{result=await applyAttendanceReport(env,ctx,report,options.preview===true);}catch(error){const retries=(JSON.parse(report.result_json||'{}').retries||0)+1;result={state:retries<=3?'fetched':'review',reason:error.message,retries};}
   await env.DB.prepare('UPDATE zoom_attendance_reports SET state=?,result_json=?,updated_at=? WHERE id=?').bind(options.preview?'fetched':result.state,JSON.stringify(result),new Date().toISOString(),report.id).run();return {discovered,processed:1,id:report.id,preview:options.preview===true,...result};
  }finally{await env.DB.prepare("UPDATE zoom_attendance_state SET value='0' WHERE id='lease' AND value=?").bind(String(lease)).run();}
 }
