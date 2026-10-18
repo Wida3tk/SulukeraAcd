@@ -34,7 +34,7 @@ export async function handleGraduationExperience(request,env,auth,path,ctx){
  }
  if(path==='/student/graduation-project/topic'&&request.method==='POST'){
   const context=await studentProject(env,auth,ctx);if(!context)fail('PROJECT_NOT_AVAILABLE',403);
-  const {project,key,student}=context,value=await body(request),topics=parse(project.topics_json),index=topics.indexOf(value.topic);
+  const {project,key}=context,value=await body(request),topics=parse(project.topics_json),index=topics.indexOf(value.topic);
   if(index<0)fail('TOPIC_NOT_AVAILABLE',409);
   const total=(await activeProjectStudents(env,project,auth,ctx)).length,capacity=globalThis.SulukeraGraduation.topicCapacity(total,index);
   if(!capacity)fail('TOPIC_NOT_AVAILABLE',409);
@@ -48,10 +48,6 @@ export async function handleGraduationExperience(request,env,auth,path,ctx){
   ]);
   const choice=await env.DB.prepare('SELECT topic FROM graduation_project_topic_choices WHERE project_id=? AND student_key=?').bind(project.id,key).first();
   if(!choice||choice.topic!==value.topic)fail('GROUP_FULL_OR_ALREADY_ASSIGNED',409);
-  const normalize=v=>String(v||'').normalize('NFKC').replace(/[إأآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/[\u064B-\u065F\u0670\s]/g,'').toLowerCase();
-  const name=[student?.firstName,student?.midName,student?.lastName].filter(Boolean).join(' ')||student?.name||'';
-  if(normalize(name)===normalize('منيرة بن حسين')&&normalize(value.topic).includes(normalize('تقييم المفضلات')))
-    await env.DB.prepare('UPDATE graduation_project_groups SET leader_student_key=?,updated_at=? WHERE id=? AND (leader_student_key IS NULL OR leader_student_key=?)').bind(key,now,groupId,key).run();
   return {data:{saved:true}};
  }
  return null;
