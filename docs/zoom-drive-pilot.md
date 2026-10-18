@@ -43,4 +43,10 @@ Professional unit `track_1/unit_1` already has recording links for all five sess
 
 Academic OBM lecture 1 (`off_5zwxxi_course_14_lesson_1`, October 11) was uploaded to the separate academic OBM folder and linked to Drive `19kf7xLnPYIyvIn5a6PHELWuNdIOVTd0u` (76,122,346 bytes). The final upload passed byte-size, MP4 signature and private media-ticket playback checks. Graduation configuration and its recording were left unchanged.
 
+## Automatic attendance requested — permission gate
+
+On October 18 Maryam requested fetching Zoom attendance reports and syncing automatically. A private, read-only `/integrations/zoom-drive-pilot/attendance-access` preflight was added under the existing operations-key guard. It probes host-meeting listing, one known meeting's details and a participant-report page, returning only allowed/status/code (never participant details or access tokens). All three connected accounts returned Zoom code 4711 for all three report endpoints. Recording permissions do not grant report access.
+
+Required granular scopes in each existing app: `report:read:user:admin`, `report:read:meeting:admin`, `report:read:list_meeting_participants:admin`. The user must grant these before live attendance ingestion can be verified. No attendance synchronization schedule, retrospective attendance rewrite or productivity/grade mutation has been enabled. Next implementation must preserve manual corrections, enrollment/license filtering, basic-homework conditions, reconnect overlap deduplication and per-meeting productivity idempotence, with review rather than guessing for unidentified participants or ambiguous lecture mappings. Graduation remains excluded per the user's explicit request.
+
 The private catalog reads sanitized professional session metadata using the existing server credential, never exporting student data, exam questions, credentials or tokens. It reports metadata/playback readiness without awarding watch progress. Some later-unit session dates repeat dates from unit 1; these are not modified or used for automatic publishing. Automatic recording matching must not infer a later unit from these copied dates.

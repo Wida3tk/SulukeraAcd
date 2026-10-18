@@ -1,5 +1,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {safeMeeting,validateLessonBindings,transferRecordingStep,transferAccount} from './src/zoom-drive-transfer.js';
+import {safeMeeting,validateLessonBindings,transferRecordingStep,transferAccount,inspectAttendanceAccess} from './src/zoom-drive-transfer.js';
+test('attendance permissions preflight is read-only and exposes no participants or tokens',async()=>{
+ const original=globalThis.fetch,calls=[];
+ globalThis.fetch=async(url,options)=>{calls.push([url,options.method||'GET']);if(url==='https://zoom.us/oauth/token')return Response.json({access_token:'private-token'});return Response.json({code:4711,message:'private details',participants:[{name:'private student'}]},{status:400});};
+ try{const r=await inspectAttendanceAccess({ZOOM_ACCOUNT_RUSHDACD1:JSON.stringify({hostEmail:'rushdacd1@gmail.com',clientId:'id',clientSecret:'secret',accountId:'account'})},'rushdacd1@gmail.com');assert.equal(r.participants.code,4711);assert.equal(r.meetings.allowed,false);assert(!JSON.stringify(r).includes('private'));assert(calls.slice(1).every(([,method])=>method==='GET'));}finally{globalThis.fetch=original;}
+});
 test('separate Zoom connections preserve the first account and reject unknown or mismatched hosts',()=>{
  const env={ZOOM_PILOT_CREDENTIALS:JSON.stringify({hostEmail:'rushdacd.sa@gmail.com',clientSecret:'first'}),ZOOM_ACCOUNT_RUSHDACD1:JSON.stringify({hostEmail:'rushdacd1@gmail.com',clientSecret:'second'}),ZOOM_ACCOUNT_RUSHDABAT:JSON.stringify({hostEmail:'RushdABAT@gmail.com',clientSecret:'third'})};
  const second=transferAccount(env,'rushdacd1@gmail.com');assert.equal(JSON.parse(second.ZOOM_PILOT_CREDENTIALS).clientSecret,'second');assert.equal(JSON.parse(env.ZOOM_PILOT_CREDENTIALS).clientSecret,'first');assert.equal(transferAccount(env).RECORDING_TRANSFER_HOST,'rushdacd.sa@gmail.com');
