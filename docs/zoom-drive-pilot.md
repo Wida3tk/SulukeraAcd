@@ -34,3 +34,13 @@ The second account's October catalog contains classroom-management recordings on
 All three second-account recordings completed transfer and private byte-range playback verification (HTTP 206, MP4 signature verified): classroom management lecture 1 → Drive `1nLB2UcaQQAiL05JrZfz0R5Xyq-Z6yOia`, lecture 2 → `1z72wy2dXfMv5OZ5I-xz4XpZGthF9Nlkj`, assessment protocols lecture 1 (Q2 and Q3) → `1Gnl7pk2XzbuOucdt-Lr6BoXCCBT1QWhz`. The final D1 readback showed all seven original and second-account jobs complete, with source byte sizes matching uploaded byte sizes. No grades, attendance, question sets or homework dates were changed by these operations.
 
 The next user-authorized account is `RushdABAT@gmail.com` for academic OBM plus the professional program. Its localhost credential form is separate and stores `ZOOM_ACCOUNT_RUSHDABAT`; it is not enabled for transfer until connection and lecture/session mapping are verified.
+
+## Third account verification
+
+The third account is now verified and explicitly enabled through `ZOOM_ACCOUNT_RUSHDABAT`. Its October catalog contains one academic OBM lecture (October 11, meeting `87930048061`), three professional foundations recordings (October 5/6/12, meeting `86410858243`) and one graduation-project recording. Maryam explicitly requested leaving the graduation recording alone; it is excluded from the transfer manifest.
+
+Professional unit `track_1/unit_1` already has recording links for all five sessions. The three October recordings match existing session 3/4/5 video byte sizes exactly (88,264,266; 188,202,467; 102,263,335) and their durations agree to less than one second. All five existing professional videos passed configured-root validation and private byte-range playback verification. Their existing links, watch progress, assignments, approvals and grades are retained; no duplicate uploads or link replacement are needed.
+
+Academic OBM lecture 1 (`off_5zwxxi_course_14_lesson_1`, October 11) was uploaded to the separate academic OBM folder and linked to Drive `19kf7xLnPYIyvIn5a6PHELWuNdIOVTd0u` (76,122,346 bytes). The final upload passed byte-size, MP4 signature and private media-ticket playback checks. Graduation configuration and its recording were left unchanged.
+
+The private catalog reads sanitized professional session metadata using the existing server credential, never exporting student data, exam questions, credentials or tokens. It reports metadata/playback readiness without awarding watch progress. Some later-unit session dates repeat dates from unit 1; these are not modified or used for automatic publishing. Automatic recording matching must not infer a later unit from these copied dates.

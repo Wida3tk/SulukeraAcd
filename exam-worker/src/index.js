@@ -1101,7 +1101,7 @@ export default {
         path = url.pathname.replace(/\/+$/, "") || "/";
       if (path === "/health")
         return reply(request, { ok: true, service: "sulukera-exams" });
-      const pilot=await handleZoomDrivePilot(request,env,path);
+      const pilot=await handleZoomDrivePilot(request,env,path,{firebaseAdminToken});
       if(pilot)return reply(request,pilot.data);
       const academicMedia=await handleAcademicRecordingMedia(request,env,path,corsHeaders);
       if(academicMedia)return academicMedia;

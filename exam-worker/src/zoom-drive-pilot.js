@@ -1,5 +1,5 @@
 import {driveIdentity,driveReadToken} from './drive-recordings.js';
-import {recordingCatalog,transferRecordingStep} from './zoom-drive-transfer.js';
+import {recordingCatalog,transferRecordingStep,inspectRecordingFile} from './zoom-drive-transfer.js';
 import {startAcademicRecording} from './academic-recording-media.js';
 const fail=(message,status=400)=>{const error=new Error(message);error.status=status;throw error;};
 const norm=v=>String(v||'').normalize('NFKC').replace(/[إأآ]/g,'ا').replace(/ة/g,'ه').replace(/[\u064B-\u065Fـ]/g,'').replace(/\s+/g,' ').trim();
@@ -34,14 +34,14 @@ export async function inspectPilotZoom(env,fetcher=fetch){
  if(next)fail('ZOOM_PAGINATION_REVIEW_REQUIRED',409);
  return {connected:true,hostEmail:credentials.hostEmail,meetingId:credentials.meetingId,recordings};
 }
-export async function handleZoomDrivePilot(request,env,path){
+export async function handleZoomDrivePilot(request,env,path,ctx={}){
  if(!['/integrations/zoom-drive-pilot/inspect','/integrations/zoom-drive-pilot/catalog','/integrations/zoom-drive-pilot/transfer','/integrations/zoom-drive-pilot/preview'].includes(path))return null;
  if(request.method!=='POST')fail('METHOD_NOT_ALLOWED',405);
  const key=env.RECORDING_PILOT_KEY;if(!key||key.length<40)fail('PILOT_NOT_ENABLED',503);
  const received=request.headers.get('Authorization')||'';
  const digest=async v=>new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
  const [actual,expected]=await Promise.all([digest(received),digest('Bearer '+key)]);let different=0;for(let i=0;i<actual.length;i++)different|=actual[i]^expected[i];if(different)fail('FORBIDDEN',403);
- if(path.endsWith('/catalog')){const b=await request.json().catch(()=>({}));return {data:await recordingCatalog(env,b.host)};}
+ if(path.endsWith('/catalog')){const b=await request.json().catch(()=>({})),data=await recordingCatalog(env,b.host);if(b.host==='RushdABAT@gmail.com'&&ctx.firebaseAdminToken){const token=await ctx.firebaseAdminToken(env),p=await checkedJson(await fetch('https://sulukeraacd-default-rtdb.firebaseio.com/professionalPrograms/organizational_behavior.json',{headers:{Authorization:'Bearer '+token}}),'PROFESSIONAL_READ');data.professionalTargets=Object.entries(p?.tracks||{}).map(([track,t])=>({track,title:t.title,units:Object.entries(t.units||{}).map(([unit,u])=>({unit,...Object.fromEntries(Object.entries(u).filter(([k,v])=>k!=='sessions'&&/title|date|time|at|zoom|recording|url|link/i.test(k)&&typeof v!=='object')),sessions:Object.entries(u.sessions||{}).map(([session,s])=>({session,...Object.fromEntries(Object.entries(s).filter(([k,v])=>/title|date|time|at|zoom|recording|url|link|order/i.test(k)&&typeof v!=='object'))}))}))}));data.professionalFiles=[];for(const t of data.professionalTargets)for(const u of t.units)for(const s of u.sessions){const id=s.recordingUrl?.match(/drive\.google\.com\/file\/d\/([\w-]+)/)?.[1];if(id&&data.professionalFiles.length<20){try{data.professionalFiles.push({track:t.track,unit:u.unit,session:s.session,...await inspectRecordingFile(env,id)});}catch(error){data.professionalFiles.push({track:t.track,unit:u.unit,session:s.session,id,error:error.message});}}}}return {data};}
  if(path.endsWith('/preview')){
   const b=await request.json(),row=await env.DB.prepare("SELECT lesson_ids FROM zoom_drive_transfers WHERE source_id=? AND state='complete'").bind(String(b.sourceId||'')).first();if(!row)fail('TRANSFER_NOT_COMPLETE',404);
   const l=await env.DB.prepare('SELECT * FROM course_lessons WHERE id=?').bind(JSON.parse(row.lesson_ids)[0]).first();return {data:await startAcademicRecording(env,l)};

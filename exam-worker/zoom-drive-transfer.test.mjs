@@ -1,9 +1,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {safeMeeting,validateLessonBindings,transferRecordingStep,transferAccount} from './src/zoom-drive-transfer.js';
 test('separate Zoom connections preserve the first account and reject unknown or mismatched hosts',()=>{
- const env={ZOOM_PILOT_CREDENTIALS:JSON.stringify({hostEmail:'rushdacd.sa@gmail.com',clientSecret:'first'}),ZOOM_ACCOUNT_RUSHDACD1:JSON.stringify({hostEmail:'rushdacd1@gmail.com',clientSecret:'second'})};
+ const env={ZOOM_PILOT_CREDENTIALS:JSON.stringify({hostEmail:'rushdacd.sa@gmail.com',clientSecret:'first'}),ZOOM_ACCOUNT_RUSHDACD1:JSON.stringify({hostEmail:'rushdacd1@gmail.com',clientSecret:'second'}),ZOOM_ACCOUNT_RUSHDABAT:JSON.stringify({hostEmail:'RushdABAT@gmail.com',clientSecret:'third'})};
  const second=transferAccount(env,'rushdacd1@gmail.com');assert.equal(JSON.parse(second.ZOOM_PILOT_CREDENTIALS).clientSecret,'second');assert.equal(JSON.parse(env.ZOOM_PILOT_CREDENTIALS).clientSecret,'first');assert.equal(transferAccount(env).RECORDING_TRANSFER_HOST,'rushdacd.sa@gmail.com');
  assert.throws(()=>transferAccount(env,'other@example.com'),/ACCOUNT_NOT_ENABLED/);
+ assert.equal(JSON.parse(transferAccount(env,'RushdABAT@gmail.com').ZOOM_PILOT_CREDENTIALS).clientSecret,'third');
  assert.throws(()=>transferAccount({...env,ZOOM_ACCOUNT_RUSHDACD1:env.ZOOM_PILOT_CREDENTIALS},'rushdacd1@gmail.com'),/ACCOUNT_SCOPE_MISMATCH/);
 });
 test('catalog never exposes Zoom download URLs or nonvideo files',()=>{
