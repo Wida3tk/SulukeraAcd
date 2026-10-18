@@ -41,7 +41,7 @@ export async function handleZoomDrivePilot(request,env,path){
  const received=request.headers.get('Authorization')||'';
  const digest=async v=>new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
  const [actual,expected]=await Promise.all([digest(received),digest('Bearer '+key)]);let different=0;for(let i=0;i<actual.length;i++)different|=actual[i]^expected[i];if(different)fail('FORBIDDEN',403);
- if(path.endsWith('/catalog'))return {data:await recordingCatalog(env)};
+ if(path.endsWith('/catalog')){const b=await request.json().catch(()=>({}));return {data:await recordingCatalog(env,b.host)};}
  if(path.endsWith('/preview')){
   const b=await request.json(),row=await env.DB.prepare("SELECT lesson_ids FROM zoom_drive_transfers WHERE source_id=? AND state='complete'").bind(String(b.sourceId||'')).first();if(!row)fail('TRANSFER_NOT_COMPLETE',404);
   const l=await env.DB.prepare('SELECT * FROM course_lessons WHERE id=?').bind(JSON.parse(row.lesson_ids)[0]).first();return {data:await startAcademicRecording(env,l)};

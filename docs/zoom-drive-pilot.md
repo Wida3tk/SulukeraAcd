@@ -24,3 +24,11 @@ All four completed MP4 recordings returned by this host's October catalog were t
 - October 14 Skill Acquisition Programming → lecture 1, Q2 and Q3; Drive `1Ya2AtIUYpkvMJnIPWw787Ws9dl2c5fyH` (158,654,818 bytes).
 
 The October 14 historical Zoom topic incorrectly says Behavior Change Interventions. Maryam explicitly clarified the course and that this was the first lecture. The matching Zoom meeting ID is `85761104229`, already assigned to course_08. Its date differs from the existing lesson 1 assignment opening (October 7); this is recorded in `zoom_drive_mapping_reviews`, without changing assignment windows, questions, attempts or grades. Date overrides require an operator reason and an exact Zoom meeting-ID match for all destination lessons.
+
+## Separate account connections
+
+On October 18, `rushdacd1@gmail.com` was connected and verified using the separate secret `ZOOM_ACCOUNT_RUSHDACD1`, without replacing `ZOOM_PILOT_CREDENTIALS`. `transferAccount` accepts only explicitly enabled account emails, checks that each credential belongs to its expected host, and creates a request-local environment rather than mutating shared credentials. The private catalog accepts `{host}`; each manual transfer manifest must specify its host. `zoom_drive_transfer_accounts` records job ownership and rejects cross-account resumes. The original four jobs retain their original-host default for compatibility.
+
+The second account's October catalog contains classroom-management recordings on October 7 and 14 (`86843545960`) and an assessment-protocols recording on October 6 (`87401037383`). These map by exact date, existing lesson meeting ID, and the existing course folders. No October 13 assessment-protocols recording was returned by this account. No scheduled automatic sync or source-deletion policy is enabled.
+
+The next user-authorized account is `RushdABAT@gmail.com` for academic OBM plus the professional program. Its localhost credential form is separate and stores `ZOOM_ACCOUNT_RUSHDABAT`; it is not enabled for transfer until connection and lecture/session mapping are verified.

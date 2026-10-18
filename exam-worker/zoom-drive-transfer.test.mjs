@@ -1,5 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {safeMeeting,validateLessonBindings,transferRecordingStep} from './src/zoom-drive-transfer.js';
+import {safeMeeting,validateLessonBindings,transferRecordingStep,transferAccount} from './src/zoom-drive-transfer.js';
+test('separate Zoom connections preserve the first account and reject unknown or mismatched hosts',()=>{
+ const env={ZOOM_PILOT_CREDENTIALS:JSON.stringify({hostEmail:'rushdacd.sa@gmail.com',clientSecret:'first'}),ZOOM_ACCOUNT_RUSHDACD1:JSON.stringify({hostEmail:'rushdacd1@gmail.com',clientSecret:'second'})};
+ const second=transferAccount(env,'rushdacd1@gmail.com');assert.equal(JSON.parse(second.ZOOM_PILOT_CREDENTIALS).clientSecret,'second');assert.equal(JSON.parse(env.ZOOM_PILOT_CREDENTIALS).clientSecret,'first');assert.equal(transferAccount(env).RECORDING_TRANSFER_HOST,'rushdacd.sa@gmail.com');
+ assert.throws(()=>transferAccount(env,'other@example.com'),/ACCOUNT_NOT_ENABLED/);
+ assert.throws(()=>transferAccount({...env,ZOOM_ACCOUNT_RUSHDACD1:env.ZOOM_PILOT_CREDENTIALS},'rushdacd1@gmail.com'),/ACCOUNT_SCOPE_MISMATCH/);
+});
 test('catalog never exposes Zoom download URLs or nonvideo files',()=>{
  const m=safeMeeting({id:123,uuid:'instance',recording_files:[{id:'mp4',status:'completed',file_type:'MP4',download_url:'private',file_size:100},{id:'chat',status:'completed',file_type:'TXT'}]});
  assert.equal(m.meetingId,'123');assert.equal(m.files.length,1);assert(!JSON.stringify(m).includes('private'));
