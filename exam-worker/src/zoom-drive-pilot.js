@@ -2,6 +2,7 @@ import {driveIdentity,driveReadToken} from './drive-recordings.js';
 import {recordingCatalog,transferRecordingStep,inspectRecordingFile,inspectAttendanceAccess} from './zoom-drive-transfer.js';
 import {startAcademicRecording} from './academic-recording-media.js';
 import {runAttendanceSync} from './zoom-attendance-sync.js';
+import {discoverNightlyRecordings,processNightlyRecordingQueue} from './nightly-recording-sync.js';
 const fail=(message,status=400)=>{const error=new Error(message);error.status=status;throw error;};
 const norm=v=>String(v||'').normalize('NFKC').replace(/[إأآ]/g,'ا').replace(/ة/g,'ه').replace(/[\u064B-\u065Fـ]/g,'').replace(/\s+/g,' ').trim();
 async function checkedJson(response,prefix){if(!response.ok){await response.body?.cancel();fail(prefix+'_'+response.status,503);}return response.json();}
@@ -36,12 +37,14 @@ export async function inspectPilotZoom(env,fetcher=fetch){
  return {connected:true,hostEmail:credentials.hostEmail,meetingId:credentials.meetingId,recordings};
 }
 export async function handleZoomDrivePilot(request,env,path,ctx={}){
- if(!['/integrations/zoom-drive-pilot/inspect','/integrations/zoom-drive-pilot/catalog','/integrations/zoom-drive-pilot/transfer','/integrations/zoom-drive-pilot/preview','/integrations/zoom-drive-pilot/attendance-access','/integrations/zoom-drive-pilot/attendance-sync'].includes(path))return null;
+ if(!['/integrations/zoom-drive-pilot/inspect','/integrations/zoom-drive-pilot/catalog','/integrations/zoom-drive-pilot/transfer','/integrations/zoom-drive-pilot/preview','/integrations/zoom-drive-pilot/attendance-access','/integrations/zoom-drive-pilot/attendance-sync','/integrations/zoom-drive-pilot/nightly-preview','/integrations/zoom-drive-pilot/nightly-queue'].includes(path))return null;
  if(request.method!=='POST')fail('METHOD_NOT_ALLOWED',405);
  const key=env.RECORDING_PILOT_KEY;if(!key||key.length<40)fail('PILOT_NOT_ENABLED',503);
  const received=request.headers.get('Authorization')||'';
  const digest=async v=>new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
  const [actual,expected]=await Promise.all([digest(received),digest('Bearer '+key)]);let different=0;for(let i=0;i<actual.length;i++)different|=actual[i]^expected[i];if(different)fail('FORBIDDEN',403);
+ if(path.endsWith('/nightly-preview'))return {data:await discoverNightlyRecordings(env,ctx,{preview:true})};
+ if(path.endsWith('/nightly-queue'))return {data:await processNightlyRecordingQueue(env,ctx)};
  if(path.endsWith('/attendance-access')){const b=await request.json();return {data:await inspectAttendanceAccess(env,b.host)};}
  if(path.endsWith('/attendance-sync')){const b=await request.json();return {data:await runAttendanceSync(env,ctx,{host:b.host,preview:b.preview!==false})};}
  if(path.endsWith('/catalog')){const b=await request.json().catch(()=>({})),data=await recordingCatalog(env,b.host);if(b.host==='RushdABAT@gmail.com'&&ctx.firebaseAdminToken){const token=await ctx.firebaseAdminToken(env),p=await checkedJson(await fetch('https://sulukeraacd-default-rtdb.firebaseio.com/professionalPrograms/organizational_behavior.json',{headers:{Authorization:'Bearer '+token}}),'PROFESSIONAL_READ');data.professionalTargets=Object.entries(p?.tracks||{}).map(([track,t])=>({track,title:t.title,units:Object.entries(t.units||{}).map(([unit,u])=>({unit,...Object.fromEntries(Object.entries(u).filter(([k,v])=>k!=='sessions'&&/title|date|time|at|zoom|recording|url|link/i.test(k)&&typeof v!=='object')),sessions:Object.entries(u.sessions||{}).map(([session,s])=>({session,...Object.fromEntries(Object.entries(s).filter(([k,v])=>/title|date|time|at|zoom|recording|url|link|order/i.test(k)&&typeof v!=='object'))}))}))}));data.professionalFiles=[];for(const t of data.professionalTargets)for(const u of t.units)for(const s of u.sessions){const id=s.recordingUrl?.match(/drive\.google\.com\/file\/d\/([\w-]+)/)?.[1];if(id&&data.professionalFiles.length<20){try{data.professionalFiles.push({track:t.track,unit:u.unit,session:s.session,...await inspectRecordingFile(env,id)});}catch(error){data.professionalFiles.push({track:t.track,unit:u.unit,session:s.session,id,error:error.message});}}}}return {data};}
@@ -52,7 +55,7 @@ export async function handleZoomDrivePilot(request,env,path,ctx={}){
  if(path.endsWith('/transfer')){
   if(Number(request.headers.get('Content-Length')||0)>16384)fail('BODY_TOO_LARGE',413);
   const raw=await request.text();if(raw.length>16384)fail('BODY_TOO_LARGE',413);
-  return {data:await transferRecordingStep(env,JSON.parse(raw))};
+  return {data:await transferRecordingStep(env,JSON.parse(raw),ctx)};
  }
  const [zoom,drive]=await Promise.allSettled([inspectPilotZoom(env),inspectPilotDrive(env)]);
  const report=value=>value.status==='fulfilled'?value.value:{connected:false,reason:value.reason?.message||'CONNECTION_FAILED'};

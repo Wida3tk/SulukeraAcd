@@ -30,7 +30,7 @@ test('resumed transfer trusts Drive offset, buffers only requested range, and re
  globalThis.fetch=async(url,options)=>{
   if(url==='https://oauth2.googleapis.com/token')return Response.json({access_token:'drive-token'});
   if(url==='https://zoom.us/oauth/token')return Response.json({access_token:'zoom-token'});
-  if(url.startsWith('https://api.zoom.us/'))return Response.json({meetings:[{uuid:'instance',id:123,recording_files:[{id:'source',file_type:'MP4',status:'completed',file_size:100,download_url:'https://zoom.us/download'}]}]});
+  if(url.startsWith('https://api.zoom.us/')){assert(url.includes('/meetings/instance/recordings'));return Response.json({uuid:'instance',id:123,recording_files:[{id:'source',file_type:'MP4',status:'completed',file_size:100,download_url:'https://zoom.us/download'}]});}
   if(url==='https://zoom.us/download'){assert.equal(options.headers.Range,'bytes=50-99');return new Response(new Uint8Array(50),{status:206,headers:{'Content-Range':'bytes 50-99/100'}});}
   if(url===row.session_url){if(options.headers['Content-Range']==='bytes */100')return new Response(null,{status:308,headers:{Range:'bytes=0-49'}});uploads++;assert.equal(options.body.byteLength,50);assert.equal(options.headers['Content-Range'],'bytes 50-99/100');return new Response(null,{status:308,headers:{Range:'bytes=0-99'}});}
   throw Error('Unexpected external request');

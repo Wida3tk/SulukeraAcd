@@ -9,6 +9,7 @@ import { handleRevenue } from "./revenue.js";
 import {handleZoomDrivePilot} from './zoom-drive-pilot.js';
 import {handleAcademicRecordingMedia} from './academic-recording-media.js';
 import {runAttendanceSync,attendanceSchema,approveAttendanceAlias} from './zoom-attendance-sync.js';
+import {discoverNightlyRecordings,processNightlyRecordingQueue,nightlyRecordingSchema} from './nightly-recording-sync.js';
 import { handleLecturerSurvey } from "./lecturer-survey.js";
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
@@ -1089,6 +1090,8 @@ async function submitEvaluation(request, env, auth, examId) {
 
 export default {
   scheduled(event,env,ctx){
+    if(event.cron==='0 20 * * *'){if(env.ZOOM_RECORDINGS_AUTO==='true')ctx.waitUntil(discoverNightlyRecordings(env,{firebaseAdminToken}).catch(error=>console.error('nightly_recording_discovery',error.message)));return;}
+    if(event.cron==='*/2 * * * *'){if(env.ZOOM_RECORDINGS_AUTO==='true')ctx.waitUntil(processNightlyRecordingQueue(env,{firebaseAdminToken}).catch(error=>console.error('nightly_recording_queue',error.message)));return;}
     if(env.ZOOM_ATTENDANCE_AUTO==='true'&&Math.floor(event.scheduledTime/60000)%5===0){ctx.waitUntil(runAttendanceSync(env,{firebaseAdminToken}).catch(error=>console.error('zoom_attendance_sync',error.message)));return;}
     ctx.waitUntil(finalizeAutomaticCoursework(env,firebaseAdminToken));
     ctx.waitUntil(syncProfessionalExamResults(env,firebaseAdminToken));
@@ -1110,6 +1113,7 @@ export default {
       const media = await handleProfessionalRecordingMedia(request,env,path,{corsHeaders});
       if(media)return media;
       const auth = await authenticate(request);
+      if(path==='/admin/recording-sync'&&request.method==='GET'){requireRole(auth,'admin');await nightlyRecordingSchema(env);return reply(request,{automatic:env.ZOOM_RECORDINGS_AUTO==='true',timeSaudi:'23:00',runs:(await env.DB.prepare('SELECT * FROM nightly_recording_runs ORDER BY day DESC LIMIT 7').all()).results,jobs:(await env.DB.prepare('SELECT source_id,topic,state,reason,attempts,updated_at FROM nightly_recording_jobs ORDER BY updated_at DESC LIMIT 100').all()).results});}
       if(path==='/admin/zoom-attendance'&&request.method==='GET'){requireRole(auth,'admin');await attendanceSchema(env);const [all,subjects]=await Promise.all([firebaseRead('students',auth.token),firebaseRead('subjects',auth.token)]),lessons=(await env.DB.prepare('SELECT id,subject_key,week FROM course_lessons').all()).results,scopeLabels=Object.fromEntries(lessons.map(l=>[l.id,(subjects?.[l.subject_key]?.name||l.subject_key)+' — '+(subjects?.[l.subject_key]?.batch||'')+' — المحاضرة '+l.week]));return reply(request,{scopeLabels,automatic:env.ZOOM_ATTENDANCE_AUTO==='true',students:Object.entries(all||{}).filter(([,s])=>SulukeraStudentAccount.isActive(s)).map(([key,s])=>({key,id:s.id,name:s.name||[s.firstName,s.midName,s.lastName].filter(Boolean).join(' ')})),reports:(await env.DB.prepare('SELECT id,host,meeting_id,topic,starts_at,ends_at,state,result_json,updated_at FROM zoom_attendance_reports ORDER BY starts_at DESC LIMIT 100').all()).results});}
       if(path==='/admin/zoom-attendance/alias'&&request.method==='POST'){requireRole(auth,'admin');return reply(request,await approveAttendanceAlias(env,{firebaseAdminToken},await request.json(),auth.uid));}
       if(path==='/admin/zoom-attendance/retry'&&request.method==='POST'){requireRole(auth,'admin');const b=await request.json();if(!/^[a-f0-9]{64}$/.test(b.reportId||''))throw Object.assign(new Error('INVALID_REPORT_ID'),{status:400});await env.DB.prepare("UPDATE zoom_attendance_reports SET state='fetched' WHERE id=?").bind(b.reportId).run();return reply(request,{queued:true});}

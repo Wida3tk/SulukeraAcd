@@ -7,6 +7,7 @@
     "test:graduation": "node --test graduation-attendance.test.mjs graduation-recordings.test.mjs",
     "test:recording-pilot": "node --test zoom-drive-pilot.test.mjs zoom-drive-transfer.test.mjs academic-recording-media.test.mjs",
     "test:zoom-attendance": "node --test zoom-attendance-sync.test.mjs",
+    "test:nightly-recordings": "node --test nightly-recording-sync.test.mjs",
     "check": "node --check src/index.js && wrangler deploy --dry-run",
     "deploy": "wrangler deploy"
   },

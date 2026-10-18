@@ -1,5 +1,7 @@
 # Zoom to Drive pilot
 
+**Current operational status:** all three hosts are connected. Daily automatic recording discovery is now configured for 23:00 Saudi time; see [nightly recording synchronization](nightly-recording-sync.md). The connection-only descriptions below document the earlier staged rollout, not the current scheduling state.
+
 The connection inspector is restricted to Zoom host `rushdacd.sa@gmail.com`, meeting `88245118262`, course `course_07`, and its Q2/Q3 October 2026 offerings. On October 18 the user authorized transferring the other courses on this same host. The operations-only catalog therefore lists this host's current-month recordings; manual reviewed manifests identify each exact file, destination folder and lesson IDs. Ambiguous titles/dates must not be linked automatically. The recordings root is the existing `DRIVE_RECORDING_FOLDER_ID`; no recording is made public or deleted.
 
 Zoom credentials are stored in Cloudflare secret `ZOOM_PILOT_CREDENTIALS`. They are not returned to clients or committed. `POST /integrations/zoom-drive-pilot/inspect` is disabled unless a strong `RECORDING_PILOT_KEY` is configured and requires that exact bearer key. This operations-only inspection lists completed MP4 metadata for the exact pilot meeting and checks Drive metadata and folder capabilities within the configured root. It never returns Zoom access tokens, download URLs, or client secrets and performs no grade or attendance writes.

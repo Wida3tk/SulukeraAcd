@@ -2,8 +2,8 @@
   "name": "sulukera-exams",
   "main": "src/index.js",
   "compatibility_date": "2026-09-18",
-  "vars": { "DRIVE_RECORDING_FOLDER_ID": "1-BRS05bBFJhX8GlW9o3ECxZaJ2UnFi-N", "ZOOM_ATTENDANCE_AUTO": "true" },
-  "triggers": { "crons": ["* * * * *"] },
+  "vars": { "DRIVE_RECORDING_FOLDER_ID": "1-BRS05bBFJhX8GlW9o3ECxZaJ2UnFi-N", "ZOOM_ATTENDANCE_AUTO": "true", "ZOOM_RECORDINGS_AUTO": "true" },
+  "triggers": { "crons": ["* * * * *", "0 20 * * *", "*/2 * * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
