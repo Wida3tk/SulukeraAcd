@@ -155,7 +155,7 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
         .bind(l.id, studentKey)
         .first(),
       env.DB.prepare(
-        "SELECT percent FROM course_attendance WHERE lesson_id=? AND student_key=?",
+        "SELECT percent,approved_by FROM course_attendance WHERE lesson_id=? AND student_key=?",
       )
         .bind(l.id, studentKey)
         .first(),
@@ -192,6 +192,9 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
         current ||
         (await (await serviceFetch(env, ctx, `grades/${legacy}`)).json()) ||
         {};
+      if(attendanceOnly&&attendance?.approved_by==='automatic-zoom-attendance'&&previous[`w${l.week}_attendProvisional`]!==true&&(previous[`w${l.week}_attendEntered`]===true||Number(previous[`w${l.week}_attend`])>0)){
+        await env.DB.prepare("UPDATE coursework_sync SET state='synced',error='MANUAL_ATTENDANCE_PROTECTED',updated_at=? WHERE lesson_id=? AND student_key=?").bind(now,l.id,studentKey).run();return true;
+      }
       const payload = {
         ...previous,
         ...fields,

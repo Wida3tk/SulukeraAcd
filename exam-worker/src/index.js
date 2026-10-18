@@ -8,6 +8,7 @@ import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
 import {handleZoomDrivePilot} from './zoom-drive-pilot.js';
 import {handleAcademicRecordingMedia} from './academic-recording-media.js';
+import {runAttendanceSync,attendanceSchema,approveAttendanceAlias} from './zoom-attendance-sync.js';
 import { handleLecturerSurvey } from "./lecturer-survey.js";
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
@@ -1088,6 +1089,7 @@ async function submitEvaluation(request, env, auth, examId) {
 
 export default {
   scheduled(event,env,ctx){
+    if(env.ZOOM_ATTENDANCE_AUTO==='true'&&Math.floor(event.scheduledTime/60000)%5===0){ctx.waitUntil(runAttendanceSync(env,{firebaseAdminToken}).catch(error=>console.error('zoom_attendance_sync',error.message)));return;}
     ctx.waitUntil(finalizeAutomaticCoursework(env,firebaseAdminToken));
     ctx.waitUntil(syncProfessionalExamResults(env,firebaseAdminToken));
     ctx.waitUntil(syncAcademicExamGrades(env,firebaseAdminToken,{limit:20}));
@@ -1108,6 +1110,8 @@ export default {
       const media = await handleProfessionalRecordingMedia(request,env,path,{corsHeaders});
       if(media)return media;
       const auth = await authenticate(request);
+      if(path==='/admin/zoom-attendance'&&request.method==='GET'){requireRole(auth,'admin');await attendanceSchema(env);const [all,subjects]=await Promise.all([firebaseRead('students',auth.token),firebaseRead('subjects',auth.token)]),lessons=(await env.DB.prepare('SELECT id,subject_key,week FROM course_lessons').all()).results,scopeLabels=Object.fromEntries(lessons.map(l=>[l.id,(subjects?.[l.subject_key]?.name||l.subject_key)+' — '+(subjects?.[l.subject_key]?.batch||'')+' — المحاضرة '+l.week]));return reply(request,{scopeLabels,automatic:env.ZOOM_ATTENDANCE_AUTO==='true',students:Object.entries(all||{}).filter(([,s])=>SulukeraStudentAccount.isActive(s)).map(([key,s])=>({key,id:s.id,name:s.name||[s.firstName,s.midName,s.lastName].filter(Boolean).join(' ')})),reports:(await env.DB.prepare('SELECT id,host,meeting_id,topic,starts_at,ends_at,state,result_json,updated_at FROM zoom_attendance_reports ORDER BY starts_at DESC LIMIT 100').all()).results});}
+      if(path==='/admin/zoom-attendance/alias'&&request.method==='POST'){requireRole(auth,'admin');return reply(request,await approveAttendanceAlias(env,{firebaseAdminToken},await request.json(),auth.uid));}
       const recording = await handleProfessionalRecordings(request,env,auth,path,{firebaseRead});
       if(recording)return reply(request,recording.data);
       if(path==='/admin/lecturer-performance' && request.method==='GET'){

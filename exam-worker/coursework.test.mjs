@@ -7,6 +7,7 @@ import {
   gradeHomework,
   attendanceGrade,
   attendanceFromGrades,
+  retryPendingCoursework,
 } from "./src/coursework.js";
 import vm from "node:vm";
 const fixtures = () => {
@@ -157,6 +158,13 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(80,3),3);
   assert.equal(attendanceGrade(50,3,false),2);
   assert.equal(attendanceGrade(0.1,3,false),1);
+});
+test('automatic attendance queue cannot overwrite a zero manually entered after report matching',async()=>{
+ const f=fixtures();await f.call('admin','/lesson',f.config);
+ f.sql.prepare('INSERT INTO course_attendance VALUES(?,?,?,?,?,?)').run('course_lesson_1','student',100,'api-source','automatic-zoom-attendance','now');
+ f.sql.prepare("UPDATE coursework_sync SET error='attendance-policy-20261011:automatic-zoom'").run();
+ const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{assert.notEqual(options?.method,'PUT');return Response.json(url.includes('/settings')?{attend:5}:{studentKey:'student',subjectKey:'course',w1_attend:0,w1_attendEntered:true});};
+ try{const result=await retryPendingCoursework({DB:f.DB},{firebaseAdminToken:async()=> 'token'});assert.equal(result.synced,1);assert.equal(f.sql.prepare('SELECT error FROM coursework_sync').get().error,'MANUAL_ATTENDANCE_PROTECTED');}finally{globalThis.fetch=original;}
 });
 test('academic recording start rejects unrelated lecturers, inactive students, drafts and unassigned subjects before creating a ticket',async()=>{
  const f=fixtures();await f.call('admin','/lesson',{...f.config,recordingUrl:'https://drive.google.com/file/d/video/view'});
