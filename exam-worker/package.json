@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test coursework.test.mjs revenue.test.mjs lecturer-survey.test.mjs professional-recordings.test.mjs exam-grade-sync.test.mjs exam-attempt-policy.test.mjs professional-exam-results.test.mjs coursework-auto-grades.test.mjs",
-    "test:graduation": "node --test graduation-attendance.test.mjs",
+    "test:graduation": "node --test graduation-attendance.test.mjs graduation-recordings.test.mjs",
     "check": "node --check src/index.js && wrangler deploy --dry-run",
     "deploy": "wrangler deploy"
   },

@@ -14,5 +14,10 @@
   function safeMeetingUrl(value){try{const url=new URL(String(value||''));return url.protocol==='https:'?url.href:'';}catch{return '';}}
   function topicCapacity(total,index,topicCount=4){const active=Math.min(Math.max(0,Number(total)||0),topicCount*5),groups=Math.min(topicCount,Math.ceil(active/4));if(index<0||index>=groups)return 0;const base=Math.floor(active/groups),extra=active%groups;return base+(index<extra?1:0);}
   function attendanceLabel(value){return value===true||value===1?'حضر':value===false||value===0?'لم يحضر':'لم يُرصد';}
-  root.SulukeraGraduation={policies,safeMeetingUrl,topicCapacity,attendanceLabel};
+  function meetingAction(meeting,now=Date.now()){
+    const end=meeting.endsAt?Date.parse(meeting.endsAt):Date.parse(meeting.at)+3600000;
+    if(Number.isFinite(end)&&now>=end){const url=safeMeetingUrl(meeting.recordingUrl);return {kind:'recording',url,label:url?'مشاهدة اللقاء مسجلًا':'التسجيل سيُتاح قريبًا'};}
+    const url=safeMeetingUrl(meeting.link);return {kind:'live',url,label:url?'دخول اللقاء':'سيُضاف رابط الحضور هنا'};
+  }
+  root.SulukeraGraduation={policies,safeMeetingUrl,topicCapacity,attendanceLabel,meetingAction};
 })(globalThis);
