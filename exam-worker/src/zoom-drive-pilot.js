@@ -1,4 +1,6 @@
 import {driveIdentity,driveReadToken} from './drive-recordings.js';
+import {recordingCatalog,transferRecordingStep} from './zoom-drive-transfer.js';
+import {startAcademicRecording} from './academic-recording-media.js';
 const fail=(message,status=400)=>{const error=new Error(message);error.status=status;throw error;};
 const norm=v=>String(v||'').normalize('NFKC').replace(/[إأآ]/g,'ا').replace(/ة/g,'ه').replace(/[\u064B-\u065Fـ]/g,'').replace(/\s+/g,' ').trim();
 async function checkedJson(response,prefix){if(!response.ok){await response.body?.cancel();fail(prefix+'_'+response.status,503);}return response.json();}
@@ -33,12 +35,22 @@ export async function inspectPilotZoom(env,fetcher=fetch){
  return {connected:true,hostEmail:credentials.hostEmail,meetingId:credentials.meetingId,recordings};
 }
 export async function handleZoomDrivePilot(request,env,path){
- if(path!=='/integrations/zoom-drive-pilot/inspect')return null;
+ if(!['/integrations/zoom-drive-pilot/inspect','/integrations/zoom-drive-pilot/catalog','/integrations/zoom-drive-pilot/transfer','/integrations/zoom-drive-pilot/preview'].includes(path))return null;
  if(request.method!=='POST')fail('METHOD_NOT_ALLOWED',405);
  const key=env.RECORDING_PILOT_KEY;if(!key||key.length<40)fail('PILOT_NOT_ENABLED',503);
  const received=request.headers.get('Authorization')||'';
  const digest=async v=>new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
  const [actual,expected]=await Promise.all([digest(received),digest('Bearer '+key)]);let different=0;for(let i=0;i<actual.length;i++)different|=actual[i]^expected[i];if(different)fail('FORBIDDEN',403);
+ if(path.endsWith('/catalog'))return {data:await recordingCatalog(env)};
+ if(path.endsWith('/preview')){
+  const b=await request.json(),row=await env.DB.prepare("SELECT lesson_ids FROM zoom_drive_transfers WHERE source_id=? AND state='complete'").bind(String(b.sourceId||'')).first();if(!row)fail('TRANSFER_NOT_COMPLETE',404);
+  const l=await env.DB.prepare('SELECT * FROM course_lessons WHERE id=?').bind(JSON.parse(row.lesson_ids)[0]).first();return {data:await startAcademicRecording(env,l)};
+ }
+ if(path.endsWith('/transfer')){
+  if(Number(request.headers.get('Content-Length')||0)>16384)fail('BODY_TOO_LARGE',413);
+  const raw=await request.text();if(raw.length>16384)fail('BODY_TOO_LARGE',413);
+  return {data:await transferRecordingStep(env,JSON.parse(raw))};
+ }
  const [zoom,drive]=await Promise.allSettled([inspectPilotZoom(env),inspectPilotDrive(env)]);
  const report=value=>value.status==='fulfilled'?value.value:{connected:false,reason:value.reason?.message||'CONNECTION_FAILED'};
  return {data:{zoom:report(zoom),drive:report(drive),transferred:false}};

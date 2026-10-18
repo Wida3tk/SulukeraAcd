@@ -40,6 +40,22 @@ const cwLink = (url, label) =>
   /^https:\/\//i.test(url || "")
     ? `<a class="btn-out" style="display:inline-block" href="${cwEscape(url)}" target="_blank" rel="noopener">${label}</a>`
     : "";
+// Drive stays private: open authorized course recordings inside the platform.
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('click',event=>{
+ const link=event.target.closest?.('a');if(!link||link.textContent.trim()!=='مشاهدة التسجيل')return;
+ let url;try{url=new URL(link.href);}catch{return;}if(url.hostname!=='drive.google.com')return;
+ const lesson=cwData?.lessons?.find(l=>l.recording_url===link.getAttribute('href'));if(!lesson)return;
+ event.preventDefault();void cwOpenRecording(lesson.id);
+});
+async function cwOpenRecording(lessonId){
+ try{
+  const data=await cwApi('/recording/start',{lessonId}),overlay=document.createElement('dialog');
+  overlay.style.cssText='width:min(960px,94vw);border:1px solid #dae3f2;border-radius:20px;padding:24px;background:#fff;color:#14305b;';
+  overlay.innerHTML='<header style="display:flex;justify-content:space-between;align-items:center;gap:16px"><h2 style="font-size:20px">'+cwEscape(data.title)+'</h2><button class="btn-out" type="button">إغلاق</button></header><video controls playsinline preload="metadata" style="display:block;width:100%;max-height:70vh;background:#071634;border-radius:14px" referrerpolicy="no-referrer"></video><p style="line-height:1.8">مشاهدة التسجيل لا تعتمد درجة الحضور تلقائيًا؛ يبقى إكمال الواجب الأساسي وواجب الحضور المسجل واعتماد المحاضر مطلوبًا.</p>';
+  const close=()=>{overlay.querySelector('video').pause();overlay.remove();};overlay.querySelector('button').onclick=close;overlay.addEventListener('cancel',event=>{event.preventDefault();close();});
+  document.body.append(overlay);overlay.showModal();const video=overlay.querySelector('video');video.src=EXAM_API_BASE+data.mediaPath;video.addEventListener('error',()=>cwNotify('تعذر تشغيل التسجيل، يرجى إعادة فتحه أو التواصل مع الدعم.'));
+ }catch(error){cwNotify(error.message);}
+}
 async function cwApi(path, body) {
   const user = firebase.auth().currentUser;
   if (!user) throw Error("انتهت جلسة الدخول");

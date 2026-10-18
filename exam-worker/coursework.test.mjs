@@ -158,6 +158,15 @@ test("homework score and attendance boundaries", () => {
   assert.equal(attendanceGrade(50,3,false),2);
   assert.equal(attendanceGrade(0.1,3,false),1);
 });
+test('academic recording start rejects unrelated lecturers, inactive students, drafts and unassigned subjects before creating a ticket',async()=>{
+ const f=fixtures();await f.call('admin','/lesson',{...f.config,recordingUrl:'https://drive.google.com/file/d/video/view'});
+ await assert.rejects(f.call('outsider','/recording/start',{lessonId:'course_lesson_1'}),/SUBJECT_ACCESS_DENIED/);
+ f.records.students.student.accountStatus='withdrawn';
+ await assert.rejects(f.call('student','/recording/start',{lessonId:'course_lesson_1'}),/ACCOUNT_INACTIVE/);
+ f.records.students.student.accountStatus='active';f.sql.prepare("UPDATE course_lessons SET status='draft'").run();
+ await assert.rejects(f.call('student','/recording/start',{lessonId:'course_lesson_1'}),/LESSON_NOT_AVAILABLE/);
+ assert.equal(f.sql.prepare("SELECT name FROM sqlite_master WHERE name='academic_recording_tickets'").get(),undefined);
+});
 test("coursework home isolates selected batch and exposes four lecture cards with clear actions", () => {
   const host={innerHTML:''},context={currentUser:{role:'admin'},document:{getElementById:()=>host}};
   vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);

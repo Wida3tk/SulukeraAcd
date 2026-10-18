@@ -1,0 +1,31 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {safeMeeting,validateLessonBindings,transferRecordingStep} from './src/zoom-drive-transfer.js';
+test('catalog never exposes Zoom download URLs or nonvideo files',()=>{
+ const m=safeMeeting({id:123,uuid:'instance',recording_files:[{id:'mp4',status:'completed',file_type:'MP4',download_url:'private',file_size:100},{id:'chat',status:'completed',file_type:'TXT'}]});
+ assert.equal(m.meetingId,'123');assert.equal(m.files.length,1);assert(!JSON.stringify(m).includes('private'));
+});
+test('resumed transfer trusts Drive offset, buffers only requested range, and releases lease without writing marks',async()=>{
+ const queries=[],row={source_id:'source',meeting_uuid:'instance',folder_id:'folder',lesson_ids:'["lesson"]',expected_size:100,drive_id:'existing-drive-id',session_url:'https://www.googleapis.com/upload/session',uploaded:0,state:'pending'};
+ const DB={prepare(query){queries.push(query);return {bind(){return {first:async()=>row,run:async()=>({meta:{changes:1}})};},run:async()=>({meta:{changes:0}})};}};
+ const env={DB,DRIVE_RECORDING_FOLDER_ID:'1-BRS05bBFJhX8GlW9o3ECxZaJ2UnFi-N',DRIVE_UPLOAD_OAUTH:JSON.stringify({rootId:'1-BRS05bBFJhX8GlW9o3ECxZaJ2UnFi-N',client_id:'client',client_secret:'secret',refresh_token:'refresh'}),ZOOM_PILOT_CREDENTIALS:JSON.stringify({hostEmail:'rushdacd.sa@gmail.com',clientId:'client',clientSecret:'secret',accountId:'account'})};
+ const original=globalThis.fetch;let uploads=0;
+ globalThis.fetch=async(url,options)=>{
+  if(url==='https://oauth2.googleapis.com/token')return Response.json({access_token:'drive-token'});
+  if(url==='https://zoom.us/oauth/token')return Response.json({access_token:'zoom-token'});
+  if(url.startsWith('https://api.zoom.us/'))return Response.json({meetings:[{uuid:'instance',id:123,recording_files:[{id:'source',file_type:'MP4',status:'completed',file_size:100,download_url:'https://zoom.us/download'}]}]});
+  if(url==='https://zoom.us/download'){assert.equal(options.headers.Range,'bytes=50-99');return new Response(new Uint8Array(50),{status:206,headers:{'Content-Range':'bytes 50-99/100'}});}
+  if(url===row.session_url){if(options.headers['Content-Range']==='bytes */100')return new Response(null,{status:308,headers:{Range:'bytes=0-49'}});uploads++;assert.equal(options.body.byteLength,50);assert.equal(options.headers['Content-Range'],'bytes 50-99/100');return new Response(null,{status:308,headers:{Range:'bytes=0-99'}});}
+  throw Error('Unexpected external request');
+ };
+ try{const result=await transferRecordingStep(env,{sourceId:'source',uuid:'instance',folderId:'folder',lessonIds:['lesson']});assert.equal(result.uploaded,100);assert.equal(uploads,1);assert(queries.some(q=>q.includes('lock_until=0')));assert(queries.every(q=>!q.includes('grades')&&!q.includes('attendance')&&!q.includes('UPDATE course_lessons')));}finally{globalThis.fetch=original;}
+});
+test('binding requires exact lecture date and same course for shared cohorts',()=>{
+ const rows=[{id:'a',opens_at:'2026-10-04T17:30:00Z',title:'المحاضرة 1 — تدخلات تغيير السلوك'},{id:'b',opens_at:'2026-10-04T17:30:00Z',title:'المحاضرة 1 — تدخلات تغيير السلوك'}];
+ assert.doesNotThrow(()=>validateLessonBindings(rows,['a','b'],'2026-10-04'));
+ assert.throws(()=>validateLessonBindings(rows,['a','b'],'2026-10-11'),/DATE_MISMATCH/);
+ assert.throws(()=>validateLessonBindings(rows,['a','a'],'2026-10-04'),/IDS_REQUIRED/);
+ assert.throws(()=>validateLessonBindings([...rows.slice(0,1),{...rows[1],title:'مقرر مختلف'}],['a','b'],'2026-10-04'),/COURSE_MISMATCH/);
+ const rescheduled=rows.map(row=>({...row,zoom_url:'https://us06web.zoom.us/j/123'}));
+ assert.doesNotThrow(()=>validateLessonBindings(rescheduled,['a','b'],'2026-10-14',{meetingId:'123',reason:'Owner explicitly confirmed first lecture on October 14.'}));
+ assert.throws(()=>validateLessonBindings(rescheduled,['a','b'],'2026-10-14',{meetingId:'456',reason:'Owner explicitly confirmed first lecture on October 14.'}),/DATE_MISMATCH/);
+});

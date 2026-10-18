@@ -2,6 +2,7 @@ import '../../productivity-ledger.js';
 import '../../student-account-policy.js';
 import '../../academic-policy.js';
 import {studentLessonDeadline} from './coursework-deadlines.js';
+import {startAcademicRecording} from './academic-recording-media.js';
 const reject = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -242,6 +243,11 @@ export async function handleCoursework(request, env, auth, path, ctx) {
   if (!path.startsWith("/coursework")) return null;
   const s = await scope(auth, ctx),
     key = auth.profile.studentKey;
+  if(path==='/coursework/recording/start'&&request.method==='POST'){
+    const b=await json(request),l=await lessonFor(env,b.lessonId,s);
+    if(s.role==='student'&&l.status!=='published')reject('LESSON_NOT_AVAILABLE',403);
+    return {data:await startAcademicRecording(env,l)};
+  }
   if (path === "/coursework" && request.method === "GET") {
     const lessons = (
       await env.DB.prepare(
