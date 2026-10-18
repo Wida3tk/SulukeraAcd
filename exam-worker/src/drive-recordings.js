@@ -18,6 +18,7 @@ async function metadata(env,id,resourceKey=''){
 }
 
 const folderCache=new Map();
+export {token as driveReadToken};
 export async function folderVideos(env){
  const key=driveIdentity(env).email+':'+env.DRIVE_RECORDING_FOLDER_ID,cached=folderCache.get(key);if(cached&&cached.expires>Date.now())return cached.files;
  if(!env.DRIVE_RECORDING_FOLDER_ID)fail('DRIVE_CONNECTION_REQUIRED');

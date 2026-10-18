@@ -6,6 +6,7 @@ import {syncProfessionalExamResults} from './professional-exam-results.js';
 import {finalizeAutomaticCoursework} from './coursework-auto-grades.js';
 import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
+import {handleZoomDrivePilot} from './zoom-drive-pilot.js';
 import { handleLecturerSurvey } from "./lecturer-survey.js";
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
@@ -1099,6 +1100,8 @@ export default {
         path = url.pathname.replace(/\/+$/, "") || "/";
       if (path === "/health")
         return reply(request, { ok: true, service: "sulukera-exams" });
+      const pilot=await handleZoomDrivePilot(request,env,path);
+      if(pilot)return reply(request,pilot.data);
       const media = await handleProfessionalRecordingMedia(request,env,path,{corsHeaders});
       if(media)return media;
       const auth = await authenticate(request);
