@@ -12,7 +12,7 @@
     ['التأخير ومراجعة الدرجة','يُخصم من الدرجة النهائية عند التأخر دون عذر مقبول. يحق للطالب طلب مراجعة الدرجة عند وجود مبررات واضحة. تُبلغ سلوكيرا الطلاب عبر البريد الإلكتروني بالتحديثات التي تطرأ على الإجراءات ضمن حدود الاتفاقية المسبقة.']
   ];
   function safeMeetingUrl(value){try{const url=new URL(String(value||''));return url.protocol==='https:'?url.href:'';}catch{return '';}}
-  function topicCapacity(total,index){const groups=Math.ceil(total/5);return index<0||index>=groups?0:index===groups-1?(total%5||5):5;}
+  function topicCapacity(total,index,topicCount=4){const active=Math.min(Math.max(0,Number(total)||0),topicCount*5),groups=Math.min(topicCount,Math.ceil(active/4));if(index<0||index>=groups)return 0;const base=Math.floor(active/groups),extra=active%groups;return base+(index<extra?1:0);}
   function attendanceLabel(value){return value===true||value===1?'حضر':value===false||value===0?'لم يحضر':'لم يُرصد';}
   root.SulukeraGraduation={policies,safeMeetingUrl,topicCapacity,attendanceLabel};
 })(globalThis);
