@@ -21,6 +21,17 @@ export async function activeProjectStudents(env,project,auth,ctx){
  return members.filter(row=>students?.[row.student_key]&&globalThis.SulukeraStudentAccount.isActive(students[row.student_key]));
 }
 export async function handleGraduationExperience(request,env,auth,path,ctx){
+ if(path==='/admin/graduation-projects/attendance-import'&&request.method==='POST'){
+  roles(auth,'admin','academic_admin');const value=await body(request),index=value.meetingIndex,rows=value.rows;
+  if(!Number.isInteger(index)||index<0||index>3||!Array.isArray(rows)||!rows.length||rows.length>1000||rows.some(row=>typeof row.studentKey!=='string'||typeof row.attended!=='boolean')||new Set(rows.map(row=>row.studentKey)).size!==rows.length)fail('INVALID_ATTENDANCE');
+  const project=await env.DB.prepare('SELECT * FROM graduation_projects WHERE id=?').bind(value.projectId).first();
+  if(!project||!parse(project.general_meetings_json)[index])fail('MEETING_NOT_FOUND',404);
+  const eligible=new Set((await activeProjectStudents(env,project,auth,ctx)).map(student=>student.student_key));
+  if(rows.some(row=>!eligible.has(row.studentKey)))fail('STUDENT_NOT_ELIGIBLE',403);
+  const now=new Date().toISOString();
+  await env.DB.batch(rows.map(row=>env.DB.prepare('INSERT INTO graduation_project_attendance VALUES (?,?,?,?,?,?) ON CONFLICT(project_id,student_key,meeting_index) DO UPDATE SET attended=excluded.attended,updated_by=excluded.updated_by,updated_at=excluded.updated_at').bind(project.id,row.studentKey,index,row.attended?1:0,auth.uid,now)));
+  return {data:{saved:true,count:rows.length,present:rows.filter(row=>row.attended).length,absent:rows.filter(row=>!row.attended).length}};
+ }
  if(path==='/admin/graduation-projects/attendance'&&request.method==='POST'){
   roles(auth,'admin','academic_admin');const value=await body(request),index=value.meetingIndex;
   if(!Number.isInteger(index)||index<0||index>3||![true,false,null].includes(value.attended))fail('INVALID_ATTENDANCE');

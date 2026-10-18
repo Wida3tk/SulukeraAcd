@@ -55,7 +55,44 @@ function gpShowMeetingNotice(){
  dialog.innerHTML=`<span class="gp-eyebrow">بداية رحلتك مع مشروع التخرج</span><h2 id="gpNoticeTitle">موعدنا في اللقاء الأول</h2><p>نبدأ معًا بخطوات واضحة: تعرف على خطة المشروع، واستمع لتوجيهات المشرف، وجهّز أسئلتك.</p><div class="gp-notice-date"><strong>الأربعاء ${escapeHtml(gpDate(meeting.at))}</strong><br>${escapeHtml(gpTime(meeting.at))} – ${escapeHtml(gpTime(gpMeetingEnd(meeting)))} · بتوقيت السعودية<br>عبر Zoom · أربعة لقاءات أسبوعية</div><div class="gp-notice-actions"><button class="gp-action" id="gpNoticeOpen">عرض تفاصيل المشروع</button><button class="btn" id="gpNoticeLater">حسنًا</button></div>`;
  dialog.querySelector('#gpNoticeOpen').onclick=()=>{gpCloseMeetingNotice();graduationStudentTab='schedule';switchAppTab('graduation-project',getAppTabButtonById('graduation-project'));};dialog.querySelector('#gpNoticeLater').onclick=()=>gpCloseMeetingNotice();dialog.addEventListener('cancel',event=>{event.preventDefault();gpCloseMeetingNotice();});document.body.append(dialog);dialog.showModal();
 }
+let gpAttendanceImport=null;
+function gpImportRoster(item){return (item.students||[]).filter(row=>row.eligible).map(row=>{const student=students.find(s=>s._fbKey===row.student_key);return student&&SulukeraStudentAccount.isActive(student)?{key:row.student_key,name:graduationStudentName(row.student_key),id:student.id,email:student.email}:null;}).filter(Boolean);}
 function gpAdminAttendance(item){
+ gpAttendanceImport=null;
+ const meetings=(item.project.generalMeetings||[]).slice(0,4);
+ return `<section class="card gp-import-card"><div class="card-title">استيراد حضور مشروع التخرج</div><p class="gp-admin-note">للتوثيق فقط: حضر أو لم يحضر، دون درجات أو تأثير على نتيجة المشروع. يدعم Excel وملفات حضور Zoom بصيغة CSV. إذا احتوى الملف على مدة الحضور، تُسجل أي مدة أكبر من صفر «حضر».</p><div class="gp-import-controls"><label>اللقاء<select id="gpImportMeeting" onchange="gpClearAttendancePreview()">${meetings.map((meeting,index)=>`<option value="${index}">اللقاء ${index+1}${meeting.at?' — '+escapeHtml(gpDate(meeting.at)):''}</option>`).join('')}</select></label><label>ملف الحضور<input id="gpImportFile" type="file" accept=".xlsx,.xls,.csv" onchange="gpReadAttendanceFile(this)"></label></div><div id="gpImportPreview" aria-live="polite"></div></section>`+gpAdminAttendanceTable(item);
+}
+function gpClearAttendancePreview(){gpAttendanceImport=null;const host=document.getElementById('gpImportPreview');if(host)host.innerHTML='';const file=document.getElementById('gpImportFile');if(file)file.value='';}
+async function gpReadAttendanceFile(input){
+ const item=graduationProjectsAdminData.find(r=>String(r.project.batch).toUpperCase()==='Q1'&&r.project.plan_type==='QASP-S'),file=input.files?.[0],host=document.getElementById('gpImportPreview');gpAttendanceImport=null;if(!file||!item)return;
+ if(file.size>10*1024*1024){input.value='';return showToast('حجم الملف يجب ألا يتجاوز 10MB');}
+ if(typeof XLSX==='undefined')return showToast('تعذر تحميل مكتبة Excel، حدّثي الصفحة');
+ const meetingIndex=Number(document.getElementById('gpImportMeeting').value);host.innerHTML='<p role="status">جاري قراءة ملف الحضور…</p>';
+ try{
+  const book=XLSX.read(await file.arrayBuffer(),{type:'array'}),roster=gpImportRoster(item);let rows,sheetName;
+  for(const sheet of book.SheetNames){try{rows=SulukeraGraduationAttendance.parse(XLSX.utils.sheet_to_json(book.Sheets[sheet],{header:1,defval:''}));sheetName=sheet;break;}catch(error){if(book.SheetNames.length===1)throw error;}}
+  if(!rows)throw Error('لم أجد ورقة تحتوي على أسماء أو أرقام طلاب.');
+  if(!document.getElementById('gpImportPreview')||input.files?.[0]!==file||Number(document.getElementById('gpImportMeeting').value)!==meetingIndex)return;
+  gpAttendanceImport={projectId:item.project.id,meetingIndex,roster,rows,sheetName,fileName:file.name};
+  host.innerHTML=`<div class="gp-import-review"><strong>معاينة اللقاء ${meetingIndex+1} — ${rows.length} سجل من الملف</strong><p class="gp-copy">${escapeHtml(file.name)} · ${escapeHtml(sheetName)}. تكرار دخول المتدرب يُدمج في سجل واحد، ويُعتمد «حضر» إذا ظهر حضوره في أي صف.</p><div class="table-wrap"><table><thead><tr><th>الاسم في الملف</th><th>ربط المتدرب</th><th>الحضور</th></tr></thead><tbody>${rows.map((row,index)=>{const key=SulukeraGraduationAttendance.match(row,roster);return `<tr><td>${escapeHtml(row.name||row.id||row.email)}${row.email?`<br><small>${escapeHtml(row.email)}</small>`:''}</td><td><select data-gp-import-student="${index}"><option value="">— يحتاج ربطًا —</option><option value="__ignore__">تجاهل هذا الاسم (مشرف أو ضيف)</option>${roster.map(student=>`<option value="${student.key}" ${student.key===key?'selected':''}>${escapeHtml(student.name)} · ${escapeHtml(student.id)}</option>`).join('')}</select></td><td><select data-gp-import-attended="${index}"><option value="" ${row.attended===null?'selected':''}>— حددي الحالة —</option><option value="1" ${row.attended===true?'selected':''}>حضر</option><option value="0" ${row.attended===false?'selected':''}>لم يحضر</option></select></td></tr>`;}).join('')}</tbody></table></div><label class="gp-import-complete"><input type="checkbox" id="gpImportComplete"> الملف يمثل سجل اللقاء كاملًا: تسجيل جميع طلاب المشروع غير الموجودين فيه «لم يحضر».</label><p class="gp-copy">عند ترك الخيار دون تحديد، تُحفظ الحالات المربوطة فقط وتبقى بقية السجلات كما هي. الاستيراد مجددًا يصحح سجل اللقاء المحدد فقط.</p><button class="btn btn-primary" onclick="gpSaveAttendanceImport(this)">اعتماد وحفظ سجل اللقاء ${meetingIndex+1}</button></div>`;
+ }catch(error){host.innerHTML=`<p role="alert" class="gp-copy">${escapeHtml(error.message||'تعذر قراءة الملف')}</p>`;}
+}
+async function gpSaveAttendanceImport(button){
+ const draft=gpAttendanceImport;if(!draft)return;const rows=[];
+ for(let index=0;index<draft.rows.length;index++){
+  const studentKey=document.querySelector(`[data-gp-import-student="${index}"]`)?.value,state=document.querySelector(`[data-gp-import-attended="${index}"]`)?.value;
+  if(studentKey==='__ignore__')continue;
+  if(!studentKey||!['0','1'].includes(state))return showToast('اربطي كل اسم أو اختاري تجاهله، وحددي حالة الحضور قبل الحفظ');
+  rows.push({studentKey,attended:state==='1'});
+ }
+ let merged=SulukeraGraduationAttendance.merge(rows);
+ if(!merged.length)return showToast('لم تُربط أي أسماء؛ لن يُحفظ غياب من ملف غير مطابق');
+ if(document.getElementById('gpImportComplete')?.checked){const found=new Set(merged.map(row=>row.studentKey));merged=merged.concat(draft.roster.filter(student=>!found.has(student.key)).map(student=>({studentKey:student.key,attended:false})));}
+ button.disabled=true;
+ try{const result=await secureAdminExamRequest('/admin/graduation-projects/attendance-import',{method:'POST',body:JSON.stringify({projectId:draft.projectId,meetingIndex:draft.meetingIndex,rows:merged})});gpAttendanceImport=null;showToast(`تم حفظ اللقاء ${draft.meetingIndex+1}: حضر ${result.present} · لم يحضر ${result.absent} — دون درجات`);await renderGraduationProjectsAdmin();}
+ catch(error){showToast('تعذر حفظ الحضور: '+error.message);}finally{button.disabled=false;}
+}
+function gpAdminAttendanceTable(item){
  const meetings=(item.project.generalMeetings||[]).slice(0,4),eligible=(item.students||[]).filter(row=>row.eligible&&students.some(student=>student._fbKey===row.student_key&&SulukeraStudentAccount.isActive(student)));
  return `<section class="card"><div class="card-title">حضور لقاءات مشروع التخرج</div><p class="gp-admin-note">رصد مستقل لكل لقاء: ✓ حضر · ✕ لم يحضر. اترك الحالة «لم يُرصد» حتى تأكيد الحضور.</p><div class="table-wrap"><table class="gp-attendance-admin"><thead><tr><th>الطالب</th>${meetings.map((m,i)=>`<th>اللقاء ${i+1}<br><small>${m.at?gpDate(m.at):'الموعد لاحقًا'}</small></th>`).join('')}</tr></thead><tbody>${eligible.map((student,rowIndex)=>`<tr><td>${escapeHtml(graduationStudentName(student.student_key))}</td>${meetings.map((m,i)=>{const value=(item.attendance||[]).find(a=>a.student_key===student.student_key&&a.meeting_index===i)?.attended;return `<td><select aria-label="اللقاء ${i+1} — ${escapeHtml(graduationStudentName(student.student_key))}" onchange="gpSaveAttendance(${rowIndex},${i},this)"><option value="" ${value==null?'selected':''}>لم يُرصد</option><option value="1" ${value===1?'selected':''}>✓ حضر</option><option value="0" ${value===0?'selected':''}>✕ لم يحضر</option></select></td>`;}).join('')}</tr>`).join('')}</tbody></table></div></section>`;
 }
