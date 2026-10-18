@@ -10,6 +10,12 @@ test('catalog never exposes Zoom download URLs or nonvideo files',()=>{
  const m=safeMeeting({id:123,uuid:'instance',recording_files:[{id:'mp4',status:'completed',file_type:'MP4',download_url:'private',file_size:100},{id:'chat',status:'completed',file_type:'TXT'}]});
  assert.equal(m.meetingId,'123');assert.equal(m.files.length,1);assert(!JSON.stringify(m).includes('private'));
 });
+test('a completed job cannot be resumed through another account, even before any external request',async()=>{
+ const row={source_id:'source',meeting_uuid:'instance',folder_id:'folder',lesson_ids:'["lesson"]',state:'complete'};
+ const DB={prepare(query){return {run:async()=>({meta:{changes:0}}),bind(){return {first:async()=>query.includes('SELECT host_email')?{host_email:'rushdacd.sa@gmail.com'}:row};}};}};
+ const env={DB,ZOOM_ACCOUNT_RUSHDACD1:JSON.stringify({hostEmail:'rushdacd1@gmail.com'})};
+ await assert.rejects(()=>transferRecordingStep(env,{host:'rushdacd1@gmail.com',sourceId:'source',uuid:'instance',folderId:'folder',lessonIds:['lesson']}),/TRANSFER_ACCOUNT_CONFLICT/);
+});
 test('resumed transfer trusts Drive offset, buffers only requested range, and releases lease without writing marks',async()=>{
  const queries=[],row={source_id:'source',meeting_uuid:'instance',folder_id:'folder',lesson_ids:'["lesson"]',expected_size:100,drive_id:'existing-drive-id',session_url:'https://www.googleapis.com/upload/session',uploaded:0,state:'pending'};
  const DB={prepare(query){queries.push(query);return {bind(){return {first:async()=>row,run:async()=>({meta:{changes:1}})};},run:async()=>({meta:{changes:0}})};}};

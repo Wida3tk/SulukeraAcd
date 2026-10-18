@@ -31,4 +31,6 @@ On October 18, `rushdacd1@gmail.com` was connected and verified using the separa
 
 The second account's October catalog contains classroom-management recordings on October 7 and 14 (`86843545960`) and an assessment-protocols recording on October 6 (`87401037383`). These map by exact date, existing lesson meeting ID, and the existing course folders. No October 13 assessment-protocols recording was returned by this account. No scheduled automatic sync or source-deletion policy is enabled.
 
+All three second-account recordings completed transfer and private byte-range playback verification (HTTP 206, MP4 signature verified): classroom management lecture 1 → Drive `1nLB2UcaQQAiL05JrZfz0R5Xyq-Z6yOia`, lecture 2 → `1z72wy2dXfMv5OZ5I-xz4XpZGthF9Nlkj`, assessment protocols lecture 1 (Q2 and Q3) → `1Gnl7pk2XzbuOucdt-Lr6BoXCCBT1QWhz`. The final D1 readback showed all seven original and second-account jobs complete, with source byte sizes matching uploaded byte sizes. No grades, attendance, question sets or homework dates were changed by these operations.
+
 The next user-authorized account is `RushdABAT@gmail.com` for academic OBM plus the professional program. Its localhost credential form is separate and stores `ZOOM_ACCOUNT_RUSHDABAT`; it is not enabled for transfer until connection and lecture/session mapping are verified.
