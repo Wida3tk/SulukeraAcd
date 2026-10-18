@@ -7,7 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="academic-policy.js?v=20261011-exception-term"></script>
+<script src="academic-policy.js?v=20261018-limited-course"></script>
 <script src="grade-result-policy.js?v=20261015-record-preservation"></script>
 <script src="student-account-policy.js?v=20261012-withdrawn-roster"></script>
 <style>
@@ -668,6 +668,7 @@ function getStudentPlanType(student){
   return trackPlan||packagePlan;
 }
 function isStudentEligibleForSubject(student,subject){
+  if(!SulukeraAcademicPolicy.subjectAllowed(student,subject,dbData.packages||{}))return false;
   if(Number(subject?.semesterNo)>=5&&getStudentPlanType(student)!=='QBA')return false;
   if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
      !['course_04','course_05','course_06'].includes(subject?.courseKey)) return false;
@@ -2246,7 +2247,7 @@ function getSubjectStudents(subjectFbKey){
   const addStudent=(studentKey)=>{
     const student=dbData.students?.[studentKey];
     if(subject?.excludedStudents?.[studentKey]) return;
-    if(student && SulukeraStudentAccount.isActiveInRoot(studentKey,dbData) && !result.find(r=>r.fbKey===studentKey))
+    if(student && SulukeraAcademicPolicy.subjectAllowed(student,subject,dbData.packages||{}) && SulukeraStudentAccount.isActiveInRoot(studentKey,dbData) && !result.find(r=>r.fbKey===studentKey))
       result.push({fbKey:studentKey,...student});
   };
 

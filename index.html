@@ -7,7 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="academic-policy.js?v=20261011-exception-term"></script>
+<script src="academic-policy.js?v=20261018-limited-course"></script>
 <script src="grade-result-policy.js?v=20261015-record-preservation"></script>
 <script src="student-account-policy.js?v=20261012-withdrawn-roster"></script>
 <script src="productivity-ledger.js?v=20261006-meetings"></script>
@@ -1382,6 +1382,7 @@ async function loadAllFromFirebase(){
         program:s.program||'', track:s.track||'', batch:s.batch||'',
         id:s.id||key, pkg:s.pkg||'full',
         planType:s.planType||'',
+        allowedCourseKeys:Array.isArray(s.allowedCourseKeys)?s.allowedCourseKeys:undefined,
         financeMode:s.financeMode||inferFinanceMode(s),
         totalAmount:parseFloat(s.totalAmount)||0, notes:s.notes||'',
         operCustomerId:s.operCustomerId||'',
@@ -1437,7 +1438,7 @@ async function loadAllFromFirebase(){
     enrollmentsData.forEach(enrollment=>{
       const si=subjects.findIndex(s=>s._fbKey===enrollment.subjectKey);
       const stdIdx=students.findIndex(s=>s._fbKey===enrollment.studentKey);
-      if(si>=0 && stdIdx>=0 && (Number(subjects[si].semesterNo)<5||getExplicitStudentPlan(students[stdIdx])==='QBA'||!subjects[si].semesterNo) && !subjects[si].students.includes(stdIdx)){
+      if(si>=0 && stdIdx>=0 && SulukeraAcademicPolicy.subjectAllowed(students[stdIdx],subjects[si]) && (Number(subjects[si].semesterNo)<5||getExplicitStudentPlan(students[stdIdx])==='QBA'||!subjects[si].semesterNo) && !subjects[si].students.includes(stdIdx)){
         subjects[si].students.push(stdIdx);
       }
     });
@@ -1509,6 +1510,7 @@ async function ensureOctober2026AcademicFoundation(root){
       semesterSubjectKeys.push(offeringKey);
       if(JSON.stringify(oldOffering)!==JSON.stringify(offering))updates[`subjects/${offeringKey}`]=offering;
       Object.entries(liveStudents).forEach(([studentKey,student])=>{
+        if(!SulukeraAcademicPolicy.subjectAllowed(student,offering,root.packages||{}))return;
         if(!SulukeraStudentAccount.isActive(student)||!sameBatchName(student.batch,batch)||!course.eligiblePlans.includes(getExplicitStudentPlan(student))||existingPairs.has(`${studentKey}|${offeringKey}`)||existingCoursePairs.has(`${studentKey}|${course.key}`))return;
         const enrollmentKey=(`enr_${studentKey}_${offeringKey}`).replace(/[.#$[\]]/g,'_');
         updates[`enrollments/${enrollmentKey}`]={studentKey,subjectKey:offeringKey,sourceType:'october_2026_foundation',status:'active'};
@@ -1594,6 +1596,7 @@ async function saveStudentToFirebase(stdIdx, passw){
     operOrderId:st.operOrderId||''
   };
   if(st.financeSnapshot) stdData.financeSnapshot = st.financeSnapshot;
+  if(Array.isArray(st.allowedCourseKeys))stdData.allowedCourseKeys=st.allowedCourseKeys;
 
   // Save installments
   if(st.installments?.length){
@@ -2207,6 +2210,7 @@ async function syncStudentFinanceFromOper(stdIdx){
   }
 }
 function studentEligibleForOffering(student,subject){
+  if(!SulukeraAcademicPolicy.subjectAllowed(student,subject))return false;
   if(sameBatchName(student?.batch,'Q3-26')&&sameBatchName(subject?.batch,'Q3-26')&&
      !['course_04','course_05','course_06'].includes(subject?.courseKey)) return false;
   const plan=getExplicitStudentPlan(student);
@@ -4179,6 +4183,7 @@ async function saveStudent() {
   if((stdData.operCustomerId||stdData.operOrderId) && editingStudentIdx>=0 && students[editingStudentIdx]?.financeSnapshot){
     stdData.financeSnapshot = students[editingStudentIdx].financeSnapshot;
   }
+  if(editingStudentIdx>=0&&Array.isArray(students[editingStudentIdx]?.allowedCourseKeys))stdData.allowedCourseKeys=[...students[editingStudentIdx].allowedCourseKeys];
   let pass=document.getElementById('studentPass').value;
   let generatedStudentPassword=false;
   if(!financialOnly && editingStudentIdx<0 && !pass){ pass=randomPassword(); generatedStudentPassword=true; }

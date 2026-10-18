@@ -15,6 +15,7 @@
     return course?Math.ceil(Number(course[1])/3):0;
   }
   function subjectAllowed(student,subject,packages={}){
+    if(Array.isArray(student?.allowedCourseKeys)&&!student.allowedCourseKeys.includes(subject?.courseKey))return false;
     const plan=resolvePlan(student,packages),limit=semesterLimit(plan),number=subjectSemester(subject);
     if(number&&(!limit||number>limit))return false;
     const plans=Array.isArray(subject?.eligiblePlans)?subject.eligiblePlans:[];
