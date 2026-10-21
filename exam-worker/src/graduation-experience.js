@@ -47,7 +47,7 @@ export async function handleGraduationExperience(request,env,auth,path,ctx){
   const context=await studentProject(env,auth,ctx);if(!context)fail('PROJECT_NOT_AVAILABLE',403);
   const {project,key}=context,value=await body(request),topics=parse(project.topics_json),index=topics.indexOf(value.topic);
   if(index<0)fail('TOPIC_NOT_AVAILABLE',409);
-  const total=(await activeProjectStudents(env,project,auth,ctx)).length,capacity=globalThis.SulukeraGraduation.topicCapacity(total,index);
+  const total=(await activeProjectStudents(env,project,auth,ctx)).length,capacity=globalThis.SulukeraGraduation.topicCapacity(total,index,topics.length);
   if(!capacity)fail('TOPIC_NOT_AVAILABLE',409);
   const groupId=`${project.id}_topic_${index}`,now=new Date().toISOString();
   await env.DB.batch([

@@ -44,21 +44,21 @@ test('attendance is explicit, role restricted, and only own attendance is return
  await assert.rejects(call('/admin/graduation-projects/attendance',{projectId:'project',studentKey:'s0',meetingIndex:4,attended:true},'admin'));
  await call('/admin/graduation-projects/attendance',{projectId:'project',studentKey:'s0',meetingIndex:0,attended:null},'admin');assert.equal((await call('/student/graduation-project')).data.attendance.length,0);
 });
-test('topic selection is disabled when empty, capacity is five then four, membership cannot duplicate, and team names are scoped',async()=>{
+test('all groups accept six members, reject a seventh, prevent duplicate membership, and scope team names',async()=>{
  const {call,env}=fixture();await assert.rejects(call('/student/graduation-project/topic',{topic:'one'}),error=>error.status===409);
  await call('/admin/graduation-projects/config',{projectId:'project',topics:['one','two','three','four','last'],generalMeetings:[]},'admin');
- for(let i=0;i<5;i++)await call('/student/graduation-project/topic',{topic:'one'},'student','s'+i);
- await assert.rejects(call('/student/graduation-project/topic',{topic:'one'},'student','s5'),error=>error.status===409);
+ for(let i=0;i<6;i++)await call('/student/graduation-project/topic',{topic:'one'},'student','s'+i);
+ await assert.rejects(call('/student/graduation-project/topic',{topic:'one'},'student','s6'),error=>error.status===409);
  await assert.rejects(call('/student/graduation-project/topic',{topic:'two'},'student','s0'),error=>error.status===409);
- for(let i=5;i<9;i++)await call('/student/graduation-project/topic',{topic:'last'},'student','s'+i);
- await assert.rejects(call('/student/graduation-project/topic',{topic:'last'},'student','s9'),error=>error.status===409);
- const data=(await call('/student/graduation-project')).data;assert.equal(data.group.members.length,5);assert.equal(data.group.memberProfiles.length,5);assert.equal(data.group.memberProfiles.some(member=>member.key==='s5'),false);
+ for(let i=6;i<12;i++)await call('/student/graduation-project/topic',{topic:'last'},'student','s'+i);
+ await assert.rejects(call('/student/graduation-project/topic',{topic:'last'},'student','s12'),error=>error.status===409);
+ const data=(await call('/student/graduation-project')).data;assert.equal(data.group.members.length,6);assert.equal(data.group.memberProfiles.length,6);assert.equal(data.group.memberProfiles.some(member=>member.key==='s6'),false);
  assert.equal(env.sql.prepare('SELECT count(*) n FROM graduation_project_group_members WHERE student_key=?').get('s0').n,1);
  await assert.rejects(call('/admin/graduation-projects/config',{projectId:'project',topics:['changed']},'admin'),error=>error.status===409);
 });
 test('project access excludes inactive students and PDF upload checks membership and file signature',async()=>{
  const {call,env,students,ctx,auth}=fixture();students.s0.accountStatus='withdrawn';assert.equal((await call('/student/graduation-project')).data.available,false);students.s0.accountStatus='active';
- env.sql.prepare('INSERT INTO graduation_project_groups VALUES (?,?,?,?,?,?,?,?,?)').run('group','project','فريق','عنوان','',null,'','now','now');env.sql.prepare('INSERT INTO graduation_project_group_members VALUES (?,?)').run('group','s0');
+ env.sql.prepare('INSERT INTO graduation_project_groups VALUES (?,?,?,?,?,?,?,?,?,?)').run('group','project','فريق','عنوان','',null,'',null,'now','now');env.sql.prepare('INSERT INTO graduation_project_group_members VALUES (?,?)').run('group','s0');
  const upload=(name,data,key='s0')=>handleGraduationProject(new Request('https://test/student/graduation-project/upload',{method:'POST',headers:{'X-Group-Id':'group','X-File-Name':encodeURIComponent(name)},body:data}),env,auth('student',key),'/student/graduation-project/upload',ctx);
  await assert.rejects(upload('file.pdf','%PDF-1.7','s1'),error=>error.status===403);await assert.rejects(upload('file.docx','%PDF-1.7'));await assert.rejects(upload('file.pdf','not a pdf'));
  assert.equal((await upload('مشروعي.pdf','%PDF-1.7\n%%EOF')).data.uploaded,true);assert.equal(env.uploaded,true);
