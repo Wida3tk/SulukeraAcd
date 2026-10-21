@@ -8,7 +8,7 @@ import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
 import {handleZoomDrivePilot} from './zoom-drive-pilot.js';
 import {handleAcademicRecordingMedia} from './academic-recording-media.js';
-import {runAttendanceSync,attendanceSchema,approveAttendanceAlias,attendanceEligibleStudents} from './zoom-attendance-sync.js';
+import {runAttendanceSync,attendanceSchema,approveAttendanceAlias,attendanceEligibleStudents,savedAttendanceNames} from './zoom-attendance-sync.js';
 import {discoverNightlyRecordings,processNightlyRecordingQueue,nightlyRecordingSchema} from './nightly-recording-sync.js';
 import { handleLecturerSurvey } from "./lecturer-survey.js";
 import "../../academic-policy.js";
@@ -1120,9 +1120,12 @@ export default {
         const lessons=(await env.DB.prepare('SELECT id,subject_key,week FROM course_lessons').all()).results,reports=(await env.DB.prepare('SELECT id,host,meeting_id,topic,starts_at,ends_at,state,result_json,updated_at FROM zoom_attendance_reports ORDER BY starts_at DESC LIMIT 100').all()).results;
         const scopeLabels=Object.fromEntries(lessons.map(l=>[l.id,(root.subjects[l.subject_key]?.name||l.subject_key)+' — '+(root.subjects[l.subject_key]?.batch||'')+' — المحاضرة '+l.week]));
         const scopes=[...new Set(reports.flatMap(r=>JSON.parse(r.result_json||'{}').targets||[]))],scopeRosters=Object.fromEntries(scopes.map(key=>[key,attendanceEligibleStudents(key,root,lessons).map(s=>s.key)]));
-        return reply(request,{scopeLabels,scopeRosters,automatic:env.ZOOM_ATTENDANCE_AUTO==='true',students:Object.entries(root.students).filter(([,s])=>SulukeraStudentAccount.isActive(s)).map(([key,s])=>({key,id:s.id,batch:s.batch||'',name:s.name||[s.firstName,s.midName,s.lastName].filter(Boolean).join(' ')})),reports});
+        const aliases=(await env.DB.prepare('SELECT * FROM zoom_attendance_aliases').all()).results;
+        const annotatedReports=reports.map(r=>({...r,approvedNames:savedAttendanceNames(r,aliases,root,lessons)}));
+        return reply(request,{scopeLabels,scopeRosters,automatic:env.ZOOM_ATTENDANCE_AUTO==='true',students:Object.entries(root.students).filter(([,s])=>SulukeraStudentAccount.isActive(s)).map(([key,s])=>({key,id:s.id,batch:s.batch||'',name:s.name||[s.firstName,s.midName,s.lastName].filter(Boolean).join(' ')})),reports:annotatedReports});
       }
       if(path==='/admin/zoom-attendance/alias'&&request.method==='POST'){requireRole(auth,'admin');return reply(request,await approveAttendanceAlias(env,{firebaseAdminToken},await request.json(),auth.uid));}
+      if(path==='/admin/zoom-attendance/process'&&request.method==='POST'){requireRole(auth,'admin');const b=await request.json();if(!/^[a-f0-9]{64}$/.test(b.reportId||''))throw Object.assign(new Error('INVALID_REPORT_ID'),{status:400});return reply(request,await runAttendanceSync(env,{firebaseAdminToken},{reportId:b.reportId,processOnly:true}));}
       if(path==='/admin/zoom-attendance/retry'&&request.method==='POST'){requireRole(auth,'admin');const b=await request.json();if(!/^[a-f0-9]{64}$/.test(b.reportId||''))throw Object.assign(new Error('INVALID_REPORT_ID'),{status:400});await env.DB.prepare("UPDATE zoom_attendance_reports SET state='fetched' WHERE id=?").bind(b.reportId).run();return reply(request,{queued:true});}
       const recording = await handleProfessionalRecordings(request,env,auth,path,{firebaseRead});
       if(recording)return reply(request,recording.data);

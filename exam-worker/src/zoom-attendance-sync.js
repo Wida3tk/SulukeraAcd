@@ -27,6 +27,14 @@ export function approvedAttendanceIdentity(aliases,hostScope,name,roster){
  const keys=[...new Set(aliases.filter(a=>a.zoom_name===norm(name)&&a.student_key).map(a=>a.student_key))];
  return keys.length===1&&roster.some(s=>s.key===keys[0])?keys[0]:null;
 }
+export function savedAttendanceNames(report,aliases,root,lessons){
+ const result=JSON.parse(report.result_json||'{}'),hostAliases=aliases.filter(a=>a.host===report.host);
+ return (result.unmatched||[]).filter(p=>(result.targets||[]).some(scope=>{
+  const roster=attendanceEligibleStudents(scope,root,lessons),aliasScope=scope.includes('/')?scope.split('_unit_')[0]:lessons.find(l=>l.id===scope)?.subject_key;
+  const known=approvedAttendanceIdentity(hostAliases,aliasScope,p.name,roster);
+  return known!==null;
+ })).map(p=>p.name);
+}
 export async function attendanceSchema(env){await env.DB.exec(`CREATE TABLE IF NOT EXISTS zoom_attendance_reports(id TEXT PRIMARY KEY,host TEXT NOT NULL,uuid TEXT NOT NULL,meeting_id TEXT NOT NULL,topic TEXT NOT NULL,starts_at TEXT NOT NULL,ends_at TEXT NOT NULL,participants_json TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'fetched',result_json TEXT NOT NULL DEFAULT '{}',updated_at TEXT NOT NULL);CREATE TABLE IF NOT EXISTS zoom_attendance_state(id TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS zoom_attendance_aliases(host TEXT NOT NULL,scope_key TEXT NOT NULL,zoom_name TEXT NOT NULL,student_key TEXT NOT NULL,approved_by TEXT NOT NULL,approved_at TEXT NOT NULL,PRIMARY KEY(host,scope_key,zoom_name));`);}
 async function zoomToken(env,host){const c=JSON.parse(transferAccount(env,host).ZOOM_PILOT_CREDENTIALS),r=await fetch('https://zoom.us/oauth/token',{method:'POST',headers:{Authorization:'Basic '+btoa(c.clientId+':'+c.clientSecret),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'account_credentials',account_id:c.accountId})});if(!r.ok)fail('ZOOM_AUTH_'+r.status);return (await r.json()).access_token;}
 async function api(token,path){const r=await fetch('https://api.zoom.us/v2/'+path,{headers:{Authorization:'Bearer '+token}});if(!r.ok){await r.body?.cancel();fail('ZOOM_REPORT_'+r.status);}return r.json();}
@@ -101,8 +109,8 @@ export async function approveAttendanceAlias(env,ctx,b,actor){
 export async function runAttendanceSync(env,ctx,options={}){
  await attendanceSchema(env);const slot=Math.floor(Date.now()/60000),lease=slot+5,locked=await env.DB.prepare("INSERT INTO zoom_attendance_state VALUES('lease',?) ON CONFLICT(id) DO UPDATE SET value=excluded.value WHERE CAST(zoom_attendance_state.value AS INTEGER)<?").bind(String(lease),slot).run();if(!locked.meta.changes)return {busy:true};
  try{
-  let discovered=null;if(options.host||slot%10===0){const host=options.host||HOSTS[Math.floor(slot/10)%3];discovered=await discoverAttendance(env,host);}
-  const report=await env.DB.prepare("SELECT * FROM zoom_attendance_reports WHERE state='fetched' AND (? IS NULL OR host=?) ORDER BY starts_at LIMIT 1").bind(options.host||null,options.host||null).first();if(!report)return {discovered,processed:0};
+  let discovered=null;if(!options.processOnly&&(options.host||slot%10===0)){const host=options.host||HOSTS[Math.floor(slot/10)%3];discovered=await discoverAttendance(env,host);}
+  const report=await env.DB.prepare("SELECT * FROM zoom_attendance_reports WHERE (state='fetched' OR (? IS NOT NULL AND state='partial')) AND (? IS NULL OR host=?) AND (? IS NULL OR id=?) ORDER BY starts_at LIMIT 1").bind(options.reportId||null,options.host||null,options.host||null,options.reportId||null,options.reportId||null).first();if(!report)return {discovered,processed:0};
   let result;try{result=await applyAttendanceReport(env,ctx,report,options.preview===true);}catch(error){const retries=(JSON.parse(report.result_json||'{}').retries||0)+1;result={state:retries<=3?'fetched':'review',reason:error.message,retries};}
   await env.DB.prepare('UPDATE zoom_attendance_reports SET state=?,result_json=?,updated_at=? WHERE id=?').bind(options.preview?'fetched':result.state,JSON.stringify(result),new Date().toISOString(),report.id).run();return {discovered,processed:1,id:report.id,preview:options.preview===true,...result};
  }finally{await env.DB.prepare("UPDATE zoom_attendance_state SET value='0' WHERE id='lease' AND value=?").bind(String(lease)).run();}

@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {attendanceMinutes,matchAttendance,attendanceTargets,zoomUuidPath,attendanceSchema,applyAttendanceReport,attendanceEligibleStudents,approvedAttendanceIdentity,approveAttendanceAlias} from './src/zoom-attendance-sync.js';
+import {attendanceMinutes,matchAttendance,attendanceTargets,zoomUuidPath,attendanceSchema,applyAttendanceReport,attendanceEligibleStudents,approvedAttendanceIdentity,approveAttendanceAlias,savedAttendanceNames,runAttendanceSync} from './src/zoom-attendance-sync.js';
 import {DatabaseSync} from 'node:sqlite';import {readFileSync} from 'node:fs';
 test('reconnects and simultaneous devices count unique clipped minutes, not the sum',()=>{
  const start=Date.parse('2026-10-11T15:00Z'),end=start+120*60000;
@@ -43,6 +43,23 @@ test('alias approval accepts enrolled Q2 student in Q2 scope and rejects wrong c
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM zoom_attendance_aliases').get().n,0);
   assert.equal((await approveAttendanceAlias(env,ctx,{...body,scopeKey:'l2'},'admin')).saved,true);
   assert.equal(sql.prepare('SELECT scope_key FROM zoom_attendance_aliases').get().scope_key,'s2');
+  const savedReport={host:'host',result_json:JSON.stringify({targets:['l3','l2'],unmatched:[{name:'Name'},{name:'Unknown'}]})};
+  const savedAliases=sql.prepare('SELECT * FROM zoom_attendance_aliases').all(),lessons=sql.prepare('SELECT * FROM course_lessons').all();
+  assert.deepEqual(savedAttendanceNames(savedReport,savedAliases,root,lessons),['Name'],'persisted approval is visible before background result refresh');
+  assert.deepEqual(savedAttendanceNames({...savedReport,host:'different'},savedAliases,root,lessons),[]);
+  assert.deepEqual(savedAttendanceNames(savedReport,savedAliases,{...root,enrollments:{}},lessons),[],'removed enrollment invalidates approval display');
+ }finally{globalThis.fetch=original;sql.close();}
+});
+test('on-demand processing selects the requested report and never waits for Zoom discovery',async()=>{
+ const sql=new DatabaseSync(':memory:');sql.exec('CREATE TABLE course_lessons(id TEXT,subject_key TEXT);CREATE TABLE zoom_drive_transfers(meeting_uuid TEXT,lesson_ids TEXT);');
+ const DB={exec:async q=>sql.exec(q),prepare(q){const build=args=>({bind:(...a)=>build(a),first:async()=>sql.prepare(q).get(...args)||null,all:async()=>({results:sql.prepare(q).all(...args)}),run:async()=>({meta:{changes:sql.prepare(q).run(...args).changes}})});return build([]);}};
+ const env={DB};await attendanceSchema(env);
+ for(const id of ['old','requested'])sql.prepare('INSERT INTO zoom_attendance_reports VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id,'host','uuid','123','Report',id==='old'?'2026-10-01':'2026-10-20','end','[]',id==='old'?'fetched':'partial','{}','now');
+ const original=globalThis.fetch;globalThis.fetch=async url=>{assert.match(String(url),/firebaseio.com/,'on-demand processing must not call Zoom');return Response.json({});};
+ try{
+  const result=await runAttendanceSync(env,{firebaseAdminToken:async()=> 'token'},{reportId:'requested',host:'host',processOnly:true});
+  assert.equal(result.id,'requested');assert.equal(result.processed,1);
+  assert.equal(sql.prepare("SELECT state FROM zoom_attendance_reports WHERE id='old'").get().state,'fetched');
  }finally{globalThis.fetch=original;sql.close();}
 });
 test('live importer supports dry run, protects explicit zero and manual imports, queues only attendance and is idempotent',async()=>{
