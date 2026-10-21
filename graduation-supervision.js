@@ -21,3 +21,14 @@ async function gpSupervisorGrade(index,form){
  try{const result=await gpSupervisorRequest('/admin/graduation-projects/grade',{method:'POST',body:JSON.stringify(payload)});status.textContent='تم اعتماد التقييم: '+result.total+'/100';gpSupervisorNotify('تم اعتماد التقييم: '+result.total+'/100');await renderGraduationSupervision();}catch{status.textContent='تعذر حفظ التقييم؛ تأكد من القيم والإسناد ثم أعد المحاولة.';}finally{button.disabled=false;}
 }
 async function gpSupervisorReply(index,requestIndex,form){const r=gpSupervisorGroup(index)?.requests?.[requestIndex];if(!r||!form.reportValidity())return;const button=form.querySelector('button');button.disabled=true;try{await gpSupervisorRequest('/lecturer/graduation-projects/requests',{method:'POST',body:JSON.stringify({requestId:r.id,adminNote:form.elements.reply.value.trim()})});gpSupervisorNotify('تم حفظ رد المشرف');await renderGraduationSupervision();}catch{form.querySelector('[data-gps-status]').textContent='تعذر حفظ الرد، أعد المحاولة.';}finally{button.disabled=false;}}
+async function gpEnsureSupervisionNavigation(){
+ const user=currentUser;if(user?.role!=='lecturer')return;
+ try{const result=await gpSupervisorRequest('/lecturer/graduation-projects');if(currentUser!==user||!result.projects?.length)return;
+ const profile=user.data||user;profile.graduationProjectIds=result.projects.map(p=>p.project.id);
+ const tabs=document.querySelector('#appTabs > div');
+ if(tabs){if(tabs.querySelector('[data-supervision-nav]')||[...tabs.querySelectorAll('button')].some(b=>b.getAttribute('onclick')?.includes("'graduation-supervision'")))return;const button=document.createElement('button');button.className='app-tab';button.dataset.supervisionNav='true';button.textContent='🎓 الإشراف على المشاريع';button.setAttribute('onclick',"switchAppTab('graduation-supervision',this)");tabs.prepend(button);if(typeof currentAppTab!=='undefined'&&['professional-teaching','home'].includes(currentAppTab))switchAppTab('graduation-supervision',button);return;}
+ const menu=document.getElementById('navMenu');if(menu&&!menu.querySelector('[data-page-id="graduationsupervision"]')){const item=document.createElement('div');item.className='nav-item';item.dataset.pageId='graduationsupervision';item.textContent='🎓 الإشراف على المشاريع';item.setAttribute('onclick',"navTo('graduationsupervision',this)");menu.prepend(item);}
+ }catch(error){console.warn('Supervisor navigation refresh unavailable');}
+}
+if(typeof showLecturerView==='function'){const gpOriginalLecturerView=showLecturerView;showLecturerView=function(){gpOriginalLecturerView();void gpEnsureSupervisionNavigation();};}
+if(typeof renderNav==='function'){const gpOriginalRenderNav=renderNav;renderNav=function(){gpOriginalRenderNav();void gpEnsureSupervisionNavigation();};}
