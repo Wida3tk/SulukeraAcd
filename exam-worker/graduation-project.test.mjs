@@ -58,7 +58,7 @@ test('all groups accept six members, reject a seventh, prevent duplicate members
 });
 test('project access excludes inactive students and PDF upload checks membership and file signature',async()=>{
  const {call,env,students,ctx,auth}=fixture();students.s0.accountStatus='withdrawn';assert.equal((await call('/student/graduation-project')).data.available,false);students.s0.accountStatus='active';
- env.sql.prepare('INSERT INTO graduation_project_groups VALUES (?,?,?,?,?,?,?,?,?,?)').run('group','project','فريق','عنوان','',null,'',null,'now','now');env.sql.prepare('INSERT INTO graduation_project_group_members VALUES (?,?)').run('group','s0');
+ env.sql.prepare('INSERT INTO graduation_project_groups VALUES (?,?,?,?,?,?,?,?,?,?)').run('group','project','فريق','عنوان','',null,'','s0','now','now');env.sql.prepare('INSERT INTO graduation_project_group_members VALUES (?,?)').run('group','s0');
  const upload=(name,data,key='s0')=>handleGraduationProject(new Request('https://test/student/graduation-project/upload',{method:'POST',headers:{'X-Group-Id':'group','X-File-Name':encodeURIComponent(name)},body:data}),env,auth('student',key),'/student/graduation-project/upload',ctx);
  await assert.rejects(upload('file.pdf','%PDF-1.7','s1'),error=>error.status===403);await assert.rejects(upload('file.docx','%PDF-1.7'));await assert.rejects(upload('file.pdf','not a pdf'));
  assert.equal((await upload('مشروعي.pdf','%PDF-1.7\n%%EOF')).data.uploaded,true);assert.equal(env.uploaded,true);
