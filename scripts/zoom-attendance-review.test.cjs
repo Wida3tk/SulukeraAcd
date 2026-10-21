@@ -1,0 +1,12 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const ctx={cwRenderCourseworkHome:()=>{},cwNotify:()=>{},console};vm.createContext(ctx);vm.runInContext(fs.readFileSync('zoom-attendance-admin.js','utf8'),ctx);
+const students=[{key:'q2',name:'آثار سامي عبدالله'},{key:'q3',name:'منى سالم عمر'}];
+assert.equal(ctx.zaSuggestedStudent('آثار سامي عبدالله',students),'q2');
+assert.equal(ctx.zaSuggestedStudent('منى عمر',students),'q3');
+assert.equal(ctx.zaSuggestedStudent('منى',students),'');
+assert.equal(ctx.zaSuggestedStudent('منى عمر',[...students,{key:'other',name:'منى محمد عمر'}]),'');
+const status={},row={dataset:{scopes:JSON.stringify(['l3','l2']),rosters:JSON.stringify({l3:['q3'],l2:['q2']})},querySelector:()=>status};
+ctx.zaSelectStudent({value:'q2',closest:()=>row});assert.equal(row.dataset.scope,'l2','Q2 student chooses Q2 lesson although report lists Q3 first');
+ctx.zaSelectStudent({value:'not-enrolled',closest:()=>row});assert.equal(row.dataset.scope,'');
+ctx.zaSelectStudent({value:'__ignore',closest:()=>row});assert.equal(row.dataset.scope,'l3');
+console.log('PASS: cohort scope selection, ambiguous/single-word names rejected, suggestions need confirmation.');

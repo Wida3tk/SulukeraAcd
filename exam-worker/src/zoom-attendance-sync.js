@@ -12,7 +12,20 @@ export function matchAttendance(participant,students){
  const email=norm(participant.user_email||participant.email),name=norm(participant.name),byEmail=email?students.filter(s=>[s.email,s.emailAddress].some(v=>v&&norm(v)===email)):[];
  if(byEmail.length)return byEmail.length===1?byEmail[0].key:null;
  const byId=students.filter(s=>s.id&&new RegExp('(^|[^a-z0-9])'+String(s.id).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^a-z0-9])','i').test(name));if(byId.length)return byId.length===1?byId[0].key:null;
- const byName=name.length>=6?students.filter(s=>[s.name,[s.firstName,s.midName,s.lastName].filter(Boolean).join(' ')].some(v=>v&&norm(v)===name)):[];return byName.length===1?byName[0].key:null;
+ const clean=v=>norm(v).replace(/[\p{Cf}\p{P}\p{S}]/gu,' ').replace(/\s+/g,' ').trim();
+ const cleaned=clean(name),byName=cleaned.length>=6?students.filter(s=>[s.name,[s.firstName,s.midName,s.lastName].filter(Boolean).join(' ')].some(v=>v&&clean(v)===cleaned)):[];return byName.length===1?byName[0].key:null;
+}
+export function attendanceEligibleStudents(scopeKey,root,lessons){
+ const professional=scopeKey.includes('/'),track=scopeKey.split('_unit_')[0],lesson=lessons.find(l=>l.id===scopeKey);
+ return Object.entries(root.students||{}).filter(([key,s])=>SulukeraStudentAccount.isActive(s)&&(professional
+  ?root.professionalEnrollments?.[key]?.[PROGRAM]?.status==='active'&&SulukeraStudentAccount.isActive(root.professionalEnrollments[key][PROGRAM])&&(root.professionalEnrollments[key][PROGRAM].selectedTracks?.[track]??track==='track_1')
+  :lesson&&Object.values(root.enrollments||{}).some(e=>e.studentKey===key&&e.subjectKey===lesson.subject_key)&&SulukeraAcademicPolicy.subjectAllowed(s,root.subjects?.[lesson.subject_key],root.packages||{}))).map(([key,s])=>({...s,key}));
+}
+export function approvedAttendanceIdentity(aliases,hostScope,name,roster){
+ const exact=aliases.find(a=>a.scope_key===hostScope&&a.zoom_name===norm(name));
+ if(exact)return exact.student_key===''?'':roster.some(s=>s.key===exact.student_key)?exact.student_key:null;
+ const keys=[...new Set(aliases.filter(a=>a.zoom_name===norm(name)&&a.student_key).map(a=>a.student_key))];
+ return keys.length===1&&roster.some(s=>s.key===keys[0])?keys[0]:null;
 }
 export async function attendanceSchema(env){await env.DB.exec(`CREATE TABLE IF NOT EXISTS zoom_attendance_reports(id TEXT PRIMARY KEY,host TEXT NOT NULL,uuid TEXT NOT NULL,meeting_id TEXT NOT NULL,topic TEXT NOT NULL,starts_at TEXT NOT NULL,ends_at TEXT NOT NULL,participants_json TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'fetched',result_json TEXT NOT NULL DEFAULT '{}',updated_at TEXT NOT NULL);CREATE TABLE IF NOT EXISTS zoom_attendance_state(id TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS zoom_attendance_aliases(host TEXT NOT NULL,scope_key TEXT NOT NULL,zoom_name TEXT NOT NULL,student_key TEXT NOT NULL,approved_by TEXT NOT NULL,approved_at TEXT NOT NULL,PRIMARY KEY(host,scope_key,zoom_name));`);}
 async function zoomToken(env,host){const c=JSON.parse(transferAccount(env,host).ZOOM_PILOT_CREDENTIALS),r=await fetch('https://zoom.us/oauth/token',{method:'POST',headers:{Authorization:'Basic '+btoa(c.clientId+':'+c.clientSecret),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'account_credentials',account_id:c.accountId})});if(!r.ok)fail('ZOOM_AUTH_'+r.status);return (await r.json()).access_token;}
@@ -49,7 +62,7 @@ export async function applyAttendanceReport(env,ctx,report,dryRun=false){
  for(const target of [...targets.academic,...targets.professional]){
   const professional=!!target.unitId,eligible=Object.entries(students||{}).filter(([key,s])=>SulukeraStudentAccount.isActive(s)&&(professional?proEnrollments?.[key]?.[PROGRAM]?.status==='active'&&SulukeraStudentAccount.isActive(proEnrollments[key][PROGRAM])&&(proEnrollments[key][PROGRAM].selectedTracks?.[target.track]??target.track==='track_1'):Object.values(enrollments||{}).some(e=>e.studentKey===key&&e.subjectKey===target.subject_key)&&SulukeraAcademicPolicy.subjectAllowed(s,subjects?.[target.subject_key],packages||{}))).map(([key,s])=>({...s,key}));
   const scopeKey=professional?target.track:target.subject_key;
-  const grouped=new Map();for(const p of participants){if(norm(p.email)===norm(report.host)){matchedAll.add(p.name);continue;}const alias=aliases.find(a=>a.scope_key===scopeKey&&a.zoom_name===norm(p.name));if(alias&&alias.student_key===''){matchedAll.add(p.name);continue;}const key=alias&&eligible.some(s=>s.key===alias.student_key)?alias.student_key:matchAttendance(p,professional?eligible:academicRoster);if(!key){if(!result.unmatched.some(u=>u.name===p.name&&u.email===p.email))result.unmatched.push({name:p.name,email:p.email});continue;}matchedAll.add(p.name);if(!eligible.some(s=>s.key===key))continue;if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push([p.join_time,p.leave_time]);}
+  const grouped=new Map();for(const p of participants){if(norm(p.email)===norm(report.host)){matchedAll.add(p.name);continue;}const known=approvedAttendanceIdentity(aliases,scopeKey,p.name,professional?eligible:academicRoster);if(known===''){matchedAll.add(p.name);continue;}const key=known||matchAttendance(p,professional?eligible:academicRoster);if(!key){if(!result.unmatched.some(u=>u.name===p.name&&u.email===p.email))result.unmatched.push({name:p.name,email:p.email});continue;}matchedAll.add(p.name);if(!eligible.some(s=>s.key===key))continue;if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push([p.join_time,p.leave_time]);}
   result.targets.push(professional?target.unitId+'/'+target.session:target.id);const sourceHash='zoom-api-'+report.id;
   // Only positively identified attendance is automatic. No fabricated absences.
   for(const [key,intervals] of grouped){const minutes=attendanceMinutes(intervals,start,end);if(minutes<=0)continue;const percent=Math.min(100,Math.round(minutes/duration*10000)/100);
