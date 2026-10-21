@@ -2055,6 +2055,7 @@ function renderLecturerPortalTab(tab){
   if(tab==='coursework')return renderAcademicCoursework();
   if(tab==='evaluation')return renderFacultyEvaluation();
   if(tab==='professional-teaching') return renderProfessionalLecturerPortal();
+  if(tab==='graduation-supervision')return renderGraduationSupervision();
   if(tab==='lecturer-requests') return renderLecturerRequestsTab();
   if(tab==='home') return renderLecturerHomeTab();
   if(tab==='courses') return renderLecturerCoursesTab();
@@ -2094,9 +2095,10 @@ function showLecturerView(){
       { id:'schedule', label:'📅 الجدول الأسبوعي' },
       ...(professionalUnits.length?[{id:'professional-teaching',label:'🚀 مساري المهني'}]:[])
     ];
+  if(currentUser.data.graduationProjectIds?.length)tabs.unshift({id:'graduation-supervision',label:'🎓 الإشراف على المشاريع'});
   configureAppTabs(tabs);
   startProfessionalLiveUpdates();
-  switchAppTab(professionalOnly?'professional-teaching':'home', document.querySelector('#appTabs .app-tab'));
+  switchAppTab(currentUser.data.graduationProjectIds?.length?'graduation-supervision':professionalOnly?'professional-teaching':'home', document.querySelector('#appTabs .app-tab'));
 }
 
 function getProfessionalLecturerUnits(){
@@ -3119,6 +3121,8 @@ window.addEventListener('load', initFB);
 <link rel="stylesheet" href="graduation-project.css?v=20261018-groups">
 <script src="graduation-project-model.js?v=20261018-recordings"></script>
 <script src="graduation-project-ui.js?v=20261018-recordings"></script>
+<link rel="stylesheet" href="graduation-project-admin.css?v=20261021-supervision">
+<script src="graduation-supervision.js?v=20261021"></script>
 <link rel="stylesheet" href="professional-recording.css?v=20261013">
 <script src="professional-recording-policy.js?v=20261013"></script>
 <script src="professional-recording-ui.js?v=20261013b"></script>
