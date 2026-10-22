@@ -14,6 +14,15 @@ test('previously reviewed rescheduling does not cause the next recording to bind
  const prior={...lesson,id:'one',subject_key:'off_course_08',week:1},future={...prior,id:'three',week:3,opens_at:'2026-10-21T17:30Z',zoom_url:'https://zoom.us/j/85761104229'};
  assert.equal(planNightlyRecording('rushdacd.sa@gmail.com',{...meeting,meetingId:'85761104229'},{...file,start:'2026-10-21T15:00Z'},[prior,future],null,[{source_date:'2026-10-14',lesson_ids:'["one"]'}]).reason,'REVIEWED_SCHEDULE_DIFFERS');
 });
+
+test('corrected Reem sequence maps October 21 to lecture two in both cohorts',()=>{
+ const prior={...lesson,id:'one',subject_key:'q2_course_08',week:1,opens_at:'2026-10-14T17:30Z',recording_url:'existing'};
+ const second={...prior,id:'two',week:2,opens_at:'2026-10-21T17:30Z',recording_url:'',zoom_url:'https://zoom.us/j/85761104229'};
+ const other={...second,id:'q3two',subject_key:'q3_course_08'};
+ const plan=planNightlyRecording('rushdacd.sa@gmail.com',{...meeting,meetingId:'85761104229'},{...file,start:'2026-10-21T15:00Z'},[prior,second,other],null,[{source_date:'2026-10-14',lesson_ids:'["one"]'}]);
+ assert.equal(plan.state,'queued');assert.deepEqual(plan.manifest.lessonIds,['two','q3two']);
+ assert.equal(planNightlyRecording('rushdacd.sa@gmail.com',{...meeting,meetingId:'85761104229'},{...file,start:'2026-10-28T15:00Z'},[prior,second,other],null).reason,'NO_EXACT_LECTURE_MATCH');
+});
 test('professional matching preserves old links, refuses ambiguous units and validates date/meeting',()=>{
  const session={scheduledDate:'2026-10-04',zoomUrl:'https://zoom.us/j/86410858243',title:'one'},unit={status:'published',title:'fundamentals',sessions:{session_1:session}},program={tracks:{track_1:{units:{unit_1:unit}}}},m={...meeting,meetingId:'86410858243'};
  assert.equal(planNightlyRecording('RushdABAT@gmail.com',m,file,[],program).manifest.lessonIds[0],'pro:track_1:unit_1:session_1');

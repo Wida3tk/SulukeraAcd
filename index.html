@@ -7227,7 +7227,9 @@ async function addScheduleSlot(){
   const existingSlot=editingScheduleSlotKey ? scheduleData.weekly?.[editingScheduleSlotKey] : null;
   const colorIdx = Object.keys(scheduleData.weekly||{}).length % SLOT_COLORS.length;
   const key = editingScheduleSlotKey || 'slot_'+Date.now();
-  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:existingSlot?.color||SLOT_COLORS[colorIdx],active:true,semesterKey:semesterEntry?.[0]||subjectRecord.semesterKey||'',termStartDate:semesterEntry?.[1]?.startDate||subjectRecord.startDate||'2026-10-04',termEndDate:semesterEntry?.[1]?.endDate||subjectRecord.endDate||''};
+  const semesterKey=semesterEntry[0];
+  const keepCourseStart=existingSlot?.subjectKey===subjectKey&&existingSlot?.semesterKey===semesterKey&&existingSlot.termStartDate>=semesterEntry[1].startDate&&existingSlot.termStartDate<=semesterEntry[1].endDate;
+  const slot = {day, timeStart:start, timeEnd:end, subject:subj, subjectKey, batch, lecturer:lecName, room, color:existingSlot?.color||SLOT_COLORS[colorIdx],active:true,semesterKey,termStartDate:keepCourseStart?existingSlot.termStartDate:semesterEntry[1].startDate,termEndDate:semesterEntry[1].endDate};
 
   if(!scheduleData.weekly) scheduleData.weekly={};
   scheduleData.weekly[key]=slot;
