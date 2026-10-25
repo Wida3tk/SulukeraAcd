@@ -501,7 +501,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
         .first();
     const a=recordedAttendance||attendanceFromGrades(l,key,await scopedGrades(s,auth,ctx),(await assessmentFor(env,l,s.settings)).attendanceMax);
     const max=(await assessmentFor(env,l,s.settings)).attendanceMax;
-    if (!a || (a.source==='firebase_grade'?a.score>=max:a.percent >= (revisedAttendancePolicy(l,max)?50:80))) reject("REFLECTION_NOT_REQUIRED", 403);
+    // Pending attendance must not block recording work; submission alone awards no credit.
+    if (a && (a.source==='firebase_grade'?a.score>=max:a.percent >= (revisedAttendancePolicy(l,max)?50:80))) reject("REFLECTION_NOT_REQUIRED", 403);
     if (
       l.status !== "published" ||
       Date.now() < Date.parse(l.opens_at) ||

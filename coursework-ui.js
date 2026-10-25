@@ -123,7 +123,7 @@ function cwStudentLessonCard(l,week){
   const hwStatus=l.recordedGrades?.hwAutoMissed===true&&!l.result?'لم يتم تسليم الواجب':homeworkScore!=null?(l.result?'تم تسليم الواجب':'درجة مرصودة يدويًا'):upcoming?'لم يفتح بعد':open?'بانتظار التسليم':'لم يتم التسليم';
   const hwAction=l.result?'<button class="btn-out" onclick="cwViewAnswers(\''+l.id+'\')">الاطلاع على إجاباتي</button>':'';
   const solveAction=homeworkScore>=l.homeworkMax?'<p class="cw-perfect-score">✓ اكتمل الواجب بالدرجة الكاملة</p>':open?'<button class="btn-primary" onclick="cwSolve(\''+l.id+'\')">'+(l.result?'تحسين الدرجة':'حل واجب المحاضرة')+' ←</button>':'<p class="cw-muted">'+(upcoming?'يُتاح الحل في الموعد الموضح أعلاه.':'انتهت فترة تسليم الواجب.')+'</p>';
-  const reflectionStatus=approved?'تم الاعتماد':reflection?'قيد المراجعة':needsReflection?'مطلوب لتعويض الحضور':attendance?'غير مطلوب':'بانتظار رصد الحضور';
+  const reflectionStatus=approved?'تم الاعتماد':reflection?'قيد المراجعة':needsReflection?(attendance?'مطلوب لتعويض الحضور':'متاح لمتابعة الحضور'):'غير مطلوب';
   const reflectionAction=needsReflection&&!approved&&open?'<button class="btn-primary" onclick="cwReflection(\''+l.id+'\')">'+(reflection?'تعديل واجب الحضور المسجل':'حل واجب الحضور المسجل')+'</button>':'';
   const reflectionNote=approved?(applied?'احتُسبت الدرجة في الحضور.':'أكمل الواجب الأساسي لاحتساب درجة التعويض.'):reflection?'أرسلت إجاباتك بنجاح. تظهر الدرجة بعد اعتماد المحاضر.':needsReflection?(open?'شاهد التسجيل، ثم أجب عن الأسئلة الثلاثة.':upcoming?'يفتح هذا الواجب في موعد إتاحة المحاضرة.':'انتهت فترة التسليم؛ راجع المحاضر إذا احتجت متابعة.'):attendance?'حضورك المباشر مكتمل؛ لا يلزم تسليم هذا الواجب.':'يتحدد هذا المتطلب بعد اعتماد الحضور.';
   return '<article class="cw-student-lesson '+(open?'cw-student-open':'cw-student-upcoming')+'"><header><span class="cw-lesson-number">'+String(week).padStart(2,'0')+'</span><span class="cw-status">'+(open?'متاح الآن':upcoming?'لم يفتح بعد':'انتهى التسليم')+'</span></header><h3>المحاضرة '+week+'</h3><div class="cw-lesson-resources">'+cwLink(l.zoom_url,'دخول اللقاء')+cwLink(l.pdf_url,'ملف المحاضرة')+cwLink(l.recording_url,'مشاهدة التسجيل')+'</div><div class="cw-student-deadline"><span>آخر موعد للتسليم</span><strong>'+cwDate(l.closes_at)+'</strong><small>يفتح الواجب: '+cwDate(l.opens_at)+'</small></div><div class="cw-task-grid">'+
@@ -267,7 +267,7 @@ function cwReflection(id) {
 }
 function cwRevisedAttendance(l){return l.attendanceMax===3&&String(l.opens_at||'').slice(0,10)>='2026-10-04';}
 function cwAttendanceThreshold(l){return cwRevisedAttendance(l)?50:80;}
-function cwNeedsReflection(a,l){return !!cwRecordedAttendance(a)&&(a.score!=null?a.score<l.attendanceMax:a.percent<cwAttendanceThreshold(l));}
+function cwNeedsReflection(a,l){return !a||(a.score!=null?a.score<l.attendanceMax:a.percent<cwAttendanceThreshold(l));}
 function cwAttendancePoints(percent,max,l){return max===3?(!l||cwRevisedAttendance(l)?(percent>=50?3:percent>=20?2:percent>=10?1:0):(percent>=80?3:percent>=50?2:percent>0?1:0)):percent>=80?max:0;}
 async function cwSendReflection(id, button) {
   try {

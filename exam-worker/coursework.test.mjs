@@ -452,16 +452,14 @@ test("closed homework is blocked and a lecturer cannot access another lecturer c
     /FORBIDDEN/,
   );
 });
-test("reflection only for attendance below threshold; lecturer reviews and attendance imports do not duplicate", async () => {
+test("pending or low attendance permits reflection; lecturer reviews and attendance imports do not duplicate", async () => {
   const f = fixtures(),
     id = (await f.call("admin", "/lesson", f.config)).data.id;
-  await assert.rejects(
-    f.call("student", "/reflection", {
+  await f.call("student", "/reflection", {
       lessonId: id,
       answers: ["a", "b", "c"],
-    }),
-    /REFLECTION_NOT_REQUIRED/,
-  );
+    });
+  assert.equal(f.sql.prepare('SELECT score FROM attendance_reflections').get().score,null);
   const input = {
     lessonId: id,
     sourceHash: "hash",
@@ -517,6 +515,18 @@ test("Zoom CSV parser handles quotes; overlapping reconnects are counted once", 
     2.5,
   );
 });
+test('zero, provisional zero, and pending attendance allow reflection without awarding or changing grades',async()=>{
+ for(const extra of [{},{w1_attendEntered:true},{w1_attendEntered:true,w1_attendProvisional:true}]){
+  const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+  f.records.grades={g:{studentKey:'student',subjectKey:'course',w1_attend:0,...extra}};
+  const before=structuredClone(f.records.grades);
+  await f.call('student','/reflection',{lessonId:id,answers:['one','two','three']});
+  assert.equal(f.sql.prepare('SELECT score FROM attendance_reflections').get().score,null);
+  assert.deepEqual(f.records.grades,before);
+  await assert.rejects(f.call('outsider','/reflection',{lessonId:id,answers:['one','two','three']}),/FORBIDDEN|SUBJECT_ACCESS_DENIED/);
+ }
+});
+
 test('manual Firebase attendance unlocks reflection and agrees with lecturer report',async()=>{
  const f=fixtures();const id=(await f.call('admin','/lesson',f.config)).data.id;
  f.records.grades={g:{studentKey:'student',subjectKey:'course',w1_attend:2,updatedAt:'2026-10-06'}};
