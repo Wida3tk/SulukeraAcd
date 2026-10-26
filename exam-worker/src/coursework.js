@@ -3,6 +3,7 @@ import '../../student-account-policy.js';
 import '../../academic-policy.js';
 import {studentLessonDeadline} from './coursework-deadlines.js';
 import {startAcademicRecording} from './academic-recording-media.js';
+import {discussionWithHistory,submitDiscussionImprovement,reviewDiscussionImprovement} from './discussion-improvements.js';
 const reject = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -204,6 +205,7 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
         updatedBy: actor,
         updatedRole: "coursework",
       };
+      if(fields[`w${l.week}_disc`]!=null){const prior=componentsFromGrades(l,studentKey,{previous},{homeworkMax:0,discussionMax:assessment.discussionMax}).disc;payload[`w${l.week}_disc`]=Math.max(fields[`w${l.week}_disc`],prior??0);}
       if((attendance||(best?.score!=null&&reflection?.score!=null))&&fields[`w${l.week}_attend`]!=null)payload[`w${l.week}_attendProvisional`]=false;
       const attendanceValue=payload[`w${l.week}_attend`];
       if(attendanceValue!=null)payload[`w${l.week}_attendNote`]=Number(attendanceValue)<maxAttend?'يرجى مشاهدة المحاضرة بشكل مسجل وحل واجب الحضور المسجل ليتم احتساب درجة الحضور، بعد اعتماد المحاضر وإكمال الواجب الأساسي.':'';
@@ -290,6 +292,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     const gradeRecords=await scopedGrades(s,auth,ctx);
     const assessments = (await env.DB.prepare("SELECT * FROM lesson_assessment").all()).results;
     const discussions = s.role === "student" ? (await env.DB.prepare("SELECT * FROM academic_discussions WHERE student_key=?").bind(key).all()).results : [];
+    const discussionHistory=s.role==='student'?(await env.DB.prepare('SELECT * FROM academic_discussion_attempts WHERE student_key=?').bind(key).all()).results:[];
     return {
       data: {
         subjects: Object.entries(s.subjects)
@@ -306,7 +309,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
             attendanceMax:assessments.find(a=>a.lesson_id===l.id)?.attendance_max??(Number(s.settings.attend)||5),
             discussionMax:assessments.find(a=>a.lesson_id===l.id)?.discussion_max??(Number(s.settings.disc)||5),
             discussionPrompt:assessments.find(a=>a.lesson_id===l.id)?.discussion_prompt||'',
-            discussion:studentReviewedRecord(discussions.find(d=>d.lesson_id===l.id)),
+            discussion:discussionWithHistory(discussions.find(d=>d.lesson_id===l.id),discussionHistory,true),
             recordedGrades:studentComponentsFromGrades(l,key,gradeRecords,{homeworkMax:assessments.find(a=>a.lesson_id===l.id)?.homework_max??(Number(s.settings.hw)||5),discussionMax:assessments.find(a=>a.lesson_id===l.id)?.discussion_max??(Number(s.settings.disc)||5)}),
             questions_json: undefined,
             questions: s.role === "student" ? undefined : qs,
@@ -613,6 +616,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       ).results;
     const gradeRecords=await scopedGrades(s,auth,ctx),assessment=await assessmentFor(env,l,s.settings);
     const homeworkAttempts=(await env.DB.prepare("SELECT id,student_key,answers_json,score,submitted_at FROM homework_attempts WHERE lesson_id=? ORDER BY submitted_at DESC,id DESC").bind(l.id).all()).results;
+    const discussionHistory=(await env.DB.prepare('SELECT * FROM academic_discussion_attempts WHERE lesson_id=?').bind(l.id).all()).results;
     return {
       data: {
         students: keys.map((key) => ({
@@ -624,7 +628,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           attendance: attendance.find((v) => v.student_key === key) || attendanceFromGrades(l,key,gradeRecords,assessment.attendanceMax),
           reflection: reflections.find((v) => v.student_key === key) || null,
         })),
-        discussions: (await env.DB.prepare("SELECT * FROM academic_discussions WHERE lesson_id=?").bind(l.id).all()).results.filter(d=>keys.includes(d.student_key)),
+        discussions: (await env.DB.prepare("SELECT * FROM academic_discussions WHERE lesson_id=?").bind(l.id).all()).results.filter(d=>keys.includes(d.student_key)).map(d=>discussionWithHistory(d,discussionHistory)),
         lesson: {...l,...await assessmentFor(env,l,s.settings)},
       },
     };
@@ -634,17 +638,30 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     const b=await json(request),l=await lessonFor(env,b.lessonId,s),a=await assessmentFor(env,l,s.settings);
     if(!a.discussionPrompt||l.status!=="published"||Date.now()<Date.parse(l.opens_at)||Date.now()>Date.parse(l.closes_at))reject("DISCUSSION_NOT_OPEN",403);
     if(typeof b.answer!=="string"||!b.answer.trim()||b.answer.length>12000)reject("INVALID_DISCUSSION_ANSWER");
-    const old=await env.DB.prepare("SELECT reviewed_at FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,key).first();
-    if(old?.reviewed_at)reject("DISCUSSION_ALREADY_REVIEWED",409);
-    await env.DB.prepare("INSERT INTO academic_discussions (lesson_id,student_key,answer,submitted_at) VALUES (?,?,?,?) ON CONFLICT(lesson_id,student_key) DO UPDATE SET answer=excluded.answer,submitted_at=excluded.submitted_at").bind(l.id,key,b.answer.trim(),new Date().toISOString()).run();
+    const old=await env.DB.prepare("SELECT * FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,key).first();
+    if(old?.reviewed_at){
+      const grades=await scopedGrades(s,auth,ctx),prior=componentsFromGrades(l,key,grades,a).disc;
+      const result=await submitDiscussionImprovement(env.DB,old,b.answer.trim(),a.discussionMax,prior);
+      if(result.error)reject(result.error,409);
+      return {data:result};
+    }
+    const saved=await env.DB.prepare("INSERT INTO academic_discussions (lesson_id,student_key,answer,submitted_at) VALUES (?,?,?,?) ON CONFLICT(lesson_id,student_key) DO UPDATE SET answer=excluded.answer,submitted_at=excluded.submitted_at WHERE academic_discussions.reviewed_at IS NULL").bind(l.id,key,b.answer.trim(),new Date().toISOString()).run();
+    if(!saved.meta.changes)reject('DISCUSSION_CHANGED_RELOAD',409);
     return {data:{saved:true}};
   }
   if(path === "/coursework/discussion-review" && request.method === "POST"){
     if(s.role==="student")reject("FORBIDDEN",403);
     const b=await json(request),l=await lessonFor(env,b.lessonId,s),a=await assessmentFor(env,l,s.settings),score=Number(b.score);
     if(b.score==null||b.score===""||!Number.isFinite(score)||score<0||score>a.discussionMax)reject("INVALID_SCORE");
-    const result=await env.DB.prepare("UPDATE academic_discussions SET score=?,feedback=?,reviewed_by=?,reviewed_at=? WHERE lesson_id=? AND student_key=?").bind(score,String(b.feedback||""),auth.uid,new Date().toISOString(),l.id,b.studentKey).run();
-    if(!result.meta.changes)reject("DISCUSSION_NOT_FOUND",404);
+    if(b.attemptId){
+      const saved=await reviewDiscussionImprovement(env.DB,{id:String(b.attemptId),lessonId:l.id,studentKey:b.studentKey,score,feedback:String(b.feedback||''),reviewer:auth.uid});
+      if(!saved)reject('DISCUSSION_ATTEMPT_ALREADY_REVIEWED',409);
+    }else{
+      const pending=await env.DB.prepare('SELECT id FROM academic_discussion_attempts WHERE lesson_id=? AND student_key=? AND reviewed_at IS NULL').bind(l.id,b.studentKey).first();
+      if(pending)reject('DISCUSSION_ATTEMPT_REQUIRED',409);
+      const result=await env.DB.prepare("UPDATE academic_discussions SET score=CASE WHEN reviewed_at IS NULL THEN ? ELSE MAX(COALESCE(score,0),?) END,feedback=?,reviewed_by=?,reviewed_at=? WHERE lesson_id=? AND student_key=?").bind(score,score,String(b.feedback||""),auth.uid,new Date().toISOString(),l.id,b.studentKey).run();
+      if(!result.meta.changes)reject("DISCUSSION_NOT_FOUND",404);
+    }
     return {data:{saved:true,synced:await synchronize(env,ctx,l,b.studentKey,auth.uid)}};
   }
   if (path === "/coursework/attendance" && request.method === "POST") {

@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS lesson_assessment (
  lesson_id TEXT PRIMARY KEY, homework_max REAL NOT NULL, attendance_max REAL NOT NULL,
  discussion_max REAL NOT NULL, discussion_prompt TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS academic_discussion_attempts (
+ id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, student_key TEXT NOT NULL,
+ answer TEXT NOT NULL, submitted_at TEXT NOT NULL, score REAL,
+ feedback TEXT NOT NULL DEFAULT '', reviewed_by TEXT, reviewed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS discussion_attempt_history ON academic_discussion_attempts(lesson_id,student_key,submitted_at);
+CREATE UNIQUE INDEX IF NOT EXISTS discussion_one_pending ON academic_discussion_attempts(lesson_id,student_key) WHERE reviewed_at IS NULL;
 CREATE TABLE IF NOT EXISTS academic_discussions (
  lesson_id TEXT NOT NULL, student_key TEXT NOT NULL, answer TEXT NOT NULL,
  submitted_at TEXT NOT NULL, score REAL, feedback TEXT NOT NULL DEFAULT '',

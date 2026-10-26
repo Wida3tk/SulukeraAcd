@@ -15,6 +15,7 @@ const fixtures = () => {
   sql.exec(readFileSync(new URL("./coursework.sql", import.meta.url), "utf8"));
   sql.exec(readFileSync(new URL("./coursework_sync_triggers.sql", import.meta.url), "utf8"));
   const DB = {
+    batch:async statements=>{sql.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());sql.exec('COMMIT');return result;}catch(error){sql.exec('ROLLBACK');throw error;}},
     prepare(query) {
       const stmt = sql.prepare(query);
       return {
@@ -387,6 +388,42 @@ test("six-point homework and discussion are independent; discussion review is sc
   f.sql.prepare('UPDATE course_lessons SET closes_at=? WHERE id=?').run('2020-01-01T00:00:00Z',id);
   await assert.rejects(f.call('student','/discussion',{lessonId:id,answer:'تعديل'}),/DISCUSSION_NOT_OPEN/);
 });
+test('discussion improvements retain answers, keep highest score, and require scoped review',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+ f.sql.prepare('INSERT OR REPLACE INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'سؤال نقاش');
+ await f.call('student','/discussion',{lessonId:id,answer:'الإجابة الأصلية'});
+ await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:4,feedback:'الأولى'});
+ const retry=(await f.call('student','/discussion',{lessonId:id,answer:'إجابة التحسين'})).data;
+ let d=(await f.call('student','')).data.lessons[0].discussion;
+ assert.equal(d.score,4);assert.equal(d.answer,'الإجابة الأصلية');assert.equal(d.history.length,2);assert.equal(d.pendingAttempt.answer,'إجابة التحسين');
+ await assert.rejects(f.call('student','/discussion',{lessonId:id,answer:'تكرار'}),/DISCUSSION_IMPROVEMENT_PENDING/);
+ await assert.rejects(f.call('outsider','/discussion-review',{lessonId:id,studentKey:'student',attemptId:retry.attemptId,score:5}),/SUBJECT_ACCESS_DENIED/);
+ await assert.rejects(f.call('teacher','/discussion-review',{lessonId:id,studentKey:'other',attemptId:retry.attemptId,score:5}),/DISCUSSION_ATTEMPT_ALREADY_REVIEWED/);
+ await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',attemptId:retry.attemptId,score:3,feedback:'أقل'});
+ d=(await f.call('student','')).data.lessons[0].discussion;assert.equal(d.score,4);assert.equal(d.pendingAttempt,null);assert.equal(d.history[1].score,3);
+ await assert.rejects(f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',attemptId:retry.attemptId,score:6}),/DISCUSSION_ATTEMPT_ALREADY_REVIEWED/);
+ const second=(await f.call('student','/discussion',{lessonId:id,answer:'تحسين أعلى'})).data;
+ await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',attemptId:second.attemptId,score:6});
+ d=(await f.call('student','')).data.lessons[0].discussion;assert.equal(d.score,6);assert.equal(d.answer,'تحسين أعلى');assert.equal(d.history.length,3);assert.equal(d.history[0].answer,'الإجابة الأصلية');
+ await assert.rejects(f.call('student','/discussion',{lessonId:id,answer:'درجة كاملة'}),/DISCUSSION_ALREADY_REVIEWED/);
+});
+
+test('discussion sync retains a higher recorded grade and improvement UI preserves prior answers',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',f.config)).data.id;
+ f.sql.prepare('INSERT OR REPLACE INTO lesson_assessment VALUES (?,?,?,?,?)').run(id,6,3,6,'سؤال');
+ f.ctx.firebaseAdminToken=async()=> 'test-token';const original=globalThis.fetch;let grade={studentKey:'student',subjectKey:'course',w1_disc:5,w1_discApproved:true,w2_hw:6,exam:40};
+ globalThis.fetch=async(url,options={})=>{if(String(url).endsWith('/settings.json'))return Response.json({disc:6});if(options.method==='PUT'){grade=JSON.parse(options.body);return Response.json(grade);}return new Response(JSON.stringify(grade),{headers:{etag:'test'}});};
+ try{
+  await f.call('student','/discussion',{lessonId:id,answer:'الأصلية'});await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:3});
+  assert.equal(grade.w1_disc,5);assert.equal(grade.exam,40);assert.equal(grade.w2_hw,6);
+  const retry=(await f.call('student','/discussion',{lessonId:id,answer:'الجديدة'})).data;
+  const lesson=(await f.call('student','')).data.lessons[0],context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+  const card=context.cwDiscussionCard(lesson,true);assert.match(card,/الأصلية/);assert.match(card,/الجديدة/);assert.match(card,/تحسين قيد المراجعة/);assert.equal(card.includes('إرسال المناقشة للتحسين'),false);
+  await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',attemptId:retry.attemptId,score:4});assert.equal(grade.w1_disc,5);
+  const next=(await f.call('student','/discussion',{lessonId:id,answer:'الأفضل'})).data;await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',attemptId:next.attemptId,score:6});assert.equal(grade.w1_disc,6);
+ }finally{globalThis.fetch=original;}
+});
+
 test("unlimited attempts retain best score, retries are idempotent, sync failure stays pending", async () => {
   const f = fixtures();
   const l = (await f.call("admin", "/lesson", f.config)).data.id;
