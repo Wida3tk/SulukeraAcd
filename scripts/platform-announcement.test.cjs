@@ -2,6 +2,7 @@ const assert=require('node:assert/strict'),{chromium}=require('playwright');
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:'msedge'}),page=await browser.newPage({viewport:{width:390,height:844}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.setContent('<html dir="rtl"><body><main><header class="topbar">المنصة</header><section id="mainContent">المحتوى الأصلي</section><section id="page-settings"></section></main></body></html>');
+ await page.addStyleTag({content:'*{margin:0;padding:0;box-sizing:border-box}'});
  await page.addStyleTag({path:'platform-announcement.css'});
  await page.evaluate(()=>{
   window.currentUser={role:'student'};window.activeSecureAttempt={attemptId:'active'};window.uid='s1';window.writes=[];window.config={active:true,version:'whatsapp-service-20261028'};
@@ -10,6 +11,7 @@ const assert=require('node:assert/strict'),{chromium}=require('playwright');
  await page.addScriptTag({path:'platform-announcement.js'});await page.waitForTimeout(1500);
  assert.equal(await page.locator('.pa-banner').count(),1);assert.equal(await page.locator('.pa-dialog').count(),0);
  await page.evaluate(()=>activeSecureAttempt=null);await page.waitForSelector('.pa-dialog[open]');
+ for(const viewport of [{width:1480,height:766},{width:390,height:844}]){await page.setViewportSize(viewport);const bounds=await page.locator('.pa-dialog').boundingBox();assert.ok(Math.abs(bounds.x+bounds.width/2-viewport.width/2)<=2);assert.ok(Math.abs(bounds.y+bounds.height/2-viewport.height/2)<=2);}
  // Broken image degrades to accessible text without preventing acknowledgement.
  await page.locator('.pa-dialog img').dispatchEvent('error');assert.equal(await page.locator('.pa-text').isVisible(),true);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
