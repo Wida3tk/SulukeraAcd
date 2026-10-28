@@ -1,7 +1,7 @@
 const vm=require('node:vm'),fs=require('node:fs'),assert=require('node:assert/strict');
 const student=fs.readFileSync('student.html','utf8'),start=student.indexOf('function renderProfessionalUnitCard('),end=student.indexOf('\nlet professionalViewerTimer',start);
 const ctx={currentUser:{fbKey:'student'},PROFESSIONAL_PROGRAM_ID:'organizational_behavior',dbData:{},escapeHtml:s=>String(s||''),professionalUnitState:()=>({record:{},answers:{},complete:false,material:false,discussion:false,examRequired:false}),professionalUnitSessions:()=>Array.from({length:5},(_,i)=>({key:'session_'+(i+1),order:i+1,title:'لقاء '+(i+1)})),professionalSafeUrl:s=>s||'',professionalDate:()=>null,professionalSessionValue:()=>'',professionalExternalRecording:()=>false,professionalDateLabel:()=>'',professionalQuestionHtml:s=>s};
-vm.createContext(ctx);vm.runInContext(student.slice(start,end),ctx);
+vm.createContext(ctx);vm.runInContext(fs.readFileSync('professional-sheet-resources.js','utf8'),ctx);vm.runInContext(student.slice(start,end),ctx);
 const first={id:'track_1_unit_1',unit:{}},next={id:'track_1_unit_2',unit:{title:'الوحدة التالية'}};
 const html=ctx.renderProfessionalUnitCard(next,[first,next],{},{});assert.ok(html.includes('الوحدة التالية'));assert.equal((html.match(/data-recording-session=/g)||[]).length,5);assert.ok(!html.includes('تفتح بعد إكمال'));
 let fallback;Object.assign(ctx,{professionalDrivePreview:()=>'/drive-preview',professionalViewerOverlay:(...a)=>{fallback=a;},secureExamRequest:async()=>{throw Error('unavailable');},console,clearInterval,decodeURIComponent});
