@@ -2,7 +2,7 @@
 (()=>{'use strict';
  const VERSION='whatsapp-service-20261028',PATH='settings/platformAnnouncement';
  const MESSAGE='تنويه: خدمة العملاء عبر واتساب متوقفة مؤقتًا بسبب مشكلة تقنية. لاستفساراتكم: Care@sulukera.com أو عبر المرشد الأكاديمي.';
- const IMAGE='assets/announcements/whatsapp-service-20261028.png';
+ const IMAGE='assets/announcements/whatsapp-service-20261028-corrected.png';
  let identity='',ref=null,config=null,ack=false,checked=false,dialog=null,banner=null,observer=null,focusBefore=null;
  const user=()=>typeof currentUser==='undefined'?null:currentUser;
  const busy=()=>!!(typeof activeSecureAttempt!=='undefined'&&activeSecureAttempt)||!!document.querySelector('#secureAttemptPanel,#secureExamForm,dialog[open]:not(.pa-dialog),.modal-overlay[style*="display: flex"],.faculty-modal,#professionalViewerOverlay')||!!document.querySelector('button:disabled[type="submit"],#saveBtn:disabled,#gradeSaveRow button:disabled');
