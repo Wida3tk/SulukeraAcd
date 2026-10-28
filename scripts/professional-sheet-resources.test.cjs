@@ -1,0 +1,10 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const c={};vm.createContext(c);vm.runInContext(fs.readFileSync('professional-sheet-resources.js','utf8'),c);
+const id='1lfCg7cKFnCY1IVL4Ev30DXzgf8W_VY7J_gkydVPpZXI';
+assert.equal(c.professionalSheetResources({}), '');
+assert.equal(c.professionalSheetResources({sheetResources:{bad:{fileId:'javascript:alert(1)',title:'bad'}}}), '');
+const s={sheetResources:{daily_progress:{fileId:id,title:'تقرير التقدم اليومي <script>'}},recordingUrl:'unchanged'},before=JSON.stringify(s),html=c.professionalSheetResources(s);
+assert.ok(html.includes('/'+id+'/copy'));assert.ok(html.includes('/'+id+'/preview'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('rel="noopener noreferrer"'));assert.equal(JSON.stringify(s),before);
+const student=fs.readFileSync('student.html','utf8');assert.equal((student.match(/\$\{professionalSheetResources\(session\)\}/g)||[]).length,2);
+const admin=fs.readFileSync('index.html','utf8');const save=admin.slice(admin.indexOf('async function saveProfessionalMeeting('),admin.indexOf('async function saveProfessionalProgram('));assert.ok(save.includes('.update(meeting)'));assert.ok(save.includes('...unit.sessions[sessionKey],...meeting'));
+console.log('PASS: allowlisted Sheet IDs, escaped titles, copy and preview links, no resource mutation, student/lecturer rendering, admin preserves supplemental resources.');
