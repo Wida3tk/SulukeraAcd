@@ -825,6 +825,8 @@ async function changeMyPassword(){
 async function doLogout(){
   if(typeof recordingStopPlayer==='function'){closeProfessionalViewer();recordingStudentData={assignments:[],progress:[]};}
   gpCloseMeetingNotice(true);
+  closeExamScheduleNotice();
+  examScheduleNoticeUser=null;
   closeStudentEvaluationReminder(true);
   lecturerSurveyClose();
   stopStudentAccountLiveUpdates();
@@ -888,6 +890,7 @@ function startExamSchedulesLiveUpdates(){
     if(!currentUser) return;
     dbData.examSchedules=snapshot.exists()?snapshot.val():{};
     if(currentUser.role==='student'&&currentAppTab==='exams') renderStudentExamsTab();
+    showExamScheduleNotice();
   };
   fbRef('examSchedules').on('value',examSchedulesLiveHandler,error=>console.error('exam schedules live update error',error));
   examExceptionsLivePath=currentUser?.role==='student' ? `studentExamExceptions/${currentUser.fbKey}` : 'studentExamExceptions';
@@ -991,6 +994,7 @@ function showStudentView(){
   switchAppTab(professionalOnly?'professional':'home',document.querySelector('#appTabs .app-tab'));
 	  refreshSecureExamGrades();
   void loadGraduationMeetingNotice();
+  showExamScheduleNotice();
 }
 
 function isGraduationProjectStageStudent(student=currentUser?.data){
@@ -1705,6 +1709,22 @@ function getNextUpcomingSlot(slots){
   }).sort((a,b)=>a.minutesScore-b.minutesScore);
   return scored[0]?.slot || null;
 }
+let examScheduleNoticeUser=null;
+function closeExamScheduleNotice(){const dialog=document.getElementById('examScheduleNotice');if(dialog){dialog.close();dialog.remove();}}
+function showExamScheduleNotice(){
+  if(currentUser?.role!=='student'||examScheduleNoticeUser===currentUser||document.querySelector('dialog[open]'))return;
+  if(typeof activeSecureAttempt!=='undefined'&&activeSecureAttempt)return;
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
+  if(today>'2026-11-08'||!getStudentExamSchedules().some(exam=>exam.date>='2026-11-01'&&exam.date<='2026-11-08'))return;
+  examScheduleNoticeUser=currentUser;
+  const dialog=document.createElement('dialog');dialog.id='examScheduleNotice';dialog.className='gp-notice';dialog.dir='rtl';dialog.style.cssText='position:fixed;inset:0;margin:auto;max-height:calc(100dvh - 32px);overflow:auto';dialog.setAttribute('aria-labelledby','examScheduleNoticeTitle');
+  dialog.innerHTML='<span class="gp-eyebrow">استعد لخطوتك القادمة</span><h2 id="examScheduleNoticeTitle">تم نشر جدول الاختبارات</h2><p>بإمكانك الاطلاع على جدول اختباراتك الآن، ومعرفة مواعيد مقرراتك والاستعداد لها. نتمنى لك التوفيق والنجاح.</p><div class="gp-notice-date">بداية الفصل القادم: <strong>15 نوفمبر 2026</strong></div><div class="gp-notice-actions"><button class="gp-action" id="examScheduleNoticeOpen">الاطلاع على جدول الاختبارات</button><button class="btn" id="examScheduleNoticeClose">حسنًا</button></div>';
+  dialog.querySelector('#examScheduleNoticeOpen').onclick=()=>{closeExamScheduleNotice();switchAppTab('exams',getAppTabButtonById('exams'));};
+  dialog.querySelector('#examScheduleNoticeClose').onclick=closeExamScheduleNotice;
+  dialog.addEventListener('cancel',event=>{event.preventDefault();closeExamScheduleNotice();});
+  document.body.append(dialog);dialog.showModal();
+}
+document.addEventListener('close',()=>setTimeout(()=>{showStudentEvaluationReminder();showExamScheduleNotice();},0),true);
 function getStudentExamSchedules(){
   if(!currentUser?.fbKey) return [];
   const exception=getActiveExamException(currentUser.fbKey);
@@ -1754,6 +1774,7 @@ function renderStudentExamsTab(){
           <div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName||dbData.subjects?.[exam.subjectKey]?.name||'اختبار المقرر')}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(exam.lecturerName||getLecturerName(dbData.subjects?.[exam.subjectKey]?.lecturerUserId)||'')}</div><div style="margin-top:8px"><span class="badge badge-info">${escapeHtml(exam.batch||'')}</span>${exam.termLabel?` <span class="badge badge-student">${escapeHtml(exam.termLabel)}</span>`:''}</div></div>
           <div class="exam-time">${to12h(exam.startTime)} إلى ${to12h(exam.endTime)}</div>
         </div>`;}).join('')}</div>`:professionalOnly&&professionalExam?`<div class="exam-schedule-card"><div class="exam-date"><strong style="font-size:16px">الموعد</strong><span style="font-size:11px;margin-top:5px">بتوقيت السعودية</span></div><div class="exam-course"><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(professionalExam.title)}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">${escapeHtml(professionalDateText)}</div></div><div class="exam-time">بانتظار الإتاحة</div></div>`:'<div class="empty">لا توجد اختبارات منشورة لمقرراتك حاليًا.</div>'}
+      ${!professionalOnly?'<div class="alert alert-info" style="margin-top:18px;margin-bottom:0">📅 <strong>بداية الفصل القادم: 15 نوفمبر 2026</strong></div>':''}
     </div>`;
   if(blocksExams){secureExamList=[];return;}
   loadSecureStudentExams();
@@ -1810,6 +1831,7 @@ function closeStudentEvaluationReminder(reset=false){
   if(reset){studentEvaluationReminded.clear();studentEvaluationTarget=null;}else if(typeof gpShowMeetingNotice==='function')gpShowMeetingNotice();
 }
 function showStudentEvaluationReminder(){
+  if(document.getElementById('examScheduleNotice')?.open)return;
   if(currentUser?.role!=='student'||document.getElementById('studentEvaluationReminder'))return;
   const pending=secureExamList.filter(exam=>studentExamNeedsEvaluation(exam)&&!studentEvaluationReminded.has(exam.id));
   if(!pending.length)return;
