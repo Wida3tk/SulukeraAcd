@@ -7112,13 +7112,12 @@ async function saveExamSchedule(){
   }catch(error){ console.error('save exam schedule error',error); showToast('⚠️ تعذر حفظ موعد الاختبار'); }
   finally{ showLoader(false); }
 }
-function renderExamSchedulesAdminList(){
+function renderExamSchedulesAdminRows(rows){
   const host=document.getElementById('examSchedulesAdminList');
   if(!host) return;
-  const rows=Object.entries(examSchedulesData||{}).map(([key,value])=>({key,...value})).sort((a,b)=>`${a.batch}|${a.date}|${a.startTime}`.localeCompare(`${b.batch}|${b.date}|${b.startTime}`));
-  if(!rows.length){ host.innerHTML='<div class="alert alert-info">لا توجد مواعيد اختبارات حتى الآن.</div>'; return; }
+  if(!rows.length){ host.innerHTML='<div class="alert alert-info">لا توجد اختبارات ضمن هذه القائمة.</div>'; return; }
   const batches=[...new Set(rows.map(row=>row.batch))];
-  host.innerHTML=batches.map(batch=>`<div style="margin-bottom:1.25rem"><div style="font-size:18px;font-weight:900;color:var(--primary-dark);margin-bottom:10px">${escapeHtml(batch)}</div><div style="display:grid;gap:10px">${rows.filter(row=>row.batch===batch).map(row=>`<div style="display:grid;grid-template-columns:150px 1fr 160px auto;gap:12px;align-items:center;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:white"><div style="padding:16px;background:var(--primary-dark);color:white;text-align:center;font-weight:800">${examAdminDate(row.date)}</div><div style="padding:14px"><strong>${escapeHtml(row.subjectName||'')}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:5px">${escapeHtml(row.lecturerName||'—')}${row.termLabel?' · '+escapeHtml(row.termLabel):''}</div></div><div style="padding:14px;text-align:center;font-weight:800">${examAdminTime(row.startTime)} – ${examAdminTime(row.endTime)}<div style="margin-top:5px"><span class="badge ${row.published===false?'badge-warn':'badge-pass'}">${row.published===false?'مسودة':'منشور'}</span></div></div><div style="padding:12px"><button class="btn btn-sm" onclick="editExamSchedule('${row.key}')">✏️ تعديل</button></div></div>`).join('')}</div></div>`).join('');
+  host.innerHTML=batches.map(batch=>`<div style="margin-bottom:1.25rem"><div style="font-size:18px;font-weight:900;color:var(--primary-dark);margin-bottom:10px">${escapeHtml(batch)}</div><div style="display:grid;gap:10px">${rows.filter(row=>row.batch===batch).map(row=>`<div style="display:grid;grid-template-columns:150px 1fr 160px auto;gap:12px;align-items:center;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:white"><div style="padding:16px;background:var(--primary-dark);color:white;text-align:center;font-weight:800">${examAdminDate(row.date)}</div><div style="padding:14px"><strong>${escapeHtml(row.subjectName||'')}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:5px">${escapeHtml(row.lecturerName||'—')}${row.termLabel?' · '+escapeHtml(row.termLabel):''}</div></div><div style="padding:14px;text-align:center;font-weight:800">${examAdminTime(row.startTime)} – ${examAdminTime(row.endTime)}<div style="margin-top:5px"><span class="badge ${examScheduleState(row).badge}">${examScheduleState(row).label}</span></div></div><div style="padding:12px"><button class="btn btn-sm" onclick="editExamSchedule('${row.key}')">✏️ تعديل</button></div></div>`).join('')}</div></div>`).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -8783,6 +8782,7 @@ async function cleanDuplicateStudents(){
 <script src="professional-recording-ui.js?v=20261013b"></script>
 <link rel="stylesheet" href="platform-announcement.css?v=20261028-centered">
 <script src="platform-announcement.js?v=20261028-corrected"></script>
+<script src="exam-schedule-archive.js?v=20261029"></script>
 </body>
 </html>
 

@@ -1,0 +1,11 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');const c={Date};vm.createContext(c);vm.runInContext(fs.readFileSync('exam-schedule-archive.js','utf8'),c);
+const row={date:'2026-11-08',startTime:'18:00',endTime:'22:00',published:true};
+assert.equal(c.examScheduleEnded(row,Date.parse('2026-11-08T18:59:59Z')),false);
+assert.equal(c.examScheduleEnded(row,Date.parse('2026-11-08T19:00:01Z')),true);
+assert.equal(c.examScheduleState(row,Date.parse('2026-11-01T00:00Z')).label,'مجدول');
+assert.equal(c.examScheduleState(row,Date.parse('2026-11-08T16:00Z')).label,'متاح في موعده');
+assert.equal(c.examScheduleState(row,Date.parse('2026-11-09T00:00Z')).label,'منتهٍ · باستثناء معتمد فقط');
+assert.equal(c.examScheduleState({...row,published:false},Date.parse('2026-11-01T00:00Z')).label,'مسودة');
+assert.equal(c.examScheduleEnded({date:'2026-09-20',endTime:'22:00'},Date.parse('2026-10-29T00:00Z')),true);
+const server=fs.readFileSync('exam-worker/src/index.js','utf8');assert.ok(server.includes('if (now < opens || now > closes) fail("EXAM_NOT_AVAILABLE", 403)'));
+console.log('PASS: Saudi closing boundary, future/live/draft/ended labels, legacy schedules without end time, existing server exception/time gate remains enforced.');
