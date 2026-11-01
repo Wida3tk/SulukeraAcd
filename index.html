@@ -374,6 +374,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
     <div class="content">
 
       <!-- DASHBOARD -->
+      <div class="page" id="page-studentpreview"><div id="studentPreviewRoot"></div></div>
       <div class="page" id="page-dashboard">
         <div class="stat-grid" id="dashStats"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
@@ -2644,6 +2645,7 @@ async function doLogout() {
 // ══════════════════════════════════════════════
 const navConfig = {
   admin: [
+    {id:'studentpreview',icon:'👁️',label:'معاينة تجربة الطالب'},
     {id:'dashboard',icon:'🏠',label:'لوحة التحكم'},
     {id:'productivity',icon:'⏱️',label:'الساعات الإنتاجية'},
     {id:'subjects',icon:'📖',label:'المواد الدراسية'},
@@ -2692,6 +2694,7 @@ const adminNavGroups=[
     {id:'productivity',icon:'⏱️',label:'الساعات الإنتاجية'}
   ]},
   {id:'students',icon:'👩‍🎓',label:'الطلاب والسجلات',items:[
+    {id:'studentpreview',icon:'👁️',label:'معاينة تجربة الطالب'},
     {id:'students',icon:'👩‍🎓',label:'قائمة الطلاب'},
     {id:'cards',icon:'🪪',label:'بطاقات الطلاب'},
     {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
@@ -2755,6 +2758,7 @@ function updateStudentRequestsNavBadge(){
   if(count) item.insertAdjacentHTML('beforeend',`<span class="nav-count-badge" id="studentRequestsNavBadge">${count}</span>`);
 }
 const pageTitles={
+  studentpreview:'معاينة تجربة الطالب',
   lecturerperformance:'أداء المحاضرين',
   revenue:'الإيرادات وأهداف المنتجات',
   coursework:'المحاضرات والواجبات',
@@ -2796,6 +2800,8 @@ function renderTopbarActions(pageId) {
   else el.innerHTML='';
 }
 function refreshPage(p) {
+  if(p!=='studentpreview'&&typeof spClose==='function'){studentPreviewEpoch++;spClose();}
+  if(p==='studentpreview')renderStudentPreview();
   if (p==='revenue') renderRevenue();
   if (p==='performance') renderPerformance();
   if (p==='lecturerperformance') renderLecturerPerformance();
@@ -8783,6 +8789,10 @@ async function cleanDuplicateStudents(){
 <link rel="stylesheet" href="platform-announcement.css?v=20261028-centered">
 <script src="platform-announcement.js?v=20261028-corrected"></script>
 <script src="exam-schedule-archive.js?v=20261029"></script>
+<script src="professional-sheet-resources.js?v=20261101"></script>
+<link rel="stylesheet" href="student-preview.css?v=20261101">
+<script src="student-evaluation-model.js?v=20261101"></script>
+<script src="student-preview.js?v=20261101"></script>
 </body>
 </html>
 

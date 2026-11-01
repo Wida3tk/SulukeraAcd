@@ -1937,19 +1937,7 @@ async function submitSecureAttempt(auto=false){
 }
 function renderSecureEvaluation(examId){
   const exam=secureExamList.find(item=>item.id===examId);
-  const questions=[
-    ['q5','المحتوى العلمي','كان المحتوى العلمي للبرنامج منظمًا ومتسلسلًا بصورة مناسبة'],
-    ['q6','المحتوى العلمي','ساهمت الأنشطة والواجبات في تعزيز فهمي لموضوعات المقرر'],
-    ['q7','المحاضر','قدّم المحاضر المحتوى بصورة واضحة ومنظمة'],
-    ['q8','المحاضر','كانت استجابة المحاضر للاستفسارات مناسبة من حيث الوقت'],
-    ['q9','المحاضر','كانت إجابات المحاضر على الاستفسارات واضحة ومفيدة'],
-    ['q10','المحاضر','شجّع المحاضر على المشاركة والتفاعل وطرح الأسئلة'],
-    ['q11','التنظيم','كانت مواعيد المحاضرات الخاصة بالمقرر واضحة بالنسبة لي'],
-    ['q12','التنظيم','كانت متطلبات المقرر وتعليماته واضحة وسهلة المتابعة'],
-    ['q13','التنظيم','تم رصد الدرجات خلال فترة زمنية مناسبة'],
-    ['q14','الدعم الأكاديمي والمتابعة','كانت التعليمات والإرشادات المقدمة من المرشد الأكاديمي واضحة'],
-    ['q15','الدعم الأكاديمي والمتابعة','كانت استجابة المرشد الأكاديمي للاستفسارات مناسبة من حيث الوقت']
-  ];
+  const questions=SulukeraStudentEvaluation.questions;
   let section='';
   const ratingRows=questions.map(([name,group,label])=>{
     const heading=group!==section?(section=group,`<div class="evaluation-section">${group}</div>`):'';
@@ -3157,6 +3145,7 @@ window.addEventListener('load', initFB);
 <script src="professional-recording-policy.js?v=20261013"></script>
 <script src="professional-recording-ui.js?v=20261013b"></script>
 <script src="professional-sheet-resources.js?v=20261028"></script>
+<script src="student-evaluation-model.js?v=20261101"></script>
 <link rel="stylesheet" href="professional-exam-experience.css?v=20261014">
 <script src="professional-exam-experience.js?v=20261014"></script>
 <link rel="stylesheet" href="professional-exam-results.css?v=20261014">

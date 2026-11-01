@@ -11,6 +11,7 @@ import {handleAcademicRecordingMedia} from './academic-recording-media.js';
 import {runAttendanceSync,attendanceSchema,approveAttendanceAlias,attendanceEligibleStudents,savedAttendanceNames} from './zoom-attendance-sync.js';
 import {discoverNightlyRecordings,processNightlyRecordingQueue,nightlyRecordingSchema} from './nightly-recording-sync.js';
 import { handleLecturerSurvey } from "./lecturer-survey.js";
+import {handleStudentPreview} from './student-preview.js';
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
 import { handleCoursework, retryPendingCoursework } from "./coursework.js";
@@ -824,8 +825,8 @@ async function studentContext(auth) {
   return { studentKey: auth.profile.studentKey, student, subjectKeys };
  
 }
-async function studentExams(env, auth) {
-  const { studentKey, student, subjectKeys } = await studentContext(auth);
+export async function studentExams(env, auth, previewContext=null) {
+  const { studentKey, student, subjectKeys } = previewContext||await studentContext(auth);
   const exams = (
     await env.DB.prepare(
       `SELECT e.*, x.opens_at exception_opens_at,x.closes_at exception_closes_at,x.duration_minutes exception_duration,x.extra_attempts,x.active exception_active FROM exams e LEFT JOIN exam_exceptions x ON x.exam_id=e.id AND x.student_key=? WHERE e.status='published' ORDER BY e.opens_at`,
@@ -1151,6 +1152,10 @@ export default {
       if(lecturerSurvey){const response=reply(request,lecturerSurvey.data);response.headers.set('Cache-Control','private, no-store');return response;}
       const revenue=await handleRevenue(request,env,auth,path);
       if(revenue){const response=reply(request,revenue.data);response.headers.set('Cache-Control','private, no-store');return response;}
+      const preview=await handleStudentPreview(request,env,auth,path,{firebaseRead,firebaseStudentGrades,studentExams,professionalPreview:async body=>{
+        const result=await handleProfessionalRecordings(new Request('https://preview/admin/professional-recordings/preview',{method:'POST',body:JSON.stringify(body)}),env,auth,'/admin/professional-recordings/preview',{firebaseRead});return result.data;
+      }});
+      if(preview){const response=reply(request,preview.data);response.headers.set('Cache-Control','private, no-store');return response;}
       const coursework = await handleCoursework(request, env, auth, path, {
         firebaseRead, firebaseAdminToken, studentContext, firebaseStudentGrades,
       });
