@@ -39,6 +39,7 @@ export async function handleStudentPreview(request,env,auth,path,ctx){
  let coursework={subjects:[],lessons:[]},exams=[];
  if(active){
   if(!professional){const result=await handleCoursework(new Request('https://preview/coursework'),env,fake,'/coursework',{...ctx,studentContext:async()=>resolved,firebaseStudentGrades:key?ctx.firebaseStudentGrades:async()=>({})});coursework=result.data;}
+  if(coursework.lessons.length){const source=(await env.DB.prepare("SELECT id,questions_json FROM course_lessons WHERE status='published'").all()).results;coursework.lessons=coursework.lessons.map(l=>({...l,practiceQuestions:JSON.parse(source.find(s=>s.id===l.id)?.questions_json||'[]')}));}
   exams=await ctx.studentExams(env,fake,resolved);
  }
  const examId=params.get('examId');let questions=[];
