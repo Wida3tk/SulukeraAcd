@@ -2753,6 +2753,7 @@ function renderWeekTable(w){
       </tr>`;
     }).join('');
   }
+  document.querySelectorAll('#gradeTableBody .grade-input').forEach(input=>{input.dataset.savedValue=input.value.trim();});
   applyLecturerStudentSort(lecturerStudentSortMode);
 }
 
@@ -2790,6 +2791,7 @@ function renderSummaryTable(subjectKey){
 async function saveGrades(){
   const btn=document.getElementById('saveBtn');
   if(!btn||btn.disabled)return;
+  const subjectKey=currentSubjectKey,week=currentWeek,actor=currentUser;
   btn.textContent='⏳ جاري الحفظ...'; btn.disabled=true;
 
   try{
@@ -2800,6 +2802,7 @@ async function saveGrades(){
       const field=inp.dataset.field;
       if(field==='exam'&&currentUser?.role==='lecturer')return;
       const raw=inp.value.trim();
+      if(inp.dataset.savedValue!==undefined&&raw===inp.dataset.savedValue)return;
       if(!byStudent[stKey]) byStudent[stKey]={};
       // احفظ الحقل فقط إذا كان فيه قيمة
       if(raw!==''){
@@ -2807,6 +2810,8 @@ async function saveGrades(){
         if(!Number.isFinite(value)||value<0||!inp.checkValidity())throw new Error('أدخل درجة صحيحة ضمن الحد المحدد؛ الصفر مسموح.');
         byStudent[stKey][field]=value;
         if(/^w[1-4]_(attend|hw|disc)$/.test(field))byStudent[stKey][field+'Entered']=true;
+        if(/^w[1-4]_attend$/.test(field))byStudent[stKey][field+'Provisional']=false;
+        if(/^w[1-4]_disc$/.test(field))byStudent[stKey][field+'Approved']=true;
         if(field==='exam') byStudent[stKey].examEntered=true;
       }
     });
@@ -2821,20 +2826,15 @@ async function saveGrades(){
     let savedCount=0;
     for(const [stKey, newFields] of Object.entries(byStudent)){
       if(!Object.keys(newFields).length) continue;
-      const gradeKey=Object.entries(dbData.grades||{}).find(([,g])=>g.studentKey===stKey&&g.subjectKey===currentSubjectKey)?.[0]||('grade_'+stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
-      const fallback=getGrade_data(stKey,currentSubjectKey)||{};
+      if(currentUser!==actor)throw new Error('تغيرت جلسة الدخول؛ أعد فتح سجل الدرجات.');
+      const gradeKey=Object.entries(dbData.grades||{}).find(([,g])=>g.studentKey===stKey&&g.subjectKey===subjectKey)?.[0]||('grade_'+stKey+'_'+subjectKey).replace(/[.#$[\]]/g,'_');
+      const fallback=getGrade_data(stKey,subjectKey)||{};
       const tx=await fbRef('grades/'+gradeKey).transaction(current=>{
         const existing=current||fallback;
         return {
           ...existing,
           studentKey:stKey,
-          subjectKey:currentSubjectKey,
-          w1_attend:existing.w1_attend||0, w1_hw:existing.w1_hw||0, w1_disc:existing.w1_disc||0,
-          w2_attend:existing.w2_attend||0, w2_hw:existing.w2_hw||0, w2_disc:existing.w2_disc||0,
-          w3_attend:existing.w3_attend||0, w3_hw:existing.w3_hw||0, w3_disc:existing.w3_disc||0,
-          w4_attend:existing.w4_attend||0, w4_hw:existing.w4_hw||0, w4_disc:existing.w4_disc||0,
-          exam:isExamEntered(existing)?(existing.exam||0):null,
-          examEntered:isExamEntered(existing),
+          subjectKey,
           ...newFields,
           updatedAt:new Date().toISOString(),
           updatedBy:currentUser?.data?.username||currentUser?.data?.name||'lecturer',
@@ -2844,13 +2844,13 @@ async function saveGrades(){
       if(!tx.committed || !tx.snapshot.exists()) throw new Error('لم تؤكد قاعدة البيانات حفظ درجة أحد الطلاب');
       const merged=tx.snapshot.val();
       for(const [field,value] of Object.entries(newFields)){
-        if(field.endsWith('Entered')){
-          if(merged[field]!==true)throw new Error('فشل تأكيد رصد الدرجة المحفوظة');
+        if(typeof value==='boolean'){
+          if(merged[field]!==value)throw new Error('فشل تأكيد رصد الدرجة المحفوظة');
         }else if(merged[field]===null||merged[field]===undefined||Number(merged[field])!==value)throw new Error('فشل التحقق من الدرجة المحفوظة');
       }
       if(newFields.exam!==undefined && (!isExamEntered(merged)||Number(merged.exam)!==Number(newFields.exam)))
         throw new Error('فشل التحقق من الاختبار النهائي المحفوظ');
-      const legacyKey=(stKey+'_'+currentSubjectKey).replace(/[.#$[\]]/g,'_');
+      const legacyKey=(stKey+'_'+subjectKey).replace(/[.#$[\]]/g,'_');
       if(legacyKey!==gradeKey&&currentUser?.role==='admin') legacyDeletes['grades/'+legacyKey]=null;
       // حدّث dbData المحلي فوراً
       if(!dbData.grades) dbData.grades={};
@@ -2862,8 +2862,7 @@ async function saveGrades(){
       await firebase.database().ref('/').update(legacyDeletes);
 
     toast(`✅ تم حفظ درجات ${savedCount} طالب والتحقق منها`);
-    renderWeekTable(currentWeek);
-    renderSummaryTable(currentSubjectKey); // تحديث ملخص المادة
+    if(currentUser===actor&&currentSubjectKey===subjectKey){renderWeekTable(week);renderSummaryTable(subjectKey);}
   }catch(e){
     console.error('saveGrades error:',e);
     toast('❌ خطأ في الحفظ: '+e.message);
