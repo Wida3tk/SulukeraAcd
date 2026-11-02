@@ -424,6 +424,20 @@ test('discussion sync retains a higher recorded grade and improvement UI preserv
  }finally{globalThis.fetch=original;}
 });
 
+test('queue reviews reject stale submissions and cannot overwrite a completed review',async()=>{
+ const f=fixtures(),id=(await f.call('admin','/lesson',{...f.config,discussionPrompt:'سؤال'})).data.id;
+ await f.call('student','/discussion',{lessonId:id,answer:'إجابة'});const row=f.sql.prepare('SELECT * FROM academic_discussions').get();
+ await assert.rejects(f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:2,queueReview:true,sourceSubmittedAt:'stale'}),/DISCUSSION_NOT_FOUND/);
+ assert.equal(f.sql.prepare('SELECT score FROM academic_discussions').get().score,null);
+ await f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:2,queueReview:true,sourceSubmittedAt:row.submitted_at});
+ await assert.rejects(f.call('teacher','/discussion-review',{lessonId:id,studentKey:'student',score:1,queueReview:true,sourceSubmittedAt:row.submitted_at}),/DISCUSSION_NOT_FOUND/);
+ await f.call('student','/reflection',{lessonId:id,answers:['أ','ب','ج']});const reflection=f.sql.prepare('SELECT * FROM attendance_reflections').get();
+ await assert.rejects(f.call('teacher','/review',{lessonId:id,studentKey:'student',score:1,queueReview:true,sourceSubmittedAt:'stale'}),/REFLECTION_NOT_FOUND/);
+ assert.equal(f.sql.prepare('SELECT score FROM attendance_reflections').get().score,null);
+ await f.call('teacher','/review',{lessonId:id,studentKey:'student',score:1,queueReview:true,sourceSubmittedAt:reflection.submitted_at});
+ await assert.rejects(f.call('teacher','/review',{lessonId:id,studentKey:'student',score:2,queueReview:true,sourceSubmittedAt:reflection.submitted_at}),/REFLECTION_NOT_FOUND/);
+});
+
 test("unlimited attempts retain best score, retries are idempotent, sync failure stays pending", async () => {
   const f = fixtures();
   const l = (await f.call("admin", "/lesson", f.config)).data.id;

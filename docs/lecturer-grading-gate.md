@@ -1,0 +1,9 @@
+# Lecturer grading workspace
+
+`lecturer-grading-gate.js` checks the signed-in lecturer's pending academic submissions after the satisfaction survey. Its centered native dialog requires each task to be reviewed or referred with a reason. Logout remains available. Scores are never prefilled; saves require explicit input. Network failures preserve entered feedback; a task whose answer/version changed cannot be graded from a stale queue. Returning to the platform requires a fresh empty queue response. Queue polling retains the displayed form while its task remains pending.
+
+The authenticated `/coursework/review-queue` API uses existing lecturer subject assignments, plan eligibility, enrollments and active-account policy. It includes unreviewed discussions, improvement attempts and recorded-attendance reflections, even when submission deadlines have passed. It excludes automatically graded homework and fully credited live attendance. Grades are saved through the existing discussion/reflection review endpoints, retaining discussion histories, highest-score policy and grade synchronization.
+
+Run `grading_review_queue.sql` against the configured D1 database before deploying the Worker. Referral records preserve the task/version, reason, actor and timestamps. Open referrals leave the lecturer queue without assigning a score and appear under Administration → Grades → **إحالات الرصد من المحاضرين**. Administrators can review the original answer there or return it to the assigned lecturer with instructions. Submitted answers and student grades are not changed by referral operations.
+
+Run `node --test grading-review-queue.test.mjs coursework.test.mjs` from `exam-worker`. Frontend modal enforcement is a workflow aid; authorization and grade validation remain server-side. No Firebase rules or lecturer permissions are broadened.

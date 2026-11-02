@@ -4,6 +4,7 @@ import '../../academic-policy.js';
 import {studentLessonDeadline} from './coursework-deadlines.js';
 import {startAcademicRecording} from './academic-recording-media.js';
 import {discussionWithHistory,submitDiscussionImprovement,reviewDiscussionImprovement} from './discussion-improvements.js';
+import {handleGradingReviewQueue} from './grading-review-queue.js';
 const reject = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -248,6 +249,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
   if (!path.startsWith("/coursework")) return null;
   const s = await scope(auth, ctx),
     key = auth.profile.studentKey;
+  const reviewQueue=await handleGradingReviewQueue(request,env,auth,path,ctx,s);if(reviewQueue)return reviewQueue;
   if(path==='/coursework/recording/start'&&request.method==='POST'){
     const b=await json(request),l=await lessonFor(env,b.lessonId,s);
     if(s.role==='student'&&l.status!=='published')reject('LESSON_NOT_AVAILABLE',403);
@@ -553,7 +555,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     )
       reject("INVALID_SCORE");
     const result = await env.DB.prepare(
-      "UPDATE attendance_reflections SET score=?,feedback=?,reviewed_by=?,reviewed_at=? WHERE lesson_id=? AND student_key=?",
+      "UPDATE attendance_reflections SET score=?,feedback=?,reviewed_by=?,reviewed_at=? WHERE lesson_id=? AND student_key=? AND (? IS NULL OR (submitted_at=? AND reviewed_at IS NULL))",
     )
       .bind(
         score,
@@ -562,6 +564,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
         new Date().toISOString(),
         l.id,
         b.studentKey,
+        b.queueReview?String(b.sourceSubmittedAt||''):null,
+        b.queueReview?String(b.sourceSubmittedAt||''):null,
       )
       .run();
     if (!result.meta.changes) reject("REFLECTION_NOT_FOUND", 404);
@@ -659,7 +663,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     }else{
       const pending=await env.DB.prepare('SELECT id FROM academic_discussion_attempts WHERE lesson_id=? AND student_key=? AND reviewed_at IS NULL').bind(l.id,b.studentKey).first();
       if(pending)reject('DISCUSSION_ATTEMPT_REQUIRED',409);
-      const result=await env.DB.prepare("UPDATE academic_discussions SET score=CASE WHEN reviewed_at IS NULL THEN ? ELSE MAX(COALESCE(score,0),?) END,feedback=?,reviewed_by=?,reviewed_at=? WHERE lesson_id=? AND student_key=?").bind(score,score,String(b.feedback||""),auth.uid,new Date().toISOString(),l.id,b.studentKey).run();
+      const result=await env.DB.prepare("UPDATE academic_discussions SET score=CASE WHEN reviewed_at IS NULL THEN ? ELSE MAX(COALESCE(score,0),?) END,feedback=?,reviewed_by=?,reviewed_at=? WHERE lesson_id=? AND student_key=? AND (? IS NULL OR (submitted_at=? AND reviewed_at IS NULL))").bind(score,score,String(b.feedback||""),auth.uid,new Date().toISOString(),l.id,b.studentKey,b.queueReview?String(b.sourceSubmittedAt||''):null,b.queueReview?String(b.sourceSubmittedAt||''):null).run();
       if(!result.meta.changes)reject("DISCUSSION_NOT_FOUND",404);
     }
     return {data:{saved:true,synced:await synchronize(env,ctx,l,b.studentKey,auth.uid)}};
