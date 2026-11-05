@@ -1,3 +1,4 @@
+import { evaluationMonthCutoff, evaluationCutoffWhere } from './evaluation-month.js';
 import { handleProfessionalRecordings, handleProfessionalRecordingMedia } from "./professional-recordings.js";
 import { handleGraduationProject } from "./graduation-projects.js";
 import {syncAcademicExamGrades} from './exam-grade-sync.js';
@@ -571,11 +572,11 @@ async function adminExamDashboard(env, auth, examId) {
     students,
   };
 }
-async function evaluationAnalytics(env) {
+async function evaluationAnalytics(env, cutoff = "") {
   const rows = (
     await env.DB.prepare(
-      `SELECT e.id exam_id,e.subject_key,e.subject_name,e.batch,v.student_key,v.responses_json,v.submitted_at,COALESCE(p.status,'draft') publication_status,COALESCE(p.show_comments,0) show_comments,p.approved_at FROM evaluations v JOIN exams e ON e.id=v.exam_id LEFT JOIN evaluation_publications p ON p.exam_id=e.id ORDER BY e.opens_at DESC,v.submitted_at DESC`,
-    ).all()
+      `SELECT e.id exam_id,e.subject_key,e.subject_name,e.batch,v.student_key,v.responses_json,v.submitted_at,COALESCE(p.status,'draft') publication_status,COALESCE(p.show_comments,0) show_comments,p.approved_at FROM evaluations v JOIN exams e ON e.id=v.exam_id LEFT JOIN evaluation_publications p ON p.exam_id=e.id ${evaluationCutoffWhere} ORDER BY e.opens_at DESC,v.submitted_at DESC`,
+    ).bind(cutoff,cutoff).all()
   ).results;
   const groups = new Map();
   for (const row of rows) {
@@ -643,9 +644,9 @@ async function evaluationAnalytics(env) {
     ),
   }));
 }
-async function adminEvaluations(env, auth) {
+async function adminEvaluations(env, auth, cutoff = "") {
   requireRole(auth, "admin");
-  const groups = await evaluationAnalytics(env);
+  const groups = await evaluationAnalytics(env, cutoff);
   return Promise.all(
     groups.map(async (group) => {
       const eligible = await eligibleStudentKeys(
@@ -1186,7 +1187,8 @@ export default {
         return reply(request, { results: await adminResults(env, auth) });
       if (path === "/admin/evaluations" && request.method === "GET")
         return reply(request, {
-          evaluations: await adminEvaluations(env, auth),
+          evaluations: await adminEvaluations(env, auth, evaluationMonthCutoff(new URL(request.url).searchParams.get('throughMonth'))),
+          throughMonth: new URL(request.url).searchParams.get('throughMonth') || null,
         });
       if (
         path === "/admin/evaluations/publication" &&

@@ -13,3 +13,5 @@ Satisfaction is restricted to subjects of official active semesters that have st
 See `recorded-ops-reconciliation.md` for the recorded-only criteria, monthly reconciliation and fixed October ABAT anchor.
 
 Lecturer satisfaction: live DB verification on 5 November found only campaign `lecturer-2026-08-23-2026-09-24`. Its responses were submitted in October, but refer to the August–September campaign. The meeting view uses the authenticated admin report and preserves its eligibility/exemption rules. Current-campaign results get a current-semester label; the available previous-campaign report is explicitly labeled as fallback, with dates, response count and participation rate. Loading/errors/empty responses never become zero satisfaction.
+
+The global report month is implemented in performance-month-scope.js; see performance-report-month.md for scope rules, historical-state limits, API cutoff behavior and verification.
