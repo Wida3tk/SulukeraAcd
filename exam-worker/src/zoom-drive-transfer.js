@@ -8,6 +8,19 @@ async function json(response,label){if(!response.ok){await response.body?.cancel
 function credentials(env,key){try{return JSON.parse(env[key]);}catch{fail(key+'_REQUIRED',503);}}
 export function transferAccount(env,host=HOST){const key=host===HOST?'ZOOM_PILOT_CREDENTIALS':host==='rushdacd1@gmail.com'?'ZOOM_ACCOUNT_RUSHDACD1':host==='RushdABAT@gmail.com'?'ZOOM_ACCOUNT_RUSHDABAT':null;if(!key)fail('ACCOUNT_NOT_ENABLED',403);const c=credentials(env,key);if(c.hostEmail!==host)fail('ACCOUNT_SCOPE_MISMATCH',403);return {...env,ZOOM_PILOT_CREDENTIALS:JSON.stringify(c),RECORDING_TRANSFER_HOST:host};}
 async function zoomToken(env){const c=credentials(env,'ZOOM_PILOT_CREDENTIALS');if(c.hostEmail!==(env.RECORDING_TRANSFER_HOST||HOST))fail('ACCOUNT_SCOPE_MISMATCH',403);return (await json(await fetch('https://zoom.us/oauth/token',{method:'POST',headers:{Authorization:'Basic '+btoa(c.clientId+':'+c.clientSecret),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'account_credentials',account_id:c.accountId})}),'ZOOM_AUTH')).access_token;}
+export async function productivityRecordingMetadata(env,host,month,fileIds=[]){
+ if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('INVALID_MONTH');
+ env=transferAccount(env,host);const token=await zoomToken(env),from=month+'-01',to=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).toISOString().slice(0,10),result={host,month,recordings:[],reports:[],drive:[],warnings:[]};
+ for(const kind of ['recordings','trash','reports']){let next='';try{for(let page=0;page<10;page++){
+  const q=new URLSearchParams({page_size:'100',...(kind==='trash'?{trash:'true',trash_type:'meeting_recordings'}:{from,to})});if(next)q.set('next_page_token',next);
+  const path=kind==='reports'?'report/users/'+encodeURIComponent(host)+'/meetings':'users/'+encodeURIComponent(host)+'/recordings';
+  const d=await json(await fetch('https://api.zoom.us/v2/'+path+'?'+q,{headers:auth(token),signal:AbortSignal.timeout(20000)}),'PRODUCTIVITY_'+kind.toUpperCase());
+  for(const m of d.meetings||[])if(m.start_time?.slice(0,7)===month){if(kind==='reports')result.reports.push({uuid:m.uuid,meetingId:String(m.id),topic:m.topic,start:m.start_time,end:m.end_time});else result.recordings.push({...safeMeeting(m),trash:kind==='trash'});}
+  next=d.next_page_token||'';if(!next)break;
+ }if(next)throw Error('PAGINATION_INCOMPLETE');}catch(e){if(kind!=='trash')throw e;result.warnings.push('TRASH_UNAVAILABLE');}}
+ if(fileIds.length){if(fileIds.length>20)fail('TOO_MANY_DRIVE_FILES');const dt=await driveToken(env);for(const id of new Set(fileIds)){try{const f=await metadata(dt,id);result.drive.push({id:f.id,name:f.name,durationMillis:f.videoMediaMetadata?.durationMillis||null});}catch{result.drive.push({id,error:'METADATA_UNAVAILABLE'});}}}
+ return result;
+}
 async function driveToken(env){const c=credentials(env,'DRIVE_UPLOAD_OAUTH');if(c.rootId!==ROOT||env.DRIVE_RECORDING_FOLDER_ID!==ROOT)fail('ROOT_SCOPE_MISMATCH',403);return (await json(await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:c.client_id,client_secret:c.client_secret,refresh_token:c.refresh_token})}),'DRIVE_AUTH')).access_token;}
 const auth=token=>({Authorization:'Bearer '+token});
 export async function verifyDirectRecordingAccess(env,host,uuid,id){const source=await sourceFile(transferAccount(env,host),uuid,id,true);return {id:source.file.id,size:source.file.file_size};}

@@ -3,6 +3,7 @@ import { handleGraduationProject } from "./graduation-projects.js";
 import {syncAcademicExamGrades} from './exam-grade-sync.js';
 import {unlimitedExam,remainingAttempts,attemptExpiry} from './exam-attempt-policy.js';
 import {syncProfessionalExamResults} from './professional-exam-results.js';
+import {processProductivityAudit} from './productivity-audit.js';
 import {finalizeAutomaticCoursework} from './coursework-auto-grades.js';
 import { readGraduationDirectory } from "./graduation-directory.js";
 import { handleRevenue } from "./revenue.js";
@@ -1091,6 +1092,7 @@ async function submitEvaluation(request, env, auth, examId) {
 
 export default {
   scheduled(event,env,ctx){
+    if(event.cron==='* * * * *')ctx.waitUntil(processProductivityAudit(env).catch(error=>console.error('productivity_audit',error.message)));
     if(event.cron==='0 20 * * *'){if(env.ZOOM_RECORDINGS_AUTO==='true')ctx.waitUntil(discoverNightlyRecordings(env,{firebaseAdminToken}).catch(error=>console.error('nightly_recording_discovery',error.message)));return;}
     if(event.cron==='*/2 * * * *'){if(env.ZOOM_RECORDINGS_AUTO==='true')ctx.waitUntil(processNightlyRecordingQueue(env,{firebaseAdminToken}).catch(error=>console.error('nightly_recording_queue',error.message)));return;}
     if(env.ZOOM_ATTENDANCE_AUTO==='true'&&Math.floor(event.scheduledTime/60000)%5===0){ctx.waitUntil(runAttendanceSync(env,{firebaseAdminToken}).catch(error=>console.error('zoom_attendance_sync',error.message)));return;}
