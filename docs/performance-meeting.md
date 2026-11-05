@@ -8,6 +8,8 @@ Monthly productivity uses `lecturerHoursTotal`: direct imported/manual hours plu
 
 Verification: `node scripts/performance-meeting.test.cjs` and `node scripts/performance-presentation.test.cjs`. Browser fixtures are synthetic; live account aggregates were checked read-only before publishing.
 
-Satisfaction is restricted to subjects of official active semesters that have started, across all batches. Explicit evaluation semester references from previous periods are excluded. Both cards describe trainee course feedback (overall course experience and lecturer questions q7-q10); the historical general lecturer survey is not shown. Empty management categories are omitted.
+Satisfaction is restricted to subjects of official active semesters that have started, across all batches. Explicit evaluation semester references from previous periods are excluded. Both cards describe trainee course feedback (overall course experience and lecturer questions q7-q10); the general lecturer survey is shown separately, labeled with its own campaign period and a previous-semester badge when applicable. Empty management categories are omitted.
 
 See `recorded-ops-reconciliation.md` for the recorded-only criteria, monthly reconciliation and fixed October ABAT anchor.
+
+Lecturer satisfaction: live DB verification on 5 November found only campaign `lecturer-2026-08-23-2026-09-24`. Its responses were submitted in October, but refer to the August–September campaign. The meeting view uses the authenticated admin report and preserves its eligibility/exemption rules. Current-campaign results get a current-semester label; the available previous-campaign report is explicitly labeled as fallback, with dates, response count and participation rate. Loading/errors/empty responses never become zero satisfaction.
