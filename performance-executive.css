@@ -92,3 +92,7 @@
 @media (max-width:1100px){.px-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.px-sat-grid,.px-modal-grid{grid-template-columns:1fr}}
 @media (max-width:560px){.px-kpis,.px-kpis.is-modal{grid-template-columns:1fr}.px-head h2{font-size:23px}.px-sat-row{grid-template-columns:110px 1fr 54px}.px-courses .px-sat-row{grid-template-columns:130px 1fr 54px}.px-compare-row{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.px-program{transition:none}}
+
+/* The admin shell sizes every svg as a 20px icon; charts and rings need their own size. */
+.admin-shell .px-exec svg.px-chart{width:100%;height:auto}
+.admin-shell .px-exec svg.px-ring{width:112px;height:112px}
