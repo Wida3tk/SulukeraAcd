@@ -1,5 +1,6 @@
 /* Executive meeting view for «الأداء والتقدم». Read-only: it renders existing loaded data and never writes. */
-const perfExec={lecturer:{state:'idle',data:null},modal:null};
+const perfExec={lecturer:{state:'idle',data:null},modal:null,defaulted:false};
+function execThisMonth(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Riyadh',year:'numeric',month:'2-digit'}).format(new Date());}
 
 function execMonths(end,count){const out=[];for(let i=count-1;i>=0;i--)out.push(reviewMonth(end,-i));return out;}
 function execMonthLabel(value){return new Intl.DateTimeFormat('ar-u-ca-gregory-nu-latn',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(value+'-01T12:00:00Z'));}
@@ -52,7 +53,7 @@ function execSatisfactionMarkup(){
 }
 
 function execProgramCard(p,month,prev){
- const cur=execRegistrations(p.students,month),before=execRegistrations(p.students,prev),delta=execDelta(cur,before),spark=execMonths(month,6).map(m=>execRegistrations(p.students,m)),max=Math.max(1,...spark);
+ const cur=execRegistrations(p.students,month),before=execRegistrations(p.students,prev),delta=month===execThisMonth()?{cls:'flat',text:'شهر جارٍ'}:execDelta(cur,before),spark=execMonths(month,6).map(m=>execRegistrations(p.students,m)),max=Math.max(1,...spark);
  return `<button class="px-program" type="button" data-exec-program="${escapeHtml(p.name)}" aria-label="تحليل ${escapeHtml(p.name)}"><span class="px-program-name">${escapeHtml(p.name)}</span><span class="px-program-total"><strong>${execNumber(p.students.length)}</strong><small>متدرب</small></span><span class="px-program-meta">${execNumber(execActive(p.students))} فعال · ${execNumber(cur)} تسجيل في ${escapeHtml(execMonthLabel(month))}</span><span class="px-spark" aria-hidden="true">${spark.slice().reverse().map((v,i)=>`<i style="height:${Math.max(6,v/max*100)}%" class="${i===0?'is-on':''}"></i>`).join('')}</span><span class="px-delta is-${delta.cls}">${delta.text}</span><span class="px-open">عرض التحليل ←</span></button>`;
 }
 
@@ -77,7 +78,7 @@ function execModalMarkup(key){
   <div class="px-modal-grid"><article class="px-panel px-wide"><h4>التسجيلات الجديدة شهريًا</h4>${execBarChart(total,{label:'التسجيلات الشهرية لكل البرامج'})}</article><article class="px-panel px-wide"><h4>${escapeHtml(execMonthLabel(month))} مقارنة بـ${escapeHtml(execMonthLabel(prev))} حسب البرنامج</h4>${execCompareBars(rows,{currentLabel:execMonthLabel(month),previousLabel:execMonthLabel(prev)})}</article></div>`;
  }
  const p=programs.find(x=>x.name===key);if(!p)return '<p class="px-empty">البرنامج غير موجود.</p>';
- const cur=execRegistrations(p.students,month),before=execRegistrations(p.students,prev),delta=execDelta(cur,before);
+ const cur=execRegistrations(p.students,month),before=execRegistrations(p.students,prev),delta=month===execThisMonth()?{cls:'flat',text:'شهر جارٍ · حتى اليوم'}:execDelta(cur,before);
  const status=[['active','فعال','#0C40FB'],['frozen','مجمد','#D99A21'],['suspended','موقوف','#8B5CF6'],['withdrawn','منسحب','#94A3B8']].map(([k,label,color])=>({label,color,count:p.students.filter(s=>performanceStatus(s)===k).length})).filter(x=>x.count),total=p.students.length;
  const tracks=new Map();p.students.forEach(s=>{const t=s.planType||s.track||'غير محدد';const r=tracks.get(t)||{name:t,current:0,previous:0,total:0};r.total++;const m=reviewDate(s.regDate).slice(0,7);if(m===month)r.current++;if(m===prev)r.previous++;tracks.set(t,r);});
  const trackRows=[...tracks.values()].sort((a,b)=>b.total-a.total);
@@ -101,6 +102,7 @@ document.addEventListener('click',e=>{const b=e.target.closest?.('[data-exec-pro
 /* Mount above the existing detailed review, which stays available below. */
 const execBaseRender=performanceRender;
 performanceRender=function(){
+ if(!perfExec.defaulted&&typeof performanceState==='object'){perfExec.defaulted=true;if(!performanceState.period||performanceState.period===execThisMonth())performanceState.period=reviewMonth(execThisMonth(),-1);}
  execBaseRender();const host=document.getElementById('performanceContent');if(!host||currentUser?.role!=='admin')return;
  const section=document.createElement('section');section.id='perfExec';section.className='px-exec';section.dir='rtl';section.innerHTML=execPanelMarkup();
  host.prepend(section);
