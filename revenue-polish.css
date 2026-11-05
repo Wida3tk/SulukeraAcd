@@ -1,0 +1,47 @@
+/* Revenue page in the Sulukera meeting theme (same palette as performance-polish.css).
+   navy #001442 · blue #0D40FC (sales) · cyan #55D7FF (collections) · muted #C5D0E8 */
+.rv-wrap{--rq-navy:#001442;--rq-blue:#0D40FC;--rq-cyan:#55D7FF;--rq-cyan-ink:#0A7EA4;--rq-ink:#4A5878}
+
+/* Hero band */
+.rv-wrap .rv-hero{background:linear-gradient(115deg,var(--rq-navy),var(--rq-blue));box-shadow:0 12px 28px rgba(0,20,66,.12)}
+.rv-wrap .rv-hero h2,.rv-wrap .rv-hero h1{color:#fff!important}
+.rv-wrap .rv-hero .rv-eyebrow{color:var(--rq-cyan)!important}
+.rv-wrap .rv-hero p{color:#D6E2FF}
+.rv-wrap .rv-hero .rv-primary{background:var(--rq-cyan);border-color:var(--rq-cyan);color:var(--rq-navy)}
+.rv-wrap .rv-hero .rv-btn:not(.rv-primary){background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);color:#fff}
+
+/* Program / channel tabs */
+.rv-wrap .rv-program-tab.selected{background:linear-gradient(135deg,var(--rq-navy),var(--rq-blue));border-color:var(--rq-blue);box-shadow:0 6px 16px rgba(13,64,252,.18)}
+.rv-wrap .rv-channel-tab.selected,.rv-wrap .rv-channel-tab[aria-selected="true"]{background:var(--rq-blue);border-color:var(--rq-blue);color:#fff}
+
+/* KPI cards */
+.rv-wrap .rv-metric{border-radius:18px;border-top-width:5px;box-shadow:0 6px 18px rgba(0,20,66,.05)}
+.rv-wrap .rv-sales{border-top-color:var(--rq-blue)}
+.rv-wrap .rv-sales strong,.rv-wrap .rv-sales-text{color:var(--rq-blue)}
+.rv-wrap .rv-collections{border-top-color:var(--rq-cyan)}
+.rv-wrap .rv-collections strong,.rv-wrap .rv-green-text{color:var(--rq-cyan-ink)}
+.rv-wrap .rv-goal{border-top-color:var(--rq-navy)}
+.rv-wrap .rv-goal strong{color:var(--rq-navy)}
+
+/* Charts: one colour per series, legends included */
+.rv-wrap rect.rv-column[fill="#2453ef"]{fill:var(--rq-blue)}
+.rv-wrap rect.rv-column[fill="#0ba88b"]{fill:var(--rq-cyan)}
+.rv-wrap rect.rv-column[fill="#9473e8"],.rv-wrap rect.rv-column[fill="#9273e5"]{fill:var(--rq-navy)}
+.rv-wrap text.rv-column-amount[fill="#2453ef"]{fill:var(--rq-blue)}
+.rv-wrap text.rv-column-amount[fill="#0ba88b"]{fill:var(--rq-cyan-ink)}
+.rv-wrap text.rv-column-amount[fill="#9473e8"]{fill:var(--rq-navy)}
+.rv-wrap [style*="background:#2453ef"]{background:var(--rq-blue)!important}
+.rv-wrap [style*="background:#0ba88b"]{background:var(--rq-cyan)!important}
+.rv-wrap [style*="background:#9473e8"]{background:var(--rq-navy)!important}
+.rv-wrap .rv-green{background:var(--rq-cyan)}
+.rv-wrap .rv-axis-value,.rv-wrap .rv-column-label,.rv-wrap .rv-svg-label,.rv-wrap .rv-svg-value,.rv-wrap .rv-column-amount{font-family:inherit}
+.rv-wrap .rv-column-label{fill:var(--rq-navy)}
+.rv-wrap .rv-chart{border-radius:22px}
+
+/* Product type sections */
+.rv-wrap .rv-type-live{border-top-color:var(--rq-blue)}
+.rv-wrap .rv-type-recorded{border-top-color:var(--rq-cyan)}
+.rv-wrap .rv-type-recorded .rv-section-kicker{color:var(--rq-cyan-ink)}
+.rv-wrap .rv-type-seats{border-top-color:var(--rq-navy)}
+.rv-wrap .rv-type-seats .rv-section-kicker{color:var(--rq-navy)}
+.rv-wrap .rv-btn:focus-visible,.rv-wrap select:focus-visible{outline-color:var(--rq-cyan)}

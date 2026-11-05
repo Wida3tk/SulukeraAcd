@@ -133,6 +133,7 @@
       const cards=prod.querySelectorAll('.mt-hour-cards article');
       if(cards.length>1)cards[cards.length-1].remove();
       prod.querySelector('.mt-hour-cards')?.classList.add('is-single');
+      prod.querySelectorAll('.mt-months .mt-month').forEach(mo=>{if(/يوليو/.test(txt(mo.querySelector('b')))){const sm=mo.querySelector('small');if(sm&&/غير مرصود/.test(txt(sm))){sm.textContent='إجازة صيفية';mo.classList.add('is-holiday');}}});
       prod.querySelectorAll('.mt-months .mt-month').forEach(m=>{const sm=m.querySelector('small');if(/يوليو/.test(txt(m.querySelector('b')))&&sm&&/غير مرصود/.test(txt(sm))){sm.textContent='إجازة صيفية';m.classList.add('is-holiday');const st=m.querySelector('strong');if(st)st.textContent='إجازة';}});
       foldNotes(prod,[...prod.querySelectorAll(':scope > .px-note')]);
     }
