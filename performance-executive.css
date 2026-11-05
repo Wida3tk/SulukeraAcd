@@ -96,3 +96,5 @@
 /* The admin shell sizes every svg as a 20px icon; charts and rings need their own size. */
 .admin-shell .px-exec svg.px-chart{width:100%;height:auto}
 .admin-shell .px-exec svg.px-ring{width:112px;height:112px}
+.admin-shell .px-exec .px-head h2,.admin-shell .px-modal-head h3{color:#fff}
+.admin-shell .px-exec .px-head p,.admin-shell .px-modal-head p{color:#C8D3EE}
