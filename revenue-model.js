@@ -15,10 +15,14 @@
    const match=norm(sheet).match(/^(\S+) (\d{2}|\d{4})$/);if(!match)continue;
    const m=months.findIndex(n=>norm(n)===match[1]);if(m<0)continue;
    const year=match[2].length===2?2000+Number(match[2]):Number(match[2]);if(year!==reportYear)continue;const month=`${year}-${String(m+1).padStart(2,'0')}`;
-   const header=grid.findIndex(r=>norm(r[5])==='التصنيف'&&norm(r[18])==='المبيعات بدون الضريبة');
+   // Columns are located by their header labels; finance may insert columns (e.g. a VAT column from October 2026).
+   const header=grid.findIndex(r=>Array.isArray(r)&&r.some(v=>norm(v)==='التصنيف')&&r.some(v=>norm(v)==='المبيعات بدون الضريبة'));
    if(header<0){issues.push({sheet,reason:'تخطيط قديم غير مطابق؛ لم يُستورد هذا الشهر'});continue;}
+   const labels=grid[header].map(norm),col=(label,fallback)=>{const i=labels.indexOf(norm(label));return i<0?fallback:i;};
+   const map=[[1,col('التاريخ',1)],[3,col('الاسبوع',3)],[5,col('التصنيف',5)],[8,col('المنتج',8)],[14,col('مرجع الطلب',14)],[16,col('المبيعات شامل الضريبة',16)],[18,col('المبيعات بدون الضريبة',18)],[20,col('منصة البيع',20)]];
+   const legacy=raw=>{const r=[];map.forEach(([to,from])=>{r[to]=raw?.[from]??null;});return r;};
    const rows=[],duplicates=new Map();
-   grid.slice(header+1).forEach((r,offset)=>{
+   grid.slice(header+1).map(legacy).forEach((r,offset)=>{
     const sourceRow=header+offset+2;
     // Empty template rows contain formulas for row number and net zero.
     if(![r[1],r[5],r[8],r[14],r[16],r[20]].some(v=>v!==null&&v!==undefined&&v!==''))return;
