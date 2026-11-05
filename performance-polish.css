@@ -41,3 +41,25 @@
 .px-exec.pq .pq-notes[open]>summary{margin-bottom:10px}
 .px-exec.pq .pq-notes .px-note,.px-exec.pq .pq-notes .mt-insight{font-size:13px;margin:8px 0;background:#F6F8FC;border-right:3px solid var(--pq-muted);color:var(--pq-ink)}
 .px-exec.pq .pq-notes .mt-history{margin-top:8px}
+
+/* Program badges + batch drill-down */
+.px-exec.pq .pq-badge,.pq-modal .pq-badge{display:inline-block;font-style:normal;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:#EEF3FF;color:#0D40FC;margin-inline-start:6px;vertical-align:middle}
+.px-exec.pq .pq-badge.is-live,.pq-modal .pq-badge.is-live{background:#E6FBF4;color:#0E7C66}
+.px-exec.pq .mt-bar.pq-clickable{cursor:pointer;border-radius:12px;padding:6px 8px;margin:-6px -8px;transition:background .15s}
+.px-exec.pq .mt-bar.pq-clickable:hover,.px-exec.pq .mt-bar.pq-clickable:focus-visible{background:#F2F6FF;outline:none}
+.px-exec.pq .mt-bar.pq-clickable > div > strong::after{content:'‹';margin-inline-start:8px;color:#0D40FC;font-weight:800}
+.pq-modal{position:fixed;inset:0;background:rgba(0,20,66,.45);display:flex;align-items:center;justify-content:center;z-index:10000;padding:24px;direction:rtl;font-family:inherit}
+.pq-dialog{background:#fff;border-radius:22px;width:min(640px,100%);max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,20,66,.3);overflow:hidden}
+.pq-dialog header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 26px;background:linear-gradient(140deg,#001442,#0D40FC);color:#fff}
+.pq-dialog header h3{margin:0;font-size:22px;color:#fff}
+.pq-dialog header p{margin:6px 0 0;font-size:13px;color:#BFD0F5}
+.pq-close{background:rgba(255,255,255,.15);border:0;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:16px}
+.pq-body{padding:18px 26px 26px;overflow:auto}
+.pq-body h4{margin:18px 0 8px;font-size:15px;color:#001442;display:flex;justify-content:space-between}
+.pq-body h4 small{color:#4A5878;font-weight:600}
+.pq-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 48px;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #EEF1F7;font-size:14px;color:#001442}
+.pq-row b{text-align:left;font-size:16px;font-variant-numeric:tabular-nums}
+.pq-track{height:10px;background:#EEF1F7;border-radius:99px;overflow:hidden}
+.pq-track i{display:block;height:100%;background:#0D40FC;border-radius:99px}
+.pq-row.is-current .pq-track i{background:#55D7FF}
+.pq-row.is-base .pq-track i{background:#001442}

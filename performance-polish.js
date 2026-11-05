@@ -35,6 +35,74 @@
     return el;
   }
 
+
+  // ---- Program names, delivery badges and per-batch drill-down ----
+  const PQ_PROGRAMS={
+    'تحليل السلوك · المسجل':{key:'abaRecorded',name:'تحليل السلوك التطبيقي',badge:'مسجل'},
+    'ABAT · المسجل':{key:'abatRecorded',name:'أخصائي تحليل السلوك التطبيقي',badge:'مسجل'},
+    'تحليل السلوك · المباشر':{key:'abaLive',name:'تحليل السلوك التطبيقي',badge:'مباشر'},
+    'السلوك التنظيمي':{key:'obm',name:'إدارة السلوك التنظيمي'}
+  };
+  const esc=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const reportMonth=()=>document.getElementById('meetingReportMonth')?.value||'';
+  const monthLabel=m=>new Intl.DateTimeFormat('ar-SA-u-nu-latn-ca-gregory',{month:'long',year:'numeric'}).format(new Date(m+'-15'));
+  const inScope=s=>{const m=reportMonth();return !m||!s.regDate||String(s.regDate).slice(0,7)<=m;};
+
+  function batchRows(key,total){
+    const m=reportMonth();
+    if(key==='abaLive'){
+      const map=new Map();
+      (typeof students!=='undefined'?students:[]).filter(s=>/تحليل السلوك التطبيقي/.test(s.program||'')&&!/مسجل|recorded|ABAT/i.test([s.program,s.track,s.planType].join(' '))&&inScope(s))
+        .forEach(s=>{const b=s.batch||'بدون دفعة';map.set(b,(map.get(b)||0)+1);});
+      const rows=[...map].sort((a,b)=>a[0].localeCompare(b[0])).map(([b,n])=>({label:'دفعة '+b,n}));
+      return {rows,note:'حسابات النظام حسب الدفعة'};
+    }
+    if(key==='obm'&&typeof reviewObmHistory!=='undefined'){
+      const groups=Object.values(reviewObmHistory).map(h=>({title:h.name,rows:h.batches.map(([label,n])=>({label,n}))}));
+      const cur=(typeof students!=='undefined'?students:[]).filter(s=>/تنظيمي|OBM/i.test([s.program,s.track,s.batch].join(' '))&&inScope(s)).length;
+      if(cur)groups[0].rows.push({label:'الدفعة السادسة · الحالية',n:cur,current:true});
+      return {groups,note:'الدفعات التاريخية المعتمدة + الدفعة الحالية من حسابات النظام'};
+    }
+    if((key==='abaRecorded'||key==='abatRecorded')&&typeof performanceRecordedOpsData!=='undefined'){
+      const d=performanceRecordedOpsData,field=key==='abaRecorded'?'qbaQasps':'abat';
+      const months=(d.months||[]).filter(r=>!m||r.month<=m);
+      const added=months.filter(r=>key==='abaRecorded'||r.month>(d.abatPlatform?.anchorMonth||'')).reduce((a,r)=>a+(r[field]||0),0);
+      const rows=[];
+      if(key==='abaRecorded'){rows.push({label:'الأساس المعتمد حتى 7 أكتوبر 2026 (QBA '+d.baseline.qba+' · QASP-S '+d.baseline.qasps+')',n:d.baseline.total,base:true});}
+      else rows.push({label:'إجمالي المنصة حتى أكتوبر 2026',n:d.abatPlatform?.anchorTotal??465,base:true});
+      return {rows,monthly:months.map(r=>({label:monthLabel(r.month),n:r[field]})),note:'برنامج مسجل بالتسجيل المفتوح، بدون دفعات · التسجيلات الشهرية من نظام العمليات'};
+    }
+    return {rows:[],note:''};
+  }
+
+  function openPrograms(cfg,total){
+    document.querySelector('.pq-modal')?.remove();
+    const data=batchRows(cfg.key,total);
+    const list=rows=>{const max=Math.max(1,...rows.map(r=>r.n));return rows.map(r=>`<div class="pq-row${r.current?' is-current':''}${r.base?' is-base':''}"><span>${esc(r.label)}</span><div class="pq-track"><i style="width:${r.n/max*100}%"></i></div><b>${r.n}</b></div>`).join('');};
+    let body='';
+    if(data.groups)body=data.groups.map(g=>`<h4>${esc(g.title)} <small>${g.rows.reduce((a,r)=>a+r.n,0)} متدرب</small></h4>${list(g.rows)}`).join('');
+    else body=list(data.rows)+(data.monthly&&data.monthly.length?`<h4>التسجيلات الشهرية</h4>${list(data.monthly)}`:'');
+    const el=document.createElement('div');el.className='pq-modal';el.setAttribute('role','dialog');
+    el.innerHTML=`<div class="pq-dialog"><header><div><h3>${esc(cfg.name)} ${cfg.badge?`<em class="pq-badge ${cfg.badge==='مباشر'?'is-live':''}">${cfg.badge}</em>`:''}</h3><p>${esc(total)} متدرب · ${esc(data.note)}</p></div><button type="button" class="pq-close" aria-label="إغلاق">✕</button></header><div class="pq-body">${body||'<p>لا تتوفر تفاصيل الدفعات لهذا البرنامج.</p>'}</div></div>`;
+    el.addEventListener('click',e=>{if(e.target===el||e.target.closest('.pq-close'))el.remove();});
+    document.addEventListener('keydown',function k(e){if(e.key==='Escape'){el.remove();document.removeEventListener('keydown',k);}});
+    document.body.appendChild(el);
+  }
+
+  function programBars(host){
+    host.querySelectorAll('#mt-total .mt-breakdown .mt-bar').forEach(bar=>{
+      const strong=bar.querySelector(':scope > div > strong');if(!strong||bar.dataset.pqProg)return;
+      const cfg=PQ_PROGRAMS[txt(strong)];if(!cfg)return;
+      bar.dataset.pqProg=cfg.key;
+      strong.innerHTML=esc(cfg.name)+(cfg.badge?` <em class="pq-badge ${cfg.badge==='مباشر'?'is-live':''}">${cfg.badge}</em>`:'');
+      const total=txt(bar.querySelector(':scope > div > b'));
+      bar.classList.add('pq-clickable');bar.tabIndex=0;bar.setAttribute('role','button');bar.title='اضغط لعرض الدفعات';
+      const go=()=>openPrograms(cfg,total);
+      bar.addEventListener('click',go);bar.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}});
+    });
+    host.querySelectorAll('#mt-active .mt-breakdown .mt-bar > div > strong').forEach(st=>{if(txt(st)==='السلوك التنظيمي')st.textContent='إدارة السلوك التنظيمي';});
+  }
+
   function polish(){
     const host=document.getElementById('perfExec');
     if(!host)return;
@@ -42,6 +110,7 @@
     const nav=host.querySelector('.mt-nav');
     if(nav){const k=kpis(host),old=host.querySelector('.pq-kpis');if(!old)nav.before(k);else if(old.innerHTML!==k.innerHTML)old.innerHTML=k.innerHTML;}
     const once=el=>{if(!el||el.dataset.pq==='1')return false;el.dataset.pq='1';return true;};
+    programBars(host);
 
     // 01 · totals
     const total=host.querySelector('#mt-total');
