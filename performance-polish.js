@@ -22,7 +22,8 @@
     const valid=months.filter(v=>v!=null);
     const hours=valid.length?valid[valid.length-1]:null,prev=valid.length>1?valid[valid.length-2]:null;
     const satHead=host.querySelector('.mt-lecturer-survey .px-sat-card');
-    const sat=satHead?num((txt(satHead).match(/\d+(?:\.\d+)?%/)||[])[0]):null;
+    const satLeaf=satHead?[...satHead.querySelectorAll('*')].find(e=>!e.children.length&&/^\d+(?:\.\d+)?%$/.test(txt(e))):null;
+    const sat=satLeaf?num(txt(satLeaf)):null;
     const month=txt(host.querySelector('#meetingReportMonth option:checked'))||'';
     const delta=hours!=null&&prev?Math.round((hours-prev)/prev*100):null;
     const card=(label,value,sub,cls='')=>`<article class="pq-kpi ${cls}"><span>${label}</span><strong>${value}</strong><small>${sub}</small></article>`;
