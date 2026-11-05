@@ -63,3 +63,4 @@
 .pq-track i{display:block;height:100%;background:#0D40FC;border-radius:99px}
 .pq-row.is-current .pq-track i{background:#55D7FF}
 .pq-row.is-base .pq-track i{background:#001442}
+.px-exec.pq .mt-month.is-holiday strong,.px-exec.pq .mt-month.is-holiday small{color:#0D40FC;font-weight:700}
