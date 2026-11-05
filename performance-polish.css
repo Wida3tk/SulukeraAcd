@@ -64,3 +64,10 @@
 .pq-row.is-current .pq-track i{background:#55D7FF}
 .pq-row.is-base .pq-track i{background:#001442}
 .px-exec.pq .mt-month.is-holiday strong,.px-exec.pq .mt-month.is-holiday small{color:#0D40FC;font-weight:700}
+
+/* Header text on the blue band */
+.admin-shell .px-exec.pq .px-head h2,.admin-shell .px-exec.pq .px-head h2 *{color:#fff!important}
+.admin-shell .px-exec.pq .px-head .px-eyebrow{color:#55D7FF!important}
+.admin-shell .px-exec.pq .px-head p{color:#D6E2FF!important}
+.px-exec.pq .mt-month.is-holiday strong{color:#8A97B3}
+.px-exec.pq .mt-month.is-holiday small{color:#0D40FC;font-weight:700}
