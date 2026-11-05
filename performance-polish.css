@@ -1,0 +1,43 @@
+/* Final visual layer for the management performance view (performance-polish.js).
+   Sulukera palette: navy #001442, blue #0D40FC, cyan #55D7FF, muted #C5D0E8. */
+.admin-shell .px-exec.pq{--pq-navy:#001442;--pq-blue:#0D40FC;--pq-cyan:#55D7FF;--pq-muted:#C5D0E8;--pq-ink:#4A5878}
+
+/* KPI strip */
+.px-exec.pq .pq-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:4px 0 8px}
+.px-exec.pq .pq-kpi{background:#fff;border:1px solid #DCE3F0;border-top:5px solid var(--pq-blue);border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 18px rgba(0,20,66,.05)}
+.px-exec.pq .pq-kpi span{font-size:14px;font-weight:700;color:var(--pq-ink)}
+.px-exec.pq .pq-kpi strong{font-size:40px;line-height:1.05;font-weight:800;color:var(--pq-navy);font-variant-numeric:tabular-nums}
+.px-exec.pq .pq-kpi small{font-size:13px;color:var(--pq-ink)}
+.px-exec.pq .pq-kpi.is-main{background:linear-gradient(140deg,var(--pq-navy),var(--pq-blue));border-top-color:var(--pq-cyan)}
+.px-exec.pq .pq-kpi.is-main span,.px-exec.pq .pq-kpi.is-main small{color:#BFD0F5}
+.px-exec.pq .pq-kpi.is-main strong{color:#fff}
+.px-exec.pq .pq-kpi.is-up small{color:#0E7C66;font-weight:700}
+@media (max-width:900px){.px-exec.pq .pq-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* One colour system */
+.px-exec.pq .mt-total,.px-exec.pq .mt-total.is-green{background:linear-gradient(140deg,var(--pq-navy),var(--pq-blue))}
+.px-exec.pq .mt-track i{background:var(--pq-blue)!important}
+.px-exec.pq .mt-breakdown .mt-bar:nth-child(even) .mt-track i{background:var(--pq-cyan)!important}
+.px-exec.pq .mt-ops-legend span:first-child i,.px-exec.pq .mt-paired-bars i:first-child{background:var(--pq-blue)!important}
+.px-exec.pq .mt-ops-legend span:nth-child(2) i,.px-exec.pq .mt-paired-bars i:nth-child(2){background:var(--pq-cyan)!important}
+.px-exec.pq .mt-month i{background:var(--pq-muted)}
+.px-exec.pq .mt-month i.is-current{background:var(--pq-blue)}
+.px-exec.pq .mt-insight{border-right-color:var(--pq-blue);background:#EEF3FF;color:var(--pq-navy);font-size:15px}
+.px-exec.pq .mt-pill{background:#EEF3FF;color:var(--pq-blue);font-weight:700}
+.px-exec.pq .mt-nav a{color:var(--pq-navy)}
+.px-exec.pq .mt-nav a:hover{border-color:var(--pq-blue);color:var(--pq-blue)}
+.px-exec.pq .mt-hour-cards.is-single{grid-template-columns:minmax(0,1fr)}
+
+/* Calmer section rhythm */
+.px-exec.pq .mt-section{border-radius:22px}
+.px-exec.pq .mt-section h3{color:var(--pq-navy)}
+.px-exec.pq .mt-breakdown .mt-bar small{font-size:12px;color:var(--pq-ink)}
+
+/* Methodology folded away */
+.px-exec.pq .pq-notes{margin-top:18px;border-top:1px dashed #DCE3F0;padding-top:12px}
+.px-exec.pq .pq-notes>summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--pq-ink);list-style:none;display:inline-flex;align-items:center;gap:6px}
+.px-exec.pq .pq-notes>summary::-webkit-details-marker{display:none}
+.px-exec.pq .pq-notes>summary::before{content:'ⓘ';color:var(--pq-blue)}
+.px-exec.pq .pq-notes[open]>summary{margin-bottom:10px}
+.px-exec.pq .pq-notes .px-note,.px-exec.pq .pq-notes .mt-insight{font-size:13px;margin:8px 0;background:#F6F8FC;border-right:3px solid var(--pq-muted);color:var(--pq-ink)}
+.px-exec.pq .pq-notes .mt-history{margin-top:8px}
