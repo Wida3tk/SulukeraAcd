@@ -1863,6 +1863,13 @@ function mergeSecureExamGrades(){
     grade.secureExamSource=true;
   });
 }
+function secureExamAvailabilityNote(closesAt){
+  const close=new Date(closesAt);
+  if(Number.isNaN(close.getTime())) return '';
+  const date=new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Riyadh'}).format(close);
+  const time=new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'Asia/Riyadh'}).format(close);
+  return `نود التنويه بأن الاختبار متاح إلى الساعة ${time} من يوم ${date}. ويمكنك حل الاختبار خلال هذه المدة في الوقت المناسب لك.`;
+}
 function renderSecureExamCards(){
   const host=document.getElementById('secureExamArea');
   if(!host) return;
@@ -1879,6 +1886,7 @@ function renderSecureExamCards(){
     const resultLabel=best>=16?'نتيجة متميزة':best>=12?'نتيجة جيدة':'تحتاج إلى مزيد من المراجعة';
     return `<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:white"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-size:17px;font-weight:900;color:var(--primary-dark)">${escapeHtml(exam.subjectName)}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">متاح: ${new Date(exam.opensAt).toLocaleString('ar-SA')} — ${new Date(exam.closesAt).toLocaleString('ar-SA')}</div><div style="font-size:12px;color:var(--muted);margin-top:5px">مدة المحاولة ${exam.durationMinutes} دقيقة · ${exam.unlimitedAttempts?'محاولات غير محدودة':`${exam.maxAttempts} محاولات`}</div></div><span class="badge ${isOpen?'badge-pass':'badge-warn'}">${isOpen?'متاح الآن':now<opens?'لم يبدأ':'انتهى'}</span></div>
 ${submitted.length?true?`<div class="secure-result secure-result-${resultTone}"><div><strong>${resultLabel}</strong><div class="secure-result-copy">${String(exam.subjectKey||'').startsWith('professional_')?'أعلى نتيجة محفوظة':'الدرجة النهائية المعتمدة للاختبار الإلكتروني'}</div></div><div class="secure-result-score">${best}/20</div></div>${String(exam.subjectKey||'').startsWith('professional_')?`<div class="alert ${exam.evaluated?'alert-success':'alert-info'}">نتيجة آخر محاولة: ${submitted[submitted.length-1].score}/20 · ${exam.evaluated?'تم إكمال التقييم؛ تُعتمد أعلى نتيجة في ملفك':'للاعتماد في ملفك، يرجى إكمال التقييم. يمكنك إعادة المحاولة لتحسين نتيجتك.'}</div>`:''}`:`<div class="alert alert-info" style="margin-top:12px">${submitted.map(attempt=>`المحاولة ${attempt.attemptNo}: ${attempt.wrongCount} إجابات خاطئة`).join(' · ')}</div>`:''}
+      <div class="alert alert-info" style="margin-top:12px;line-height:1.9"><strong>ملاحظة:</strong> ${escapeHtml(secureExamAvailabilityNote(exam.closesAt))}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${isOpen&&(inProgress||remaining>0)&&(exam.unlimitedAttempts||!exam.evaluated)?`<button class="btn btn-primary" onclick="startSecureExam('${exam.id}')">${inProgress?`متابعة المحاولة ${inProgress.attemptNo}`:submitted.length?(exam.unlimitedAttempts?(best<20?'إعادة المحاولة لتحسين النتيجة':'إعادة المحاولة'):'بدء محاولة جديدة'):'بدء الاختبار'}</button>`:''}${canEvaluate&&!exam.evaluated?`<button class="btn btn-success" onclick="renderSecureEvaluation('${exam.id}')">تقييم المقرر وإظهار الدرجة</button>`:''}${remaining===0&&!inProgress&&!exam.evaluated?'<span class="badge badge-warn">استُنفدت المحاولات — يرجى إكمال التقييم لإظهار الدرجة</span>':''}</div></div>`;
   }).join('')}</div>`;
 }
@@ -3123,7 +3131,7 @@ window.addEventListener('load', initFB);
 
 
 </script>
-<script src="coursework-ui.js?v=20261108-course-access-policy"></script>
+<script src="coursework-ui.js?v=20261108-lecturer-discussions"></script>
 <link rel="stylesheet" href="lecturer-grading.css?v=20261011">
 <script src="lecturer-grading.js?v=20261011"></script>
 <script src="faculty-evaluation.js?v=20261021-public-copy"></script>

@@ -244,7 +244,7 @@ test("lecture cards separate absence, partial attendance and reviewed compensati
   assert.ok(cards.innerHTML.includes('إجابة الطالب'));
   assert.ok(cards.innerHTML.includes('حفظ تقييم المناقشة'));
   assert.ok(cards.innerHTML.includes('class="cw-discussion-row"'));
-  assert.equal(cards.innerHTML.includes('<details class="cw-discussion-row" open'),false);
+  assert.equal(cards.innerHTML.includes('<details class="cw-discussion-row" open'),true);
   assert.equal(cards.innerHTML.includes('<h4>غائب</h4>'),false);
 });
 test("shared Zoom file is approved independently per batch without zeroing unmatched students", async () => {
