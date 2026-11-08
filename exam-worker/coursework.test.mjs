@@ -150,6 +150,16 @@ test('students retain published lectures after a course moves to previous course
   assert.equal(data.lessons[0].recording_url,'https://drive.google.com/file/d/recording/view');
   assert.ok(Date.now()>Date.parse(data.lessons[0].closes_at));
 });
+test('lecturers retain assigned courses and student discussions after the term ends',async()=>{
+  const f=fixtures();
+  const id=(await f.call('admin','/lesson',{...f.config,opensAt:'2026-10-01T15:00:00.000Z',closesAt:'2026-11-05T20:59:59.000Z',discussionPrompt:'ناقش تطبيق المفهوم'})).data.id;
+  f.sql.prepare('INSERT INTO academic_discussions (lesson_id,student_key,answer,submitted_at) VALUES (?,?,?,?)').run(id,'student','إجابة الطالب الكاملة','2026-11-04T12:00:00.000Z');
+  const list=(await f.call('teacher','')).data;
+  assert.deepEqual(list.subjects.map(subject=>subject.key),['course']);
+  const report=(await f.call('teacher','/report',{lessonId:id})).data;
+  assert.equal(report.discussions.length,1);
+  assert.equal(report.discussions[0].answer,'إجابة الطالب الكاملة');
+});
 test('student UI separates previous courses while retaining lecture recording access',()=>{
   const context={Date,document:{getElementById:()=>({innerHTML:''})}};
   vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);

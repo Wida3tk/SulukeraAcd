@@ -329,7 +329,11 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           .filter(
             ([k]) => s.allowed.includes(k) && (s.role!=='student'||lessons.some(l=>l.subject_key===k&&l.status==='published')),
           )
-          .filter(([k,v])=>s.role==='student'||isCurrent(v,s.semesters,k))
+          // Lecturers must retain access to every course explicitly assigned to
+          // them so they can review discussions and attendance after a term
+          // closes.  The current-term filter is only an admin catalogue filter;
+          // scope.allowed already limits lecturers to their own courses.
+          .filter(([k,v])=>s.role!=='admin'||isCurrent(v,s.semesters,k))
           .map(([subjectKey, v]) => ({ key:subjectKey, ...v, ...(s.role==='student'?courseworkPeriod(v,s.semesters,subjectKey,lessons,s.students[key],exams):{}) })),
         lessons: lessons.map((original) => {
           const l=s.role==='student'?studentLessonDeadline(original,s.students[key]):original;
