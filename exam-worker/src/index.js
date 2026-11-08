@@ -17,6 +17,7 @@ import {handleStudentPreview} from './student-preview.js';
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
 import { handleCoursework, retryPendingCoursework } from "./coursework.js";
+import {syncExamScheduleMirror} from './exam-schedule-mirror.js';
 const PROJECT_ID = "sulukeraacd";
 const FIREBASE_DB = "https://sulukeraacd-default-rtdb.firebaseio.com";
 const ALLOWED_ORIGINS = new Set([
@@ -1093,6 +1094,7 @@ async function submitEvaluation(request, env, auth, examId) {
 
 export default {
   scheduled(event,env,ctx){
+    ctx.waitUntil(syncExamScheduleMirror(env,firebaseAdminToken).catch(error=>console.error('exam_schedule_mirror',error.message)));
     if(event.cron==='* * * * *')ctx.waitUntil(processProductivityAudit(env).catch(error=>console.error('productivity_audit',error.message)));
     if(event.cron==='0 20 * * *'){if(env.ZOOM_RECORDINGS_AUTO==='true')ctx.waitUntil(discoverNightlyRecordings(env,{firebaseAdminToken}).catch(error=>console.error('nightly_recording_discovery',error.message)));return;}
     if(event.cron==='*/2 * * * *'){if(env.ZOOM_RECORDINGS_AUTO==='true')ctx.waitUntil(processNightlyRecordingQueue(env,{firebaseAdminToken}).catch(error=>console.error('nightly_recording_queue',error.message)));return;}
