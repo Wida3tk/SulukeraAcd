@@ -54,6 +54,31 @@ export function isCurrent(subject, semesters, key) {
     !["inactive", "finished", "completed", "archived"].includes(term?.status)
   );
 }
+const SAUDI_OFFSET_MS=3*60*60*1000;
+export function saudiWeekEnd(value){
+  const instant=Date.parse(value);
+  if(!Number.isFinite(instant))return 0;
+  const local=new Date(instant+SAUDI_OFFSET_MS),daysToSaturday=(6-local.getUTCDay()+7)%7;
+  return Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate()+daysToSaturday,20,59,59,999);
+}
+function subjectTerm(subject,semesters,key){
+  return Object.entries(semesters||{}).find(([termKey,term])=>(termKey===subject.semesterKey||(term.batches||[]).includes(subject.batch))&&(term.subjects||[]).includes(key))?.[1]||semesters?.[subject.semesterKey]||null;
+}
+export function courseworkPeriod(subject,semesters,key,lessons,student,exams=[],now=Date.now()){
+  const term=subjectTerm(subject,semesters,key),endDate=term?.endDate||subject.endDate;
+  let accessThrough=endDate?saudiWeekEnd(`${endDate}T20:59:59.999Z`):0;
+  for(const original of lessons){
+    if(original.subject_key!==key||original.status!=='published')continue;
+    const lesson=studentLessonDeadline(original,student);
+    accessThrough=Math.max(accessThrough,saudiWeekEnd(lesson.closes_at));
+  }
+  for(const exam of exams){
+    if(exam.subject_key!==key||exam.status!=='published'||(exam.batch&&subject.batch&&exam.batch!==subject.batch))continue;
+    const closes=Number(exam.exception_active)===1&&exam.exception_closes_at?exam.exception_closes_at:exam.closes_at;
+    accessThrough=Math.max(accessThrough,saudiWeekEnd(closes));
+  }
+  return {courseworkPeriod:accessThrough&&now<=accessThrough?'current':'previous',accessThrough:accessThrough?new Date(accessThrough).toISOString():null};
+}
 export function attendanceFromGrades(lesson,studentKey,grades,max){
   if(!(Number(max)>0))return null;
   const candidates=Object.values(grades||{}).filter(g=>g.studentKey===studentKey&&g.subjectKey===lesson.subject_key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
@@ -291,6 +316,9 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           .all()
       ).results;
     }
+    const exams=s.role==='student'?(await env.DB.prepare(
+      "SELECT e.*,x.closes_at exception_closes_at,x.active exception_active FROM exams e LEFT JOIN exam_exceptions x ON x.exam_id=e.id AND x.student_key=? WHERE e.status='published'",
+    ).bind(key).all()).results:[];
     const gradeRecords=await scopedGrades(s,auth,ctx);
     const assessments = (await env.DB.prepare("SELECT * FROM lesson_assessment").all()).results;
     const discussions = s.role === "student" ? (await env.DB.prepare("SELECT * FROM academic_discussions WHERE student_key=?").bind(key).all()).results : [];
@@ -299,9 +327,10 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       data: {
         subjects: Object.entries(s.subjects)
           .filter(
-            ([k, v]) => s.allowed.includes(k) && isCurrent(v, s.semesters, k),
+            ([k]) => s.allowed.includes(k) && (s.role!=='student'||lessons.some(l=>l.subject_key===k&&l.status==='published')),
           )
-          .map(([key, v]) => ({ key, ...v })),
+          .filter(([k,v])=>s.role==='student'||isCurrent(v,s.semesters,k))
+          .map(([subjectKey, v]) => ({ key:subjectKey, ...v, ...(s.role==='student'?courseworkPeriod(v,s.semesters,subjectKey,lessons,s.students[key],exams):{}) })),
         lessons: lessons.map((original) => {
           const l=s.role==='student'?studentLessonDeadline(original,s.students[key]):original;
           const qs = JSON.parse(l.questions_json);

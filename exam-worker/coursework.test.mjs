@@ -7,11 +7,27 @@ import {
   gradeHomework,
   attendanceGrade,
   attendanceFromGrades,
+  courseworkPeriod,
+  saudiWeekEnd,
   retryPendingCoursework,
 } from "./src/coursework.js";
 import vm from "node:vm";
+
+test('course stays current through Saturday of its last extension and then becomes previous',()=>{
+  const subject={batch:'Q2-26',semesterKey:'term'},semesters={term:{startDate:'2026-10-01',endDate:'2026-11-05',status:'active',batches:['Q2-26'],subjects:['course']}};
+  const lessons=[{subject_key:'course',status:'published',opens_at:'2026-11-04T15:00:00.000Z',closes_at:'2026-11-12T20:59:59.000Z'}];
+  assert.equal(saudiWeekEnd('2026-11-12T20:59:59.000Z'),Date.parse('2026-11-14T20:59:59.999Z'));
+  assert.equal(courseworkPeriod(subject,semesters,'course',lessons,{},[],Date.parse('2026-11-14T20:59:59.000Z')).courseworkPeriod,'current');
+  assert.equal(courseworkPeriod(subject,semesters,'course',lessons,{},[],Date.parse('2026-11-14T21:00:00.000Z')).courseworkPeriod,'previous');
+});
+test('a student exam exception keeps the course current through its exam week',()=>{
+  const subject={batch:'Q2-26',endDate:'2026-11-05'},exam={subject_key:'course',batch:'Q2-26',status:'published',closes_at:'2026-11-05T20:59:59Z',exception_active:1,exception_closes_at:'2026-11-18T18:00:00Z'};
+  assert.equal(courseworkPeriod(subject,{},'course',[],{},[exam],Date.parse('2026-11-21T20:59:59Z')).courseworkPeriod,'current');
+  assert.equal(courseworkPeriod(subject,{},'course',[],{},[exam],Date.parse('2026-11-21T21:00:00Z')).courseworkPeriod,'previous');
+});
 const fixtures = () => {
   const sql = new DatabaseSync(":memory:");
+  sql.exec(readFileSync(new URL("./schema.sql", import.meta.url), "utf8"));
   sql.exec(readFileSync(new URL("./coursework.sql", import.meta.url), "utf8"));
   sql.exec(readFileSync(new URL("./coursework_sync_triggers.sql", import.meta.url), "utf8"));
   const DB = {
@@ -114,7 +130,7 @@ test("current semester excludes unassigned courses and templates survive a new b
   const f = fixtures();
   f.records.subjects.course.courseKey = "shared-course";
   f.records.subjects.unassigned = {...f.records.subjects.course};
-  f.records.semesters.current = {startDate:"2026-10-04",endDate:"2026-11-05",batches:["Q2-26"],subjects:["course"],status:"active"};
+  f.records.semesters.current = {startDate:"2026-10-04",endDate:"2026-11-15",batches:["Q2-26"],subjects:["course"],status:"active"};
   const list = (await f.call("admin", "")).data;
   assert.deepEqual(list.subjects.map(s=>s.key), ["course"]);
   await f.call("admin", "/lesson", f.config);
@@ -124,6 +140,26 @@ test("current semester excludes unassigned courses and templates survive a new b
   const next = (await f.call("admin", "")).data;
   assert.deepEqual(next.templates[0].questions,f.config.questions);
   assert.equal(next.lessons.some(l=>l.subject_key==="nextBatch"),false);
+});
+test('students retain published lectures after a course moves to previous courses',async()=>{
+  const f=fixtures();
+  await f.call('admin','/lesson',{...f.config,opensAt:'2026-10-01T15:00:00.000Z',closesAt:'2026-10-08T20:59:59.000Z',recordingUrl:'https://drive.google.com/file/d/recording/view'});
+  const data=(await f.call('student','')).data;
+  assert.equal(data.subjects.length,1);
+  assert.equal(data.subjects[0].courseworkPeriod,'previous');
+  assert.equal(data.lessons[0].recording_url,'https://drive.google.com/file/d/recording/view');
+  assert.ok(Date.now()>Date.parse(data.lessons[0].closes_at));
+});
+test('student UI separates previous courses while retaining lecture recording access',()=>{
+  const context={Date,document:{getElementById:()=>({innerHTML:''})}};
+  vm.createContext(context);vm.runInContext(readFileSync(new URL('../coursework-ui.js',import.meta.url),'utf8'),context);
+  vm.runInContext(`cwData={maxHomework:5,subjects:[{key:'current',name:'حالي',batch:'Q2',courseworkPeriod:'current'},{key:'old',name:'سابق',batch:'Q1',courseworkPeriod:'previous'}],lessons:[{id:'old_lesson_1',subject_key:'old',week:1,title:'المحاضرة 1',status:'published',opens_at:'2026-01-01T00:00:00Z',closes_at:'2026-01-02T00:00:00Z',recording_url:'https://drive.google.com/file/d/video/view',attendanceMax:3,homeworkMax:5,discussionMax:5,recordedGrades:{}}]};`,context);
+  const markup=context.cwStudentCoursesMarkup();
+  assert.ok(markup.includes('مقررات الفصل الحالي'));
+  assert.ok(markup.includes('المقررات السابقة'));
+  assert.ok(markup.includes('المحاضرات والتسجيلات متاحة'));
+  assert.ok(markup.includes('مشاهدة التسجيل'));
+  assert.ok(markup.includes('انتهت فترة تسليم الواجب'));
 });
 test("admin discussion editor saves reusable prompt and protects existing submissions", async () => {
   const f=fixtures();
