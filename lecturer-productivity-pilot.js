@@ -40,5 +40,14 @@
     if(dashboard&&!dashboard.querySelector('#afnanProductivityPilot'))dashboard.querySelector('.or-header')?.insertAdjacentHTML('afterend',afnanPilotMarkup(month));
     return result;
   };
+  const baseDashboard=typeof renderDashboard==='function'?renderDashboard:null;
+  if(baseDashboard)renderDashboard=function(){
+    const result=baseDashboard.apply(this,arguments),identity=String(currentUser?.username||currentUser?.id||currentUser?._fbKey||'').toLowerCase();
+    if(currentUser?.role==='lecturer'&&[PILOT.username.toLowerCase(),PILOT.uid.toLowerCase()].includes(identity)){
+      const page=document.getElementById('page-dashboard'),month=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Karachi',year:'numeric',month:'2-digit'}).format(new Date());
+      if(page&&!page.querySelector('#afnanProductivityPilot'))page.querySelector('.student-profile-header')?.insertAdjacentHTML('afterend',afnanPilotMarkup(month));
+    }
+    return result;
+  };
   if(typeof globalThis!=='undefined')globalThis.SulukeraAfnanProductivityPilot={afnanGradeEvents,gradingSessions,afnanPilotModel,formatDuration};
 })();
