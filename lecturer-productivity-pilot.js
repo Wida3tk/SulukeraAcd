@@ -41,13 +41,6 @@
     const semester=afnanSemester(),selected=semester.months.includes(month)?month:semester.months.at(-1),options=semester.months.map(value=>`<option value="${value}" ${value===selected?'selected':''}>${new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{year:'numeric',month:'long',timeZone:'Asia/Riyadh'}).format(new Date(value+'-01T12:00:00Z'))}</option>`).join('');
     return `<section class="afnan-semester-productivity"><div><span>الفصل الدراسي</span><strong>من ${semesterDate(semester.start)} إلى ${semesterDate(semester.end)}</strong></div><label>الشهر<select onchange="SulukeraAfnanProductivityPilot.selectMonth(this.value)">${options}</select></label></section>${afnanPilotMarkup(selected).replace('id="afnanProductivityPilot"',`data-afnan-month="${selected}"`)}`;
   }
-  const baseRender=typeof renderLecturerProductivity==='function'?renderLecturerProductivity:null;
-  if(baseRender)renderLecturerProductivity=function(){
-    if(!window.lecturerHoursPageMonth)window.lecturerHoursPageMonth=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Karachi',year:'numeric',month:'2-digit'}).format(new Date());
-    const result=baseRender.apply(this,arguments),host=document.getElementById('lecturerProductivityContent'),dashboard=host?.querySelector('.or-dashboard'),month=window.lecturerHoursPageMonth;
-    if(dashboard&&!dashboard.querySelector('#afnanProductivityPilot'))dashboard.querySelector('.or-header')?.insertAdjacentHTML('afterend',afnanPilotMarkup(month));
-    return result;
-  };
   const baseDashboard=typeof renderDashboard==='function'?renderDashboard:null;
   if(baseDashboard)renderDashboard=function(){
     const result=baseDashboard.apply(this,arguments),identity=String(currentUser?.username||currentUser?.id||currentUser?._fbKey||'').toLowerCase();
