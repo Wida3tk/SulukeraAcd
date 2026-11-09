@@ -45,7 +45,10 @@
     const result=baseDashboard.apply(this,arguments),identity=String(currentUser?.username||currentUser?.id||currentUser?._fbKey||'').toLowerCase();
     if(currentUser?.role==='lecturer'&&[PILOT.username.toLowerCase(),PILOT.uid.toLowerCase()].includes(identity)){
       const page=document.getElementById('page-dashboard'),month=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Karachi',year:'numeric',month:'2-digit'}).format(new Date());
-      if(page&&!page.querySelector('#afnanProductivityPilot'))page.querySelector('.student-profile-header')?.insertAdjacentHTML('afterend',afnanPilotMarkup(month));
+      if(page&&!page.querySelector('#afnanProductivityDashboardPilot')){
+        const months=[...new Set(['2026-10',month])],markup=months.map(value=>afnanPilotMarkup(value).replace('id="afnanProductivityPilot"',`data-afnan-month="${value}"`)).join('');
+        page.querySelector('.student-profile-header')?.insertAdjacentHTML('afterend',`<div id="afnanProductivityDashboardPilot">${markup}</div>`);
+      }
     }
     return result;
   };
