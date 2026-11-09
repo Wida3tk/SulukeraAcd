@@ -36,10 +36,12 @@ test('Afnan pilot reports monthly meeting time and only her saved grades',()=>{
 
 test('Afnan pilot can render October independently and prefers recording duration',()=>{
   const context=pilotContext(),pilot=context.SulukeraAfnanProductivityPilot;
-  context.lecturerProductivityData={'2026-10':{Aalmubaddal:{meetings:{one:{durationMinutes:200}},recordingAudit:{lectures:{one:{recordingSeconds:3600},two:{recordingSeconds:1800}}}}}};
+  context.lecturerProductivityData={'2026-10':{Aalmubaddal:{meetings:{one:{durationMinutes:200}},recordingAudit:{lectures:{one:{title:'الأولى',startsAt:'2026-10-01T10:00:00Z',recordingSeconds:3600},two:{title:'الثانية',startsAt:'2026-10-08T10:00:00Z',recordingSeconds:1800}}},gradingPilot:{minutes:18,source:'manual_verified'}}}};
   const model=pilot.afnanPilotModel('2026-10');
   assert.equal(model.recordingSeconds,5400);
   assert.equal(model.deliveryCount,2);
   assert.equal(model.deliverySource,'مدة التسجيل الفعلية');
-  assert.equal(model.gradingMinutes,0);
+  assert.equal(model.gradingMinutes,18);
+  assert.equal(model.gradingSource,'manual_verified');
+  assert.equal(model.deliveryItems[0].title,'الأولى');
 });
