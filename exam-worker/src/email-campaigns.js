@@ -34,5 +34,19 @@ export async function handleEmailCampaigns(request,env,auth,path,ctx){
  return null;
 }
 const emailCampaignBaseTemplate=template;
-template=function(draft,person){return emailCampaignBaseTemplate(draft,person).replace('max-width:640px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 14px 40px rgba(14,43,92,.12)','max-width:640px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 14px 40px rgba(14,43,92,.12);border-top:5px solid #1648f5').replace('padding:28px 34px;background:linear-gradient(135deg,#071b4d,#1648f5);text-align:center','padding:28px 34px;background:#fff;text-align:center;border-bottom:1px solid #e2e9f7').replace('margin-top:12px;color:#bfefff','margin-top:12px;color:#1648f5').replace('فريق أكاديمية سلوكيرا','سلوكيرا');};
+const emailCampaignArabicDate=value=>new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-latn',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T12:00:00Z'));
+template=function(draft,person){return emailCampaignBaseTemplate(draft,person)
+ .replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" style="direction:rtl">')
+ .replace('margin:0;background:#eef3fb;font-family:Tahoma,Arial,sans-serif;color:#14213d','margin:0;background:#eef3fb;font-family:Tahoma,Arial,sans-serif;color:#14213d;direction:rtl;text-align:right')
+ .replace('max-width:640px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 14px 40px rgba(14,43,92,.12)','max-width:640px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 14px 40px rgba(14,43,92,.12);border-top:5px solid #1648f5')
+ .replace('padding:28px 34px;background:linear-gradient(135deg,#071b4d,#1648f5);text-align:center','padding:30px 34px 26px;background:#fff;text-align:center;border-bottom:1px solid #e2e9f7')
+ .replace('margin-top:12px;color:#bfefff','display:inline-block;margin-top:14px;padding:6px 12px;border-radius:99px;background:#edf3ff;color:#1648f5')
+ .replace('padding:34px"><p','padding:38px 42px;direction:rtl;text-align:right"><p')
+ .replaceAll('color:#536080;font-size:15px','color:#536080;font-size:15px;text-align:right;direction:rtl')
+ .replace('color:#0b2f8e;font-size:27px;line-height:1.5','color:#0b2f8e;font-size:28px;line-height:1.55;text-align:right;direction:rtl')
+ .replace('font-size:16px;line-height:2;color:#34415f','font-size:16px;line-height:2;color:#34415f;text-align:right;direction:rtl')
+ .replace('margin:0 0 24px;padding:16px;border-radius:16px;background:#edf3ff;border-right:4px solid #1648f5','margin:0 0 26px;padding:18px 20px;border-radius:16px;background:#edf3ff;border-right:4px solid #1648f5;text-align:right;direction:rtl')
+ .replace(`من ${escape(draft.semesterStart)} إلى ${escape(draft.semesterEnd)}`,`من ${emailCampaignArabicDate(draft.semesterStart)} إلى ${emailCampaignArabicDate(draft.semesterEnd)}`)
+ .replaceAll('background:#f5f8ff;border:1px solid #dce5fb;border-radius:12px;color:#152344;font-weight:700','background:#f8faff;border:1px solid #dce5fb;border-right:3px solid #1648f5;border-radius:12px;color:#152344;font-weight:700;text-align:right;direction:rtl')
+ .replace('فريق أكاديمية سلوكيرا','سلوكيرا');};
 export const emailCampaignInternals={normalizeDraft,template,activeProfessional};
