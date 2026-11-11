@@ -1601,12 +1601,19 @@ function getPortalBatchProfile(batch){
 function getCurrentSemesterForBatch(batch){
   if(sameBatchName(batch,currentUser?.data?.batch)&&isGraduationProjectStageStudent(currentUser?.data))return {name:'مرحلة مشروع التخرج',semesterNo:SulukeraAcademicPolicy.semesterLimit(getStudentPlanType(currentUser?.data)),startDate:'',endDate:'',batches:[batch],status:'project'};
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
-  const liveSemester = Object.values(dbData.semesters||{}).filter(semester=>
+  const activeSemesters = Object.values(dbData.semesters||{}).filter(semester=>
     (semester.status==='active' || semester.status==='current') &&
-    (!semester.startDate||String(semester.startDate).replace(/\//g,'-')<=today) &&
     (!semester.endDate||String(semester.endDate).replace(/\//g,'-')>=today) &&
     (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
-  ).sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0];
+  );
+  // Keep an approved upcoming term visible before its first teaching day so
+  // students can review their timetable as soon as it is published.
+  const liveSemester = activeSemesters.filter(semester=>
+    !semester.startDate||String(semester.startDate).replace(/\//g,'-')<=today
+  ).sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0]
+    || activeSemesters.filter(semester=>
+      String(semester.startDate||'').replace(/\//g,'-')>today
+    ).sort((a,b)=>String(a.startDate||'').localeCompare(String(b.startDate||'')))[0];
   if(liveSemester){
     if(sameBatchName(batch,'Q3-26')&&liveSemester.startDate==='2026-10-04'&&(Number(liveSemester.semesterNo)===3||/الفصل\s*(?:3|الثالث)/.test(liveSemester.name||''))) return {...liveSemester,semesterNo:2,name:String(liveSemester.name||'الفصل الثاني').replace(/الفصل\s*(?:3|الثالث)/,'الفصل الثاني')};
     return liveSemester;
@@ -1637,7 +1644,9 @@ function isCurrentAcademicScheduleSlot(slot){
   const start=String(slot.termStartDate||subject?.startDate||semester?.startDate||'').replace(/\//g,'-');
   const end=String(slot.termEndDate||subject?.endDate||semester?.endDate||'').replace(/\//g,'-');
   if(!start||!end)return false;
-  if((start&&start>today)||(end&&end<today))return false;
+  // Future approved schedules remain visible for advance planning. Only an
+  // ended term is removed from the current timetable.
+  if(end&&end<today)return false;
   const current=getCurrentSemesterForBatch(slot.batch);
   if(current?.status==='project')return false;
   const currentStart=String(current?.startDate||'').replace(/\//g,'-');
