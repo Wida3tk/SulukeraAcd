@@ -709,6 +709,7 @@ function showStudentView(){
 function renderStudentHomeTab(){
   const { st, fullName, mySubjects, avg, gradeRows, hasFail } = getCurrentStudentAcademicData();
   const semester = getCurrentSemesterForBatch(st.batch);
+  const upcomingSemester = getUpcomingSemesterForBatch(st.batch);
   const requests = getStudentRequests();
   const motivation = STUDENT_MOTIVATIONS[new Date().getDate() % STUDENT_MOTIVATIONS.length];
   const scheduleSlots = getStudentScheduleSlots(st);
@@ -760,6 +761,14 @@ function renderStudentHomeTab(){
         <div class="avg-label">المتوسط</div>
       </div>
     </div>
+    ${upcomingSemester?`<section style="margin:0 0 1rem;padding:18px;border-radius:18px;background:linear-gradient(135deg,#08245f,#1648f5 68%,#36c8ef);color:#fff;box-shadow:0 12px 30px rgba(13,64,252,.18);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:240px">
+        <div style="font-size:11px;font-weight:900;color:#bfefff;margin-bottom:6px">موعدنا يتجدد قريبًا ✨</div>
+        <div style="font-size:18px;font-weight:900;line-height:1.7">${upcomingSemester.studentHomeMessage||'يسعدنا أن نرحّب بكِ في فصل دراسي جديد، بخطوات واضحة وفرص جديدة للتعلّم والإنجاز.'}</div>
+        <div style="font-size:12px;color:#e3eeff;margin-top:7px">من <strong>${upcomingSemester.startDate}</strong> إلى <strong>${upcomingSemester.endDate}</strong> · ${upcomingSemester.name||'الفصل القادم'}</div>
+      </div>
+      <button class="btn" style="background:#fff;color:#0d40fc;border-color:#fff;font-weight:900" onclick="switchAppTab('schedule',getAppTabButtonById('schedule'))">📅 الاطلاع على الجدول</button>
+    </section>`:''}
     <div class="stat-row">
       <div class="stat-box"><div class="stat-val">${mySubjects.length}</div><div class="stat-lbl">📚 المقررات</div></div>
       <div class="stat-box"><div class="stat-val">${pendingRequests}</div><div class="stat-lbl">📝 طلبات مفتوحة</div></div>
@@ -1176,10 +1185,12 @@ function getStudentRequests(){
     .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
 }
 function getCurrentSemesterForBatch(batch){
-  return Object.values(dbData.semesters||{}).find(semester=>
-    (semester.status==='active' || semester.status==='current') &&
-    (semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))
-  ) || null;
+  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Riyadh'}).format(new Date());
+  return Object.values(dbData.semesters||{}).filter(semester=>(semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))&&(!semester.startDate||semester.startDate<=today)&&(!semester.endDate||semester.endDate>=today)).sort((a,b)=>String(b.startDate||'').localeCompare(String(a.startDate||'')))[0]||null;
+}
+function getUpcomingSemesterForBatch(batch){
+  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Riyadh'}).format(new Date());
+  return Object.values(dbData.semesters||{}).filter(semester=>semester.startDate>today&&(semester.batches||[]).some(item=>normalizeBatchName(item)===normalizeBatchName(batch))).sort((a,b)=>a.startDate.localeCompare(b.startDate))[0]||null;
 }
 function sortScheduleSlots(slots){
   const dayOrder = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];

@@ -1,6 +1,6 @@
 # Lecturer satisfaction survey
 
-Campaign: `lecturer-2026-08-23-2026-09-24`, covering 23 August through 24 September 2026. Questions and displayed scales follow the supplied lecturer satisfaction PDF. The recommendation choices in that PDF are 1–10 (its explanatory caption also mentions 0); the system retains the displayed 1–10 choices. The lecturer name comes from the authenticated account rather than an editable answer.
+Campaigns are generated automatically from the latest ended academic period in Firebase `semesters`. Semesters sharing the same dates form one campaign with ID `lecturer-{start}-{end}`. A campaign opens on the Saudi calendar day after its end date; the 4 October–5 November period therefore becomes `lecturer-2026-10-04-2026-11-05`, and the 15 November–17 December period opens automatically on 18 December. Questions and displayed scales follow the supplied lecturer satisfaction PDF. The lecturer name comes from the authenticated account rather than an editable answer.
 
 The login dialog is shown to every lecturer account until the server confirms a submission. It blocks background interaction, Escape and backdrop dismissal. Logout remains available. Failed saves retain the entered answers. Completion is never inferred from browser storage. Database uniqueness by campaign and Firebase UID makes retries and parallel submissions idempotent; the first saved response is immutable.
 
@@ -10,4 +10,4 @@ Analytics are available under Evaluation → Lecturer satisfaction. Overall sati
 
 Apply the additive `exam-worker/lecturer-survey.sql` before deploying the Worker. No existing user or academic table is modified. Backend tests: `node --test lecturer-survey.test.mjs`; UI tests: `node scripts/lecturer-survey-ui.test.cjs`. Future semesters must use a new campaign ID to keep responses separate.
 
-Afnan Al Mubaddal is exempt only for the 23 August–24 September 2026 campaign because her course is ongoing. Her account bypasses the dialog and is excluded from the required roster and analytics. Any existing response remains stored without contributing to this campaign's results.
+A lecturer is eligible only when their Firebase UID or username is assigned to at least one subject in the ended period. Future campaigns need no code change: correct semester dates and lecturer assignments are sufficient. Afnan Al Mubaddal remains exempt only from the historical 23 August–24 September 2026 campaign; that exception does not carry into later terms.
