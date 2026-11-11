@@ -1,4 +1,5 @@
 import '../../student-account-policy.js';
+import '../../academic-policy.js';
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 const clean=value=>String(value||'').trim();
 const escape=value=>clean(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -13,10 +14,10 @@ function normalizeDraft(body={}){
  return result;
 }
 async function audience(env,auth,ctx,start){
- const paths=['semesters','subjects','enrollments','students','professionalEnrollments'],values=await Promise.all(paths.map(path=>ctx.firebaseRead(path,auth.token))),root=Object.fromEntries(paths.map((path,index)=>[path,values[index]||{}]));
+ const paths=['semesters','subjects','enrollments','students','professionalEnrollments','packages'],values=await Promise.all(paths.map(path=>ctx.firebaseRead(path,auth.token))),root=Object.fromEntries(paths.map((path,index)=>[path,values[index]||{}]));
  const terms=Object.entries(root.semesters).filter(([,term])=>term?.startDate===start),subjectKeys=new Set(terms.flatMap(([,term])=>term.subjects||[]));if(!terms.length)fail('SEMESTER_NOT_FOUND',404);
  const projects=(await env.DB.prepare('SELECT DISTINCT student_key FROM graduation_project_students WHERE eligible=1').all()).results||[],projectKeys=new Set(projects.map(row=>row.student_key)),coursesByStudent=new Map();
- for(const enrollment of Object.values(root.enrollments)){if(!enrollment||!subjectKeys.has(enrollment.subjectKey)||enrollment.active===false)continue;const list=coursesByStudent.get(enrollment.studentKey)||[],subject=root.subjects[enrollment.subjectKey];if(subject&&!list.some(item=>item.key===enrollment.subjectKey))list.push({key:enrollment.subjectKey,name:subject.name||'مقرر دراسي'});coursesByStudent.set(enrollment.studentKey,list);}
+ for(const enrollment of Object.values(root.enrollments)){const subject=root.subjects[enrollment?.subjectKey],student=root.students[enrollment?.studentKey],inactive=['inactive','cancelled','withdrawn'].includes(clean(enrollment?.status).toLowerCase());if(!enrollment||!subjectKeys.has(enrollment.subjectKey)||enrollment.active===false||inactive||!student||!globalThis.SulukeraAcademicPolicy.subjectAllowed(student,subject,root.packages))continue;const list=coursesByStudent.get(enrollment.studentKey)||[];if(!list.some(item=>item.key===enrollment.subjectKey))list.push({key:enrollment.subjectKey,name:subject.name||'مقرر دراسي'});coursesByStudent.set(enrollment.studentKey,list);}
  const rows=[],excluded={project:0,professional:0,inactive:0,missingEmail:0,duplicateEmail:0},seen=new Set();
  for(const [studentKey,courses] of coursesByStudent){const student=root.students[studentKey];if(!student||!globalThis.SulukeraStudentAccount.isActive(student)){excluded.inactive++;continue;}if(projectKeys.has(studentKey)){excluded.project++;continue;}if(activeProfessional(root.professionalEnrollments[studentKey])){excluded.professional++;continue;}const address=email(student.email);if(!validEmail(address)){excluded.missingEmail++;continue;}if(seen.has(address)){excluded.duplicateEmail++;continue;}seen.add(address);rows.push({studentKey,name:fullName(student),firstName:clean(student.firstName)||fullName(student).split(/\s+/)[0],email:address,batch:clean(student.batch),courses:courses.sort((a,b)=>a.name.localeCompare(b.name,'ar'))});}
  rows.sort((a,b)=>a.batch.localeCompare(b.batch)||a.name.localeCompare(b.name,'ar'));return {semesterStart:start,semesterEnd:terms.map(([,term])=>term.endDate).filter(Boolean).sort().at(-1)||'',terms:terms.map(([key,term])=>({key,name:term.name,batches:term.batches||[]})),eligible:rows,excluded,candidateCount:coursesByStudent.size};
