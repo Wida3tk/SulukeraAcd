@@ -14,6 +14,7 @@ import {runAttendanceSync,attendanceSchema,approveAttendanceAlias,attendanceElig
 import {discoverNightlyRecordings,processNightlyRecordingQueue,nightlyRecordingSchema} from './nightly-recording-sync.js';
 import { handleLecturerSurvey } from "./lecturer-survey.js";
 import {handleStudentPreview} from './student-preview.js';
+import {handleEmailCampaigns} from './email-campaigns.js';
 import "../../academic-policy.js";
 import "../../student-account-policy.js";
 import { handleCoursework, retryPendingCoursework } from "./coursework.js";
@@ -1155,6 +1156,8 @@ export default {
       }
       const lecturerSurvey=await handleLecturerSurvey(request,env,auth,path,{firebaseRead});
       if(lecturerSurvey){const response=reply(request,lecturerSurvey.data);response.headers.set('Cache-Control','private, no-store');return response;}
+      const emailCampaign=await handleEmailCampaigns(request,env,auth,path,{firebaseRead});
+      if(emailCampaign){const response=reply(request,emailCampaign.data);response.headers.set('Cache-Control','private, no-store');return response;}
       const revenue=await handleRevenue(request,env,auth,path);
       if(revenue){const response=reply(request,revenue.data);response.headers.set('Cache-Control','private, no-store');return response;}
       const preview=await handleStudentPreview(request,env,auth,path,{firebaseRead,firebaseStudentGrades,studentExams,professionalPreview:async body=>{

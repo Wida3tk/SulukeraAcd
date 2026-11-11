@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {emailCampaignInternals} from './src/email-campaigns.js';
+test('draft validation and branded personalized template escape content',()=>{
+ const draft=emailCampaignInternals.normalizeDraft({semesterStart:'2026-11-15',semesterEnd:'2026-12-17',subject:'فصل جديد',preheader:'الجدول جاهز',headline:'بداية جديدة',intro:'مرحبًا بكم',buttonLabel:'الاطلاع على جدولي'}),html=emailCampaignInternals.template(draft,{firstName:'مريم <script>',courses:[{name:'التصميم التجريبي <img>'}]});
+ assert.match(html,/sulukera-logo\.png/);assert.match(html,/https:\/\/acd\.sulukera\.com/);assert(!html.includes('<script>'));assert(!html.includes('<img>'));assert.match(html,/مريم &lt;script&gt;/);
+});
+test('professional enrollment exclusion only follows active-like records',()=>{assert.equal(emailCampaignInternals.activeProfessional({organizational_behavior:{status:'active'}}),true);assert.equal(emailCampaignInternals.activeProfessional({organizational_behavior:{status:'withdrawn'}}),false);assert.equal(emailCampaignInternals.activeProfessional(null),null);});
+test('invalid or empty campaign copy is rejected',()=>{assert.throws(()=>emailCampaignInternals.normalizeDraft({semesterStart:'2026-12-17',semesterEnd:'2026-11-15'}),/INVALID_SEMESTER/);});

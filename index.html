@@ -867,6 +867,10 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
         </div>
       </div>
 
+      <div class="page" id="page-emailcampaigns">
+        <div id="emailCampaignWorkspace"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -2722,6 +2726,7 @@ const adminNavGroups=[
   {id:'system',icon:'🏛️',label:'الهيكل والنظام',items:[
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
     {id:'users',icon:'👥',label:'المحاضرون والمستخدمون'},
+    {id:'emailcampaigns',icon:'✉️',label:'الحملات البريدية'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'}
   ]}
 ];
@@ -2768,7 +2773,7 @@ const pageTitles={
   performance:'الأداء والتقدم',dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'المحاضرون والمستخدمون',
   grades:'إدخال الدرجات',reports:'التقارير الأكاديمية',programs:'البرامج والمسارات والدفعات',professionalprogram:'محتوى ومسارات البرنامج المهني',professionalprogress:'تقدم متدربي البرنامج المهني', batchplans:'الخطط الدراسية', graduationprojects:'مشاريع التخرج', alerts:'الطلبات والتنبيهات', schedule:'الجدول الأكاديمي', exams:'الاختبارات', evaluations:'التقييم ورضا الطلاب', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
-  settings:'الإعدادات',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturerexams:'نتائج الاختبارات',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
+  settings:'الإعدادات',emailcampaigns:'الحملات البريدية',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturerexams:'نتائج الاختبارات',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
   const resolvedPageId=pageId;
@@ -2808,6 +2813,7 @@ function refreshPage(p) {
   if (p==='revenue') renderRevenue();
   if (p==='performance') renderPerformance();
   if (p==='lecturerperformance') renderLecturerPerformance();
+  if (p==='emailcampaigns') renderEmailCampaigns();
   if (p==='dashboard') renderDashboard();
   if (p==='productivity') renderLecturerProductivity();
   if (p==='subjects') renderSubjectsTable();
@@ -8814,6 +8820,8 @@ async function cleanDuplicateStudents(){
 <link rel="stylesheet" href="student-preview.css?v=20261101">
 <script src="student-evaluation-model.js?v=20261101"></script>
 <script src="student-preview.js?v=20261101"></script>
+<link rel="stylesheet" href="email-campaigns.css?v=20261111-draft">
+<script src="email-campaigns-ui.js?v=20261111-draft"></script>
 <link rel="stylesheet" href="lecturer-grading-gate.css?v=20261102">
 <script src="lecturer-grading-gate.js?v=20261102"></script>
 </body>
