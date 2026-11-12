@@ -202,8 +202,9 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
     const attend = attendance
       ? attendanceGrade(attendance.percent, maxAttend,revisedAttendancePolicy(l,maxAttend))
       : null;
+    const attendanceFinal = reflection?.score != null || Number(attend)>0 || Date.now()>Date.parse(l.closes_at);
     if (best?.score != null && reflection?.score != null) fields[`w${l.week}_attend`]=revisedAttendancePolicy(l,maxAttend)?Math.max(attend??0,reflection.score):reflection.score;
-    else if (attend != null) fields[`w${l.week}_attend`]=attend;
+    else if (attend != null&&attendanceFinal) fields[`w${l.week}_attend`]=attend;
     else if (attendance) fields[`w${l.week}_attend`] = null;
     if(fields[`w${l.week}_attend`]!=null)fields[`w${l.week}_attendEntered`]=true;
     const key = safeKey(`grade_${studentKey}_${l.subject_key}`),

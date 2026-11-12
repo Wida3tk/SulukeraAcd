@@ -17,7 +17,8 @@ export function automaticCourseworkFields(l,g={},sources={},now=Date.now()){
  if(!attRecorded||provisionalZero){
   let score=attendance?attendanceGrade(attendance.percent,max,String(l.opens_at).slice(0,10)>='2026-10-04'):null;
   if(best?.score!=null&&sources.reflection?.score!=null)score=Math.max(score??0,sources.reflection.score);
-  if(score!=null){out[w+'_attend']=score;out[w+'_attendEntered']=true;out[w+'_attendProvisional']=false;}
+  const attendanceFinal=sources.reflection?.score!=null||Number(score)>0||now>Date.parse(l.closes_at);
+  if(score!=null&&attendanceFinal){out[w+'_attend']=score;out[w+'_attendEntered']=true;out[w+'_attendProvisional']=false;}
  }
  const value=Object.hasOwn(out,w+'_attend')?out[w+'_attend']:(attRecorded?Number(g[w]?.attend??g[w+'_attend']):null);
  if(value!=null)out[w+'_attendNote']=value<max?ATTENDANCE_FOLLOWUP:'';
