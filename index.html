@@ -1501,6 +1501,9 @@ function resolveSemesterOfferingKey(key,batch,catalog){
 }
 async function ensureOctober2026AcademicFoundation(root){
   if(currentUser?.role!=='admin')return false;
+  // One-time historical migration. Re-running it after a newer term exists
+  // would incorrectly archive that term's semesters and weekly schedule.
+  if(root.settings?.systemMigrations?.october2026AcademicFoundation)return false;
   const startDate='2026-10-04',endDate='2026-11-05',previousStartDate='2026-08-23',previousEndDate='2026-09-24';
   const coursesForSemester=number=>FIXED_COURSES.slice((number-1)*3,number*3);
   const liveStudents=root.students||{},liveSubjects=root.subjects||{},liveSemesters=root.semesters||{},liveEnrollments=root.enrollments||{},updates={};
