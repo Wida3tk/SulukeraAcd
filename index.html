@@ -7208,7 +7208,9 @@ function academicSlotPeriod(slot){
 }
 function isCurrentAdminScheduleSlot(slot){
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'}),period=academicSlotPeriod(slot);
-  return slot.active!==false&&!slot.archivedAt&&!!period.start&&!!period.end&&period.start<=today&&period.end>=today;
+  // Approved upcoming meetings must remain visible to administrators before
+  // their first teaching day; only ended or archived slots are hidden.
+  return slot.active!==false&&!slot.archivedAt&&!!period.start&&!!period.end&&period.end>=today;
 }
 async function repairLegacyAcademicSchedule(){
   if(currentUser?.role!=='admin')return;
