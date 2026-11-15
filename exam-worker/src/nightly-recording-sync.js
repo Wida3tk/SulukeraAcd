@@ -1,12 +1,13 @@
 import {recordingCatalog,transferRecordingStep,verifyDirectRecordingAccess} from './zoom-drive-transfer.js';
 const HOSTS=['rushdacd.sa@gmail.com','rushdacd1@gmail.com','RushdABAT@gmail.com'];
 const COURSES={
- '88245118262':['course_07','1A4UvkeSse2FY00tK0uO4ysHuGGkNucTS','rushdacd.sa@gmail.com'],
- '85761104229':['course_08','1Vl5Jw8Aipmjowcym1nDpyXYTGJ3GCzc8','rushdacd.sa@gmail.com'],
- '87401037383':['course_09','1LwVmxiHzc9C69mDo_OByZSP7mx2L7CCe','rushdacd1@gmail.com'],
- '86843545960':['course_13','1dfCbFzAgFbSG9YCWbL4627c7oaGu6OQd','rushdacd1@gmail.com'],
- '87930048061':['course_14','1S-rIe5Gk8witgjh3E0_ky-bFEz9E-npa','RushdABAT@gmail.com'],
- '85196341732':['course_15','1AOOoZNYHYhUO4umUGFBq0toNLSJNfrtp','rushdacd.sa@gmail.com']
+ '88245118262':[['course_07','1A4UvkeSse2FY00tK0uO4ysHuGGkNucTS','rushdacd.sa@gmail.com',true],['course_16','1BAXtclSUrGIr5OSToziaPBeejImv7sGO','rushdacd.sa@gmail.com']],
+ '85761104229':[['course_08','1Vl5Jw8Aipmjowcym1nDpyXYTGJ3GCzc8','rushdacd.sa@gmail.com'],['course_17','1PkKPKlXkVeiDO8X8MrRVEfSZiTdrX7eP','rushdacd.sa@gmail.com']],
+ '85196341732':[['course_15','1AOOoZNYHYhUO4umUGFBq0toNLSJNfrtp','rushdacd.sa@gmail.com'],['course_18','1l_xvQ91e0jUzy9eSJQgo9VNXclxZXoPv','rushdacd.sa@gmail.com']],
+ '84993389534':[['course_12','1Bm50MlEWHkSrcw-caUNSey2ra5_VFiUZ',null]],
+ '86843545960':[['course_13','1dfCbFzAgFbSG9YCWbL4627c7oaGu6OQd','rushdacd1@gmail.com'],['course_11','17gTbMHNKYuUo7KZ8UHt3IeMQ2KAMApwK','rushdacd1@gmail.com']],
+ '87401037383':[['course_09','1LwVmxiHzc9C69mDo_OByZSP7mx2L7CCe','rushdacd1@gmail.com'],['course_10','1SELmOeqkSC6WF2Kq7xHb-5mXiDecKgpA','rushdacd1@gmail.com']],
+ '87930048061':[['course_14','1S-rIe5Gk8witgjh3E0_ky-bFEz9E-npa','RushdABAT@gmail.com',true]]
 };
 export const nightlySaudiDate=now=>new Date(now+3*3600000).toISOString().slice(0,10);
 export async function nightlyRecordingSchema(env){await env.DB.exec(`CREATE TABLE IF NOT EXISTS nightly_recording_runs(day TEXT PRIMARY KEY,state TEXT NOT NULL,result_json TEXT NOT NULL,updated_at TEXT NOT NULL);CREATE TABLE IF NOT EXISTS nightly_recording_jobs(source_id TEXT PRIMARY KEY,manifest_json TEXT NOT NULL,topic TEXT NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',attempts INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL);CREATE TABLE IF NOT EXISTS nightly_recording_lock(id TEXT PRIMARY KEY,expires INTEGER NOT NULL);`);}
@@ -14,8 +15,10 @@ function zoomId(url){try{return new URL(url).pathname.match(/\/j\/(\d+)/)?.[1]||
 export function planNightlyRecording(host,meeting,file,lessons,program,reviewed=[]){
  const date=file.start.slice(0,10),base={host,sourceId:file.id,uuid:meeting.uuid,date,courseName:meeting.topic};
  if(meeting.meetingId==='82789191279')return {state:'excluded',reason:'GRADUATION_EXCLUDED'};
- const course=COURSES[meeting.meetingId];if(course){if(course[2]!==host)return {state:'review',reason:'RECORDING_ACCOUNT_MISMATCH'};
-  const targets=lessons.filter(l=>l.subject_key?.endsWith('_'+course[0])&&l.status==='published'&&l.opens_at.slice(0,10)===date&&(zoomId(l.zoom_url)===meeting.meetingId||['course_07','course_14'].includes(course[0])));
+ const options=COURSES[meeting.meetingId];if(options){const permitted=options.filter(course=>!course[2]||course[2]===host);if(!permitted.length)return {state:'review',reason:'RECORDING_ACCOUNT_MISMATCH'};
+  const matches=permitted.map(course=>({course,targets:lessons.filter(l=>l.subject_key?.endsWith('_'+course[0])&&l.status!=='archived'&&l.opens_at.slice(0,10)===date&&(zoomId(l.zoom_url)===meeting.meetingId||course[3]))})).filter(item=>item.targets.length);
+  if(matches.length>1)return {state:'review',reason:'AMBIGUOUS_LECTURE_DATE'};
+  const course=matches[0]?.course,targets=matches[0]?.targets||[];
   if(!targets.length)return {state:'review',reason:'NO_EXACT_LECTURE_MATCH'};
   if(new Set(targets.map(t=>t.subject_key)).size!==targets.length)return {state:'review',reason:'AMBIGUOUS_LECTURE_DATE'};
   if(targets.some(l=>l.recording_url))return {state:'retained',reason:'EXISTING_RECORDING_PRESERVED'};

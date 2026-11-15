@@ -3,7 +3,9 @@ import '../../academic-policy.js';
 import '../../student-account-policy.js';
 import '../../productivity-ledger.js';
 const HOSTS=['rushdacd.sa@gmail.com','rushdacd1@gmail.com','RushdABAT@gmail.com'],PROGRAM='organizational_behavior',ACTOR='automatic-zoom-attendance';
-const FIXED={'88245118262':'course_07','87930048061':'course_14'};
+// Current-term fallback for the one legacy lesson that historically omitted
+// its Zoom URL. Exact lesson URLs remain the primary match for every course.
+const FIXED={'88245118262':'course_16'};
 const fail=message=>{throw Error(message);};
 const norm=v=>String(v||'').normalize('NFKC').toLowerCase().replace(/[إأآ]/g,'ا').replace(/ى/g,'ي').replace(/[\u064B-\u065Fـ]/g,'').replace(/\s+/g,' ').trim();
 export const zoomUuidPath=v=>v.startsWith('/')||v.includes('//')?encodeURIComponent(encodeURIComponent(v)):encodeURIComponent(v);
@@ -54,7 +56,7 @@ export async function discoverAttendance(env,host){
 }
 function meetingId(url){try{return new URL(url).pathname.match(/\/j\/(\d+)/)?.[1]||'';}catch{return '';}}
 export function attendanceTargets(report,lessons,subjects,program){
- const date=report.starts_at.slice(0,10),academic=lessons.filter(l=>l.status==='published'&&l.opens_at.slice(0,10)===date&&(meetingId(l.zoom_url)===report.meeting_id||FIXED[report.meeting_id]&&subjects[l.subject_key]?.courseKey===FIXED[report.meeting_id]));
+ const date=report.starts_at.slice(0,10),academic=lessons.filter(l=>l.status!=='archived'&&l.opens_at.slice(0,10)===date&&(meetingId(l.zoom_url)===report.meeting_id||FIXED[report.meeting_id]&&subjects[l.subject_key]?.courseKey===FIXED[report.meeting_id]));
  const professional=[];for(const [track,t] of Object.entries(program?.tracks||{}))for(const [unit,u] of Object.entries(t.units||{}))if(u.status==='published')for(const [session,s] of Object.entries(u.sessions||{}))if((s.scheduledDate||s.scheduledAt?.slice(0,10))===date&&meetingId(s.zoomUrl)===report.meeting_id)professional.push({track,unit,session,unitId:track+'_'+unit,definition:u});
  if(academic.length&&professional.length||professional.length>1)return {ambiguous:true,academic:[],professional:[]};return {academic,professional,ambiguous:false};
 }
