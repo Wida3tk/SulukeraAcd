@@ -118,7 +118,8 @@ const fixtures = () => {
     subjectKey: "course",
     week: 1,
     title: "محاضرة",
-    opensAt: new Date(Date.now() - 3600000).toISOString(),
+    // Historical attendance-question fixtures stay on the pre-November policy even when extended.
+    opensAt: "2026-11-14T18:00:00.000Z",
     closesAt: new Date(Date.now() + 3600000).toISOString(),
     questions: [{ prompt: "سؤال", choices: ["أ", "ب", "ج", "د"], correct: 1 }],
     status: "published",

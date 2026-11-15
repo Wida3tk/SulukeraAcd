@@ -2,7 +2,7 @@ import '../../productivity-ledger.js';
 import '../../student-account-policy.js';
 import '../../academic-policy.js';
 import {studentLessonDeadline} from './coursework-deadlines.js';
-import {startAcademicRecording} from './academic-recording-media.js';
+import {startAcademicRecording,checkpointAcademicRecording,ensureAcademicRecordingSchema} from './academic-recording-media.js';
 import {discussionWithHistory,submitDiscussionImprovement,reviewDiscussionImprovement} from './discussion-improvements.js';
 import {handleGradingReviewQueue} from './grading-review-queue.js';
 const reject = (message, status = 400) => {
@@ -31,6 +31,8 @@ export function attendanceGrade(percent, max, revised=true) {
   if(max===3)return revised?(percent>=50?3:percent>=20?2:percent>=10?1:0):(percent>=80?3:percent>=50?2:percent>0?1:0);
   return percent >= 80 ? max : null;
 }
+function recordingAttendanceGrade(percent,max){return percent>=80?max:percent>=50?Math.min(2,max):null;}
+const usesRecordingWatch=lesson=>String(lesson?.opens_at||'').slice(0,10)>='2026-11-15';
 export function revisedAttendancePolicy(lesson,max){return max===3&&String(lesson.opens_at||'').slice(0,10)>='2026-10-04';}
 function isProfessional(s) {
   return (
@@ -200,7 +202,7 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
     const discussion = await env.DB.prepare("SELECT score FROM academic_discussions WHERE lesson_id=? AND student_key=?").bind(l.id,studentKey).first();
     if(!attendanceOnly&&discussion?.score!=null){fields[`w${l.week}_disc`]=discussion.score;fields[`w${l.week}_discEntered`]=true;fields[`w${l.week}_discApproved`]=true;}
     const attend = attendance
-      ? attendanceGrade(attendance.percent, maxAttend,revisedAttendancePolicy(l,maxAttend))
+      ? attendance.approved_by==='automatic-recording-watch'?recordingAttendanceGrade(attendance.percent,maxAttend):attendanceGrade(attendance.percent, maxAttend,revisedAttendancePolicy(l,maxAttend))
       : null;
     const attendanceFinal = reflection?.score != null || Number(attend)>0 || Date.now()>Date.parse(l.closes_at);
     if (best?.score != null && reflection?.score != null) fields[`w${l.week}_attend`]=revisedAttendancePolicy(l,maxAttend)?Math.max(attend??0,reflection.score):reflection.score;
@@ -220,7 +222,7 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
         current ||
         (await (await serviceFetch(env, ctx, `grades/${legacy}`)).json()) ||
         {};
-      if(attendanceOnly&&attendance?.approved_by==='automatic-zoom-attendance'&&previous[`w${l.week}_attendProvisional`]!==true&&(previous[`w${l.week}_attendEntered`]===true||Number(previous[`w${l.week}_attend`])>0)){
+      if(attendanceOnly&&['automatic-zoom-attendance','automatic-recording-watch'].includes(attendance?.approved_by)&&previous[`w${l.week}_attendProvisional`]!==true&&(previous[`w${l.week}_attendEntered`]===true||Number(previous[`w${l.week}_attend`])>0)){
         await env.DB.prepare("UPDATE coursework_sync SET state='synced',error='MANUAL_ATTENDANCE_PROTECTED',updated_at=? WHERE lesson_id=? AND student_key=?").bind(now,l.id,studentKey).run();return true;
       }
       const payload = {
@@ -235,7 +237,7 @@ async function synchronize(env, ctx, l, studentKey, actor, attendanceOnly=false)
       if(fields[`w${l.week}_disc`]!=null){const prior=componentsFromGrades(l,studentKey,{previous},{homeworkMax:0,discussionMax:assessment.discussionMax}).disc;payload[`w${l.week}_disc`]=Math.max(fields[`w${l.week}_disc`],prior??0);}
       if((attendance||(best?.score!=null&&reflection?.score!=null))&&fields[`w${l.week}_attend`]!=null)payload[`w${l.week}_attendProvisional`]=false;
       const attendanceValue=payload[`w${l.week}_attend`];
-      if(attendanceValue!=null)payload[`w${l.week}_attendNote`]=Number(attendanceValue)<maxAttend?'يرجى مشاهدة المحاضرة بشكل مسجل وحل واجب الحضور المسجل ليتم احتساب درجة الحضور، بعد اعتماد المحاضر وإكمال الواجب الأساسي.':'';
+      if(attendanceValue!=null)payload[`w${l.week}_attendNote`]=Number(attendanceValue)<maxAttend?(usesRecordingWatch(l)?'يمكنك متابعة التسجيل داخل المنصة حتى تصل إلى 80% للحصول على درجة الحضور الكاملة.':'يرجى استكمال متطلبات الحضور المسجل المعتمدة للفصل.') :'';
       const token = await ctx.firebaseAdminToken(env),
         write = await fetch(`${dbUrl}/grades/${key}.json`, {
           method: "PUT",
@@ -279,9 +281,19 @@ export async function handleCoursework(request, env, auth, path, ctx) {
   if(path==='/coursework/recording/start'&&request.method==='POST'){
     const b=await json(request),l=await lessonFor(env,b.lessonId,s);
     if(s.role==='student'&&l.status!=='published')reject('LESSON_NOT_AVAILABLE',403);
-    return {data:await startAcademicRecording(env,l)};
+    return {data:await startAcademicRecording(env,l,s.role==='student'?key:null)};
+  }
+  if(path==='/coursework/recording/checkpoint'&&request.method==='POST'){
+    if(s.role!=='student')reject('FORBIDDEN',403);const progress=await checkpointAcademicRecording(env,key,await json(request)),l=await lessonFor(env,progress.lessonId,s);
+    if(usesRecordingWatch(l)){
+      const current=await env.DB.prepare('SELECT * FROM course_attendance WHERE lesson_id=? AND student_key=?').bind(l.id,key).first(),automatic=!current||['automatic-recording-watch','automatic-zoom-attendance'].includes(current.approved_by);
+      if(automatic&&Number(progress.percent)>Number(current?.percent??-1))await env.DB.prepare("INSERT INTO course_attendance VALUES(?,?,?,?,?,?) ON CONFLICT(lesson_id,student_key) DO UPDATE SET percent=excluded.percent,source_hash=excluded.source_hash,approved_by=excluded.approved_by,approved_at=excluded.approved_at WHERE course_attendance.approved_by IN ('automatic-recording-watch','automatic-zoom-attendance') AND excluded.percent>course_attendance.percent").bind(l.id,key,progress.percent,'recording-watch-'+l.id,'automatic-recording-watch',new Date().toISOString()).run();
+      if(progress.percent>=50)await synchronize(env,ctx,l,key,'automatic-recording-watch',true);
+    }
+    return {data:progress};
   }
   if (path === "/coursework" && request.method === "GET") {
+    await ensureAcademicRecordingSchema(env);
     const lessons = (
       await env.DB.prepare(
         "SELECT * FROM course_lessons ORDER BY subject_key,week",
@@ -293,7 +305,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     );
     let results = [],
       attendance = [],
-      reflections = [];
+      reflections = [],recordingProgress=[];
     if (s.role === "student") {
       results = (
         await env.DB.prepare(
@@ -316,6 +328,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           .bind(key)
           .all()
       ).results;
+      recordingProgress=(await env.DB.prepare('SELECT lesson_id,ranges_json,duration_seconds,watched_seconds,last_position,updated_at FROM academic_recording_progress WHERE student_key=?').bind(key).all()).results;
     }
     const exams=s.role==='student'?(await env.DB.prepare(
       "SELECT e.*,x.closes_at exception_closes_at,x.active exception_active FROM exams e LEFT JOIN exam_exceptions x ON x.exam_id=e.id AND x.student_key=? WHERE e.status='published'",
@@ -353,6 +366,8 @@ export async function handleCoursework(request, env, auth, path, ctx) {
             result: results.find((r) => r.lesson_id === l.id) || null,
             attendance: attendance.find((r) => r.lesson_id === l.id) || attendanceFromGrades(l,key,gradeRecords,assessments.find(a=>a.lesson_id===l.id)?.attendance_max??(Number(s.settings.attend)||5)),
             reflection: studentReviewedRecord(reflections.find((r) => r.lesson_id === l.id)),
+            recordingProgress:(()=>{const p=recordingProgress.find(r=>r.lesson_id===l.id);return p?{...globalThis.SulukeraWatch.summary(JSON.parse(p.ranges_json),p.duration_seconds),duration:p.duration_seconds,lastPosition:p.last_position,updatedAt:p.updated_at}:{seconds:0,percent:0,lastPosition:0,ranges:[]};})(),
+            recordedAttendanceQuestionsRequired:!usesRecordingWatch(l),
           };
         }),
         maxHomework: Number(s.settings.hw) || 5,
@@ -538,6 +553,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
       )
         .bind(l.id, key)
         .first();
+    if(usesRecordingWatch(l))reject('RECORDED_ATTENDANCE_QUESTIONS_REMOVED',403);
     const a=recordedAttendance||attendanceFromGrades(l,key,await scopedGrades(s,auth,ctx),(await assessmentFor(env,l,s.settings)).attendanceMax);
     const max=(await assessmentFor(env,l,s.settings)).attendanceMax;
     // Pending attendance must not block recording work; submission alone awards no credit.
