@@ -24,8 +24,17 @@
   function projectStage(student,semesters={},subjects={},packages={},today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'})){
     const plan=resolvePlan(student,packages),limit=semesterLimit(plan),batch=normalize(student?.batch);
     if(!limit||!batch)return false;
-    return Object.values(semesters).some(term=>{
-      if(!(term.batches||[]).some(b=>normalize(b)===batch))return false;
+    const batchTerms=Object.values(semesters).filter(term=>(term.batches||[]).some(b=>normalize(b)===batch));
+    // A published current/upcoming academic term always takes precedence over
+    // graduation-project inference. Historical/contaminated archive records
+    // must never hide a student's newly approved courses or timetable.
+    const hasPublishedAcademicTerm=batchTerms.some(term=>{
+      const end=String(term.endDate||'').replace(/\//g,'-');
+      if(!end||end<today||['inactive','finished','completed','archived'].includes(term.status))return false;
+      return (term.subjects||[]).some(key=>subjects[key]&&subjectAllowed(student,subjects[key],packages));
+    });
+    if(hasPublishedAcademicTerm)return false;
+    return batchTerms.some(term=>{
       const end=String(term.endDate||'').replace(/\//g,'-');
       if(!end||end>=today)return false;
       const numbers=(term.subjects||[]).map(key=>subjectSemester(subjects[key])).filter(n=>n>0&&n<=limit);
