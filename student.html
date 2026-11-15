@@ -1648,7 +1648,6 @@ function isCurrentAcademicScheduleSlot(slot){
   // ended term is removed from the current timetable.
   if(end&&end<today)return false;
   const current=getCurrentSemesterForBatch(slot.batch);
-  if(current?.status==='project')return false;
   const currentStart=String(current?.startDate||'').replace(/\//g,'-');
   if(currentStart&&start&&start<currentStart)return false;
   return true;
@@ -1656,7 +1655,8 @@ function isCurrentAcademicScheduleSlot(slot){
 function getStudentScheduleSlots(student=currentUser?.data){
   if(!student) return [];
   const weekly = Object.values(dbData.schedule?.weekly||{}).filter(isCurrentAcademicScheduleSlot);
-  const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch)&&SulukeraAcademicPolicy.subjectAllowed(student,dbData.subjects?.[slot.subjectKey]||{},dbData.packages||{}));
+  const projectStage=isGraduationProjectStageStudent(student),enrolled=new Set(Object.values(dbData.enrollments||{}).filter(item=>item?.studentKey===currentUser?.fbKey&&item?.status!=='inactive').map(item=>item.subjectKey));
+  const matched = weekly.filter(slot=>normalizeBatchName(slot.batch)===normalizeBatchName(student.batch)&&SulukeraAcademicPolicy.subjectAllowed(student,dbData.subjects?.[slot.subjectKey]||{},dbData.packages||{})&&(!projectStage||enrolled.has(slot.subjectKey)));
   if(matched.length) return sortScheduleSlots(matched);
   return [];
 }
