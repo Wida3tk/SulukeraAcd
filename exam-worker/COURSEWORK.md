@@ -3,6 +3,7 @@
 Install schema before deploying the worker or publishing the UI:
 
     npx wrangler d1 execute sulukera-exams --remote --file=coursework.sql
+    npx wrangler d1 execute sulukera-exams --remote --file=coursework-upload-times.sql
     npm test
     npm run check
     npx wrangler deploy

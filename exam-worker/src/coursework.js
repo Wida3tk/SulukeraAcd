@@ -335,6 +335,9 @@ export async function handleCoursework(request, env, auth, path, ctx) {
     ).bind(key).all()).results:[];
     const gradeRecords=await scopedGrades(s,auth,ctx);
     const assessments = (await env.DB.prepare("SELECT * FROM lesson_assessment").all()).results;
+    const uploadTimes = s.role === "admin"
+      ? new Map((await env.DB.prepare("SELECT lesson_id,uploaded_at FROM coursework_upload_times").all()).results.map(row => [row.lesson_id, row.uploaded_at]))
+      : null;
     const discussions = s.role === "student" ? (await env.DB.prepare("SELECT * FROM academic_discussions WHERE student_key=?").bind(key).all()).results : [];
     const discussionHistory=s.role==='student'?(await env.DB.prepare('SELECT * FROM academic_discussion_attempts WHERE student_key=?').bind(key).all()).results:[];
     return {
@@ -354,6 +357,7 @@ export async function handleCoursework(request, env, auth, path, ctx) {
           const qs = JSON.parse(l.questions_json);
           return {
             ...l,
+            ...(uploadTimes ? { uploadedAt: uploadTimes.get(l.id) || null } : {}),
             homeworkMax:assessments.find(a=>a.lesson_id===l.id)?.homework_max??(Number(s.settings.hw)||5),
             attendanceMax:assessments.find(a=>a.lesson_id===l.id)?.attendance_max??(Number(s.settings.attend)||5),
             discussionMax:assessments.find(a=>a.lesson_id===l.id)?.discussion_max??(Number(s.settings.disc)||5),

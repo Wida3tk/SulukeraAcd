@@ -29,6 +29,7 @@ const fixtures = () => {
   const sql = new DatabaseSync(":memory:");
   sql.exec(readFileSync(new URL("./schema.sql", import.meta.url), "utf8"));
   sql.exec(readFileSync(new URL("./coursework.sql", import.meta.url), "utf8"));
+  sql.exec(readFileSync(new URL("./coursework-upload-times.sql", import.meta.url), "utf8"));
   sql.exec(readFileSync(new URL("./coursework_sync_triggers.sql", import.meta.url), "utf8"));
   const DB = {
     batch:async statements=>{sql.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());sql.exec('COMMIT');return result;}catch(error){sql.exec('ROLLBACK');throw error;}},
@@ -131,7 +132,8 @@ test("current semester excludes unassigned courses and templates survive a new b
   const f = fixtures();
   f.records.subjects.course.courseKey = "shared-course";
   f.records.subjects.unassigned = {...f.records.subjects.course};
-  f.records.semesters.current = {startDate:"2026-10-04",endDate:"2026-11-15",batches:["Q2-26"],subjects:["course"],status:"active"};
+  const todaySaudi = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  f.records.semesters.current = {startDate:todaySaudi,endDate:todaySaudi,batches:["Q2-26"],subjects:["course"],status:"active"};
   const list = (await f.call("admin", "")).data;
   assert.deepEqual(list.subjects.map(s=>s.key), ["course"]);
   await f.call("admin", "/lesson", f.config);
