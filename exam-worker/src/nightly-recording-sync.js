@@ -34,7 +34,26 @@ export function planNightlyRecording(host,meeting,file,lessons,program,reviewed=
  }
  return {state:'review',reason:'MEETING_NOT_CONFIGURED'};
 }
-export function chooseRecordingFile(files){const types=['shared_screen_with_speaker_view(CC)','shared_screen_with_speaker_view','shared_screen','active_speaker'];for(const type of types){const found=files.filter(f=>f.type===type);if(found.length===1)return found[0];if(found.length>1)return null;}return files.length===1?files[0]:null;}
+export function chooseRecordingFile(files) {
+ const duration = file => (Date.parse(file.end) - Date.parse(file.start)) / 1000;
+ const candidates = files.some(file => duration(file) >= 300)
+  ? files.filter(file => !(duration(file) > 0 && duration(file) <= 15))
+  : files;
+ const types = ['shared_screen_with_speaker_view(CC)', 'shared_screen_with_speaker_view', 'shared_screen', 'active_speaker'];
+ for (const type of types) {
+  const found = candidates.filter(file => file.type === type);
+  if (found.length) return found.length === 1 ? found[0] : null;
+ }
+ return candidates.length === 1 ? candidates[0] : null;
+}
+
+async function reviewRecordingFiles(env, meeting, host, reason) {
+ const sourceId = 'review:' + host + ':' + meeting.uuid;
+ const manifest = JSON.stringify({host, uuid: meeting.uuid, date: meeting.start.slice(0, 10)});
+ await env.DB.prepare(
+  "INSERT INTO nightly_recording_jobs VALUES(?,?,?,'review',?,0,?) ON CONFLICT(source_id) DO UPDATE SET state='review',reason=excluded.reason,updated_at=excluded.updated_at"
+ ).bind(sourceId, manifest, meeting.topic, reason, new Date().toISOString()).run();
+}
 async function professionalProgram(env,ctx){const token=await ctx.firebaseAdminToken(env),r=await fetch('https://sulukeraacd-default-rtdb.firebaseio.com/professionalPrograms/organizational_behavior.json',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error('PROFESSIONAL_RECORDING_CONFIG_'+r.status);return r.json();}
 export async function discoverNightlyRecordings(env,ctx,{now=Date.now(),preview=false,catalogReader=recordingCatalog,programReader=professionalProgram}={}){
  await nightlyRecordingSchema(env);const day=nightlySaudiDate(now),existing=await env.DB.prepare('SELECT state FROM nightly_recording_runs WHERE day=?').bind(day).first();if(!preview&&existing)return {alreadyScanned:true,day};
@@ -43,7 +62,18 @@ export async function discoverNightlyRecordings(env,ctx,{now=Date.now(),preview=
  const lessons=(await env.DB.prepare('SELECT * FROM course_lessons').all()).results;
  // Review metadata may not exist on a new installation; inspect sqlite catalog first.
  const hasReviews=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='zoom_drive_mapping_reviews'").first(),reviewed=hasReviews?(await env.DB.prepare('SELECT r.source_date,t.lesson_ids FROM zoom_drive_mapping_reviews r JOIN zoom_drive_transfers t ON t.source_id=r.source_id').all()).results:[];
- for(const host of HOSTS){try{const catalog=await catalogReader(env,host),program=host==='RushdABAT@gmail.com'?await programReader(env,ctx):null;if(preview){const probe=catalog.recordings.find(m=>m.meetingId!=='82789191279'&&m.files.length);if(probe)await verifyDirectRecordingAccess(env,host,probe.uuid,probe.files[0].id);}for(const m of catalog.recordings){if(m.meetingId==='82789191279'){summary.excluded++;continue;}const file=chooseRecordingFile(m.files);if(!file){if(m.files.length)summary.review++;continue;}
+ for(const host of HOSTS){try{const catalog=await catalogReader(env,host),program=host==='RushdABAT@gmail.com'?await programReader(env,ctx):null;if(preview){const probe=catalog.recordings.find(m=>m.meetingId!=='82789191279'&&m.files.length);if(probe)await verifyDirectRecordingAccess(env,host,probe.uuid,probe.files[0].id);}for(const m of catalog.recordings){if(m.meetingId==='82789191279'){summary.excluded++;continue;}
+    const file=chooseRecordingFile(m.files);
+    if(!file){
+     const plan=planNightlyRecording(host,m,{start:m.start},lessons,program,reviewed);
+     if(plan.state==='retained'){summary.retained++;continue;}
+     if(m.files.length||plan.state==='queued'){
+      summary.review++;
+      if(!preview)await reviewRecordingFiles(env,m,host,m.files.length?'AMBIGUOUS_RECORDING_FILES':'RECORDING_VIDEO_NOT_READY');
+     }
+     continue;
+    }
+    if(!preview)await env.DB.prepare("DELETE FROM nightly_recording_jobs WHERE source_id=? AND state='review'").bind('review:'+host+':'+m.uuid).run();
     const transferred=await env.DB.prepare('SELECT state FROM zoom_drive_transfers WHERE source_id=?').bind(file.id).first();if(transferred?.state==='complete'){summary.complete++;continue;}
     const plan=planNightlyRecording(host,m,file,lessons,program,reviewed);summary[plan.state]++;
     if(!preview)await env.DB.prepare('INSERT INTO nightly_recording_jobs(source_id,manifest_json,topic,state,reason,attempts,updated_at) VALUES(?,?,?,?,?,0,?) ON CONFLICT(source_id) DO UPDATE SET manifest_json=excluded.manifest_json,topic=excluded.topic,state=CASE WHEN nightly_recording_jobs.state IN (\'complete\',\'uploading\') THEN nightly_recording_jobs.state ELSE excluded.state END,reason=excluded.reason,attempts=CASE WHEN nightly_recording_jobs.state=\'uploading\' THEN nightly_recording_jobs.attempts ELSE 0 END,updated_at=excluded.updated_at').bind(file.id,JSON.stringify(plan.manifest||{host,sourceId:file.id,uuid:m.uuid,date:file.start.slice(0,10)}),m.topic,plan.state,plan.reason||'',new Date(now).toISOString()).run();

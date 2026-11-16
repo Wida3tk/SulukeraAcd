@@ -36,6 +36,21 @@ test('professional publication conditionally writes only recordingUrl; never pro
  try{await publishProfessionalRecording({}, {firebaseAdminToken:async()=> 'private'},'pro:track_1:unit_1:session_1','https://drive.google.com/file/d/video/view','');assert.equal(calls.filter(c=>c.options.method==='PUT').length,1);await publishProfessionalRecording({}, {firebaseAdminToken:async()=> 'private'},'pro:track_1:unit_1:session_1',value,'');assert.equal(calls.filter(c=>c.options.method==='PUT').length,1);}finally{globalThis.fetch=original;}
 });
 function fixture(){const sql=new DatabaseSync(':memory:');sql.exec('CREATE TABLE course_lessons(id TEXT);CREATE TABLE zoom_drive_transfers(source_id TEXT,state TEXT);');const DB={exec:async q=>sql.exec(q),prepare(q){const build=args=>({bind:(...a)=>build(a),first:async()=>sql.prepare(q).get(...args)||null,all:async()=>({results:sql.prepare(q).all(...args)}),run:async()=>({meta:{changes:sql.prepare(q).run(...args).changes}})});return build([]);}};return {sql,env:{DB}};}
+test('a short Zoom fragment does not block the lecture, while two substantial files appear in the review queue', async () => {
+ const full={...file,end:'2026-10-04T16:15Z'};
+ const fragment={...file,id:'fragment',end:'2026-10-04T15:00:06Z'};
+ assert.equal(chooseRecordingFile([fragment,full]),full);
+ const {sql,env}=fixture();
+ const scan=await discoverNightlyRecordings(env,{},{
+  now:Date.parse('2026-10-04T20:00Z'),
+  catalogReader:async (_,host)=>({recordings:host==='rushdacd.sa@gmail.com'?[{...meeting,start:file.start,files:[full,{...full,id:'other'}]}]:[]}),
+  programReader:async()=>null,
+ });
+ assert.equal(scan.review,1,JSON.stringify(scan));
+ const job=sql.prepare('SELECT topic,state,reason FROM nightly_recording_jobs').get();
+ assert.deepEqual({...job},{topic:meeting.topic,state:'review',reason:'AMBIGUOUS_RECORDING_FILES'});
+ sql.close();
+});
 test('account discovery scans once per day and an idle continuation never calls Zoom',async()=>{
  const {sql,env}=fixture();let scans=0;const options={now:Date.parse('2026-10-18T20:00Z'),catalogReader:async()=>{scans++;return {recordings:[]};},programReader:async()=>null};
  await discoverNightlyRecordings(env,{},options);assert.equal(scans,3);assert.equal((await discoverNightlyRecordings(env,{},options)).alreadyScanned,true);assert.equal(scans,3);

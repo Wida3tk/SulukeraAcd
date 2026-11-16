@@ -49,6 +49,72 @@ async function processZoomAttendanceReport(reportId,status){
 async function processZoomAttendanceButton(button){button.disabled=true;try{await processZoomAttendanceReport(button.dataset.report,button.parentElement.querySelector('[data-za-process-status]'));}finally{button.disabled=false;}}
 
 const zoomAttendanceOriginalHome=cwRenderCourseworkHome;
-async function openNightlyRecordingStatus(){try{const user=firebase.auth().currentUser,r=await fetch(EXAM_API_BASE+'/admin/recording-sync',{headers:{Authorization:'Bearer '+await user.getIdToken()}}),data=await r.json();if(!r.ok)throw Error(data.error||'تعذر عرض حالة التسجيلات');const dialog=document.createElement('dialog');dialog.dir='rtl';dialog.style.cssText='width:min(900px,94vw);max-height:85vh;overflow:auto;border:1px solid #dce4f4;border-radius:20px;padding:24px;color:#17365c;background:white';const labels={queued:'بانتظار النقل',uploading:'يجري استكمال النقل',complete:'اكتمل',retained:'التسجيل موجود — دون تكرار',review:'تحتاج مراجعة'},last=data.runs[0];dialog.innerHTML='<header style="display:flex;justify-content:space-between;gap:20px"><h2>المزامنة اليومية للتسجيلات</h2><button class="btn-out" onclick="this.closest(\'dialog\').close()">إغلاق</button></header><p>المزامنة '+(data.automatic?'مفعّلة':'متوقفة')+' — يوميًا الساعة <b>11:00 مساءً بتوقيت السعودية</b>.</p><p>البحث مرة واحدة يوميًا؛ استكمال الملفات المعلّقة لا يعيد البحث في الحسابات. مشروع التخرج مستثنى.</p>'+(last?'<p>آخر فحص: '+cwEscape(last.day)+' — '+cwEscape(labels[last.state]||last.state)+'</p>':'<p>أول فحص تلقائي يبدأ في الموعد المحدد.</p>')+data.jobs.map(j=>'<section style="border:1px solid #dce4f4;border-radius:12px;padding:16px;margin:12px 0"><b>'+cwEscape(j.topic)+'</b><p>'+cwEscape(labels[j.state]||j.state)+'</p>'+(j.reason?'<small>التفاصيل: '+cwEscape(j.reason)+'</small>':'')+'</section>').join('');dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();}catch(error){cwNotify(error.message);}}
+const recordingReviewReasons = {
+  AMBIGUOUS_RECORDING_FILES: 'وجد Zoom أكثر من ملف محتمل للمحاضرة.',
+  RECORDING_VIDEO_NOT_READY: 'ملف الفيديو غير جاهز في Zoom.',
+  NO_EXACT_LECTURE_MATCH: 'تعذرت مطابقة التسجيل مع محاضرة في الجدول.',
+  NO_EXACT_PROFESSIONAL_SESSION: 'تعذرت مطابقة التسجيل مع لقاء في البرنامج المهني.',
+  AMBIGUOUS_PROFESSIONAL_SESSION: 'طابق التسجيل أكثر من لقاء في البرنامج المهني.',
+  MEETING_NOT_CONFIGURED: 'رابط اجتماع Zoom غير مربوط بمقرر.',
+};
+
+async function loadRecordingSyncStatus() {
+  const user = firebase.auth().currentUser;
+  const response = await fetch(EXAM_API_BASE + '/admin/recording-sync', {
+    headers: {Authorization: 'Bearer ' + await user.getIdToken()},
+  });
+  if (!response.ok) throw Error('تعذر التحقق من مزامنة التسجيلات');
+  return response.json();
+}
+
+async function renderRecordingSyncAlert(container) {
+  if (!container || currentUser?.role !== 'admin') return;
+  container.querySelector('[data-recording-sync-alert]')?.remove();
+  const alert = document.createElement('section');
+  alert.dataset.recordingSyncAlert = '';
+  alert.style.cssText = 'margin:12px 0;padding:12px 16px;background:#fff7e6;color:#713f12;border:1px solid #e8c578;border-radius:12px';
+  container.prepend(alert);
+  alert.hidden = true;
+  let message;
+  try {
+    const data = await loadRecordingSyncStatus();
+    const reviewCount = data.jobs.filter(job => job.state === 'review').length;
+    const delayedCount = data.jobs.filter(job =>
+      ['queued', 'uploading'].includes(job.state) && Date.now() - Date.parse(job.updated_at) > 3600000
+    ).length;
+    const latest = data.runs[0];
+    const saudiNow = new Date(Date.now() + 3 * 3600000).toISOString();
+    const expectedDay = saudiNow.slice(11, 16) >= '23:15'
+      ? saudiNow.slice(0, 10)
+      : new Date(Date.parse(saudiNow) - 86400000).toISOString().slice(0, 10);
+    const notices = [];
+    if (!data.automatic) notices.push('مزامنة التسجيلات التلقائية متوقفة.');
+    else if (!latest || latest.day < expectedDay || latest.state === 'running' && Date.now() - Date.parse(latest.updated_at) > 900000) notices.push('فحص التسجيلات لم يكتمل في موعده.');
+    else if (latest.state === 'review') notices.push('تعذر فحص بعض حسابات Zoom.');
+    if (reviewCount) notices.push('تسجيلات تحتاج مراجعة (' + reviewCount + ').');
+    if (delayedCount) notices.push('تسجيلات تأخر نقلها أكثر من ساعة (' + delayedCount + ').');
+    message = notices.join(' ');
+  } catch (error) {
+    message = error.message;
+  }
+  if (!message || !alert.isConnected || currentUser?.role !== 'admin') return;
+  const label = document.createElement('strong');
+  label.textContent = message;
+  const button = document.createElement('button');
+  button.className = 'btn-out';
+  button.style.marginInlineStart = '12px';
+  button.textContent = 'عرض حالة التسجيلات';
+  button.onclick = openNightlyRecordingStatus;
+  alert.append(label, button);
+  alert.hidden = false;
+}
+
+const recordingOriginalDashboard = renderDashboard;
+renderDashboard = function (...args) {
+  const result = recordingOriginalDashboard.apply(this, args);
+  void renderRecordingSyncAlert(document.querySelector('#page-dashboard .ops-dashboard'));
+  return result;
+};
+async function openNightlyRecordingStatus(){try{const data=await loadRecordingSyncStatus();const dialog=document.createElement('dialog');dialog.dir='rtl';dialog.style.cssText='width:min(900px,94vw);max-height:85vh;overflow:auto;border:1px solid #dce4f4;border-radius:20px;padding:24px;color:#17365c;background:white';const labels={queued:'بانتظار النقل',uploading:'يجري استكمال النقل',complete:'اكتمل',retained:'التسجيل موجود — دون تكرار',review:'تحتاج مراجعة'},last=data.runs[0];dialog.innerHTML='<header style="display:flex;justify-content:space-between;gap:20px"><h2>المزامنة اليومية للتسجيلات</h2><button class="btn-out" onclick="this.closest(\'dialog\').close()">إغلاق</button></header><p>المزامنة '+(data.automatic?'مفعّلة':'متوقفة')+' — يوميًا الساعة <b>11:00 مساءً بتوقيت السعودية</b>.</p><p>البحث مرة واحدة يوميًا؛ استكمال الملفات المعلّقة لا يعيد البحث في الحسابات. مشروع التخرج مستثنى.</p>'+(last?'<p>آخر فحص: '+cwEscape(last.day)+' — '+cwEscape(labels[last.state]||last.state)+'</p>':'<p>أول فحص تلقائي يبدأ في الموعد المحدد.</p>')+[...data.jobs].sort((a,b)=>Number(b.state==="review")-Number(a.state==="review")).map(j=>'<section style="border:1px solid #dce4f4;border-radius:12px;padding:16px;margin:12px 0"><b>'+cwEscape(j.topic)+'</b><p>'+cwEscape(labels[j.state]||j.state)+'</p>'+(j.reason?'<small>التفاصيل: '+cwEscape(recordingReviewReasons[j.reason]||j.reason)+'</small>':'')+'</section>').join('');dialog.addEventListener('close',()=>dialog.remove());document.body.append(dialog);dialog.showModal();}catch(error){cwNotify(error.message);}}
 async function retryZoomAttendanceReport(reportId,button){button.disabled=true;try{const user=firebase.auth().currentUser,response=await fetch(EXAM_API_BASE+'/admin/zoom-attendance/retry',{method:'POST',headers:{Authorization:'Bearer '+await user.getIdToken(),'Content-Type':'application/json'},body:JSON.stringify({reportId})});if(!response.ok)throw Error('تعذر إعادة الفحص');button.textContent='تمت الإضافة إلى المزامنة';}catch(error){cwNotify(error.message);button.disabled=false;}}
-cwRenderCourseworkHome=function(){zoomAttendanceOriginalHome();if(currentUser.role!=='admin')return;const hero=cwHost()?.querySelector('.cw-report-hero');if(!hero)return;const button=document.createElement('button');button.type='button';button.className='btn-out';button.style.cssText='margin-top:14px;background:#fff;color:#1644a0;border-radius:12px;padding:10px 16px';button.textContent='تقارير حضور Zoom والمزامنة';button.onclick=openZoomAttendanceReports;hero.append(button);const recordings=document.createElement('button');recordings.type='button';recordings.className='btn-out';recordings.style.cssText=button.style.cssText+';margin-inline-start:8px';recordings.textContent='حالة مزامنة التسجيلات';recordings.onclick=openNightlyRecordingStatus;hero.append(recordings);};
+cwRenderCourseworkHome=function(){zoomAttendanceOriginalHome();if(currentUser.role!=='admin')return;const hero=cwHost()?.querySelector('.cw-report-hero');if(!hero)return;const button=document.createElement('button');button.type='button';button.className='btn-out';button.style.cssText='margin-top:14px;background:#fff;color:#1644a0;border-radius:12px;padding:10px 16px';button.textContent='تقارير حضور Zoom والمزامنة';button.onclick=openZoomAttendanceReports;hero.append(button);const recordings=document.createElement('button');recordings.type='button';recordings.className='btn-out';recordings.style.cssText=button.style.cssText+';margin-inline-start:8px';recordings.textContent='حالة مزامنة التسجيلات';recordings.onclick=openNightlyRecordingStatus;hero.append(recordings);void renderRecordingSyncAlert(hero.parentElement);};
