@@ -1,3 +1,4 @@
+import {beginStaffAudit} from './staff-audit.js';
 import { evaluationMonthCutoff, evaluationCutoffWhere } from './evaluation-month.js';
 import { handleProfessionalRecordings, handleProfessionalRecordingMedia } from "./professional-recordings.js";
 import { handleGraduationProject } from "./graduation-projects.js";
@@ -1106,6 +1107,8 @@ export default {
     ctx.waitUntil(retryPendingCoursework(env,{firebaseAdminToken}).then(result=>{if(result.attempted)console.log("coursework_sync_retry",result);}));
   },
   async fetch(request, env) {
+    let completeAudit=null;
+    const response=await (async()=>{
     if (request.method === "OPTIONS")
       return new Response(null, { status: 204, headers: corsHeaders(request) });
     try {
@@ -1120,6 +1123,11 @@ export default {
       const media = await handleProfessionalRecordingMedia(request,env,path,{corsHeaders});
       if(media)return media;
       const auth = await authenticate(request);
+      completeAudit=await beginStaffAudit(request,auth,async(key,entry)=>{
+        const token=await firebaseAdminToken(env);
+        const saved=await fetch(`${FIREBASE_DB}/staffActivityLogs/${key}.json`,{method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(entry)});
+        if(!saved.ok)fail('AUDIT_STORAGE_UNAVAILABLE',503);
+      });
       if(path==='/admin/recording-sync'&&request.method==='GET'){requireRole(auth,'admin');await nightlyRecordingSchema(env);return reply(request,{automatic:env.ZOOM_RECORDINGS_AUTO==='true',timeSaudi:'23:00',runs:(await env.DB.prepare('SELECT * FROM nightly_recording_runs ORDER BY day DESC LIMIT 7').all()).results,jobs:(await env.DB.prepare('SELECT source_id,topic,state,reason,attempts,updated_at FROM nightly_recording_jobs ORDER BY updated_at DESC LIMIT 100').all()).results});}
       if(path==='/admin/zoom-attendance'&&request.method==='GET'){
         requireRole(auth,'admin');await attendanceSchema(env);
@@ -1239,5 +1247,8 @@ export default {
         error.status || 500,
       );
     }
+    })();
+    if(completeAudit) await completeAudit(response);
+    return response;
   },
 };

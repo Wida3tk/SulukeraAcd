@@ -1030,6 +1030,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
     <div class="form-group"><label>الاسم الكامل *</label><input type="text" id="userFullName"></div>
     <div class="form-group"><label>الدور</label><select id="userRole" onchange="toggleUserSubjectsField()"><option value="lecturer">👨‍🏫 محاضر</option><option value="finance">💰 مالية</option><option value="admin">🔐 إدارة</option></select></div>
   </div>
+  <div class="form-group"><label>المسمى الوظيفي</label><input type="text" id="userStaffTitle" placeholder="مثال: خدمة العملاء - الإرشاد الأكاديمي"></div>
   <div class="form-group"><label>اسم المستخدم *</label><input type="text" id="userUsername"></div>
   <div class="form-group"><label>كلمة المرور *</label><input type="password" id="userPassword"></div>
   <div class="form-group" id="userSubjectsGroup"><label>المقررات المرتبطة بالمحاضر</label><select id="userSubjects" multiple style="height:80px;"></select></div>
@@ -1420,6 +1421,7 @@ async function loadAllFromFirebase(){
     activityLogsData = root.activityLogs
       ? Object.entries(root.activityLogs).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
+    activityLogsData.push(...Object.entries(root.staffActivityLogs||{}).map(([key,item])=>({_fbKey:key,...item,_staffAudit:true})));
     advisorCasesData = root.advisorCases
       ? Object.entries(root.advisorCases).map(([key, item]) => ({ _fbKey:key, ...item }))
       : [];
@@ -1818,6 +1820,9 @@ async function saveActivityLog(entry){
   const payload = {
     actorName:entry.actorName||currentUser?.name||'مستخدم النظام',
     actorRole:entry.actorRole||currentUser?.role||'system',
+    actorUid:currentUser?.authUid||'',
+    actorUsername:currentUser?.username||'',
+    actorTitle:currentUser?.staffTitle||'',
     action:entry.action||'تحديث',
     targetType:entry.targetType||'general',
     targetKey:entry.targetKey||'',
@@ -2618,7 +2623,7 @@ async function _finishLogin() {
   if(currentUser.role==='lecturer') void lecturerSurveyGate();
   document.getElementById('sidebarUserName').textContent=currentUser.name;
   const roleNames={admin:'مدير النظام',finance:'موظف المالية',lecturer:'عضو هيئة التدريس',student:'طالب'};
-  document.getElementById('sidebarUserRole').textContent=roleNames[currentUser.role];
+  document.getElementById('sidebarUserRole').textContent=currentUser.staffTitle||roleNames[currentUser.role];
   document.getElementById('loginUsername').value='';
   document.getElementById('loginPassword').value='';
   // Clear seed data and load from Firebase
@@ -4964,7 +4969,7 @@ function renderUsersTable() {
       : u.role==='finance' ? 'صلاحيات مالية فقط' : 'جميع المقررات';
     return `<tr><td class="mono">${i+1}</td><td><strong>${u.name}</strong></td>
       <td class="mono" style="color:var(--primary)">${u.username}</td>
-      <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${roleNames[u.role]||u.role}</span></td>
+      <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${escapeHtml(u.staffTitle||roleNames[u.role]||u.role)}</span></td>
       <td style="font-size:11px;color:var(--text-muted)">${mySubjs}</td>
       <td style="display:flex;gap:4px;">${u.username!=='admin'
         ?`<button class="btn btn-sm" onclick="openUserModal(${origIdx})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteUser(${origIdx})">🗑️</button>`
@@ -4976,6 +4981,7 @@ function openUserModal(i=-1) {
   editingUserIdx=i;
   document.getElementById('userModalTitle').textContent=i>=0?'✏️ تعديل مستخدم':'👤 إضافة مستخدم';
   document.getElementById('userFullName').value=i>=0?users[i].name:'';
+  document.getElementById('userStaffTitle').value=i>=0?users[i].staffTitle||'':'';
   const usernameField=document.getElementById('userUsername');
   usernameField.value=i>=0?users[i].username:'';
   usernameField.readOnly=i>=0;
@@ -5009,6 +5015,7 @@ function toggleUserSubjectsField(){
   select.disabled=!isLecturer;
 }
 async function saveUser() {
+  const staffTitle=document.getElementById('userStaffTitle').value.trim();
   const name=document.getElementById('userFullName').value.trim();
   const username=document.getElementById('userUsername').value.trim();
   const password=document.getElementById('userPassword').value;
@@ -5024,7 +5031,7 @@ async function saveUser() {
 
   if (editingUserIdx>=0) {
     const u=users[editingUserIdx];
-    u.name=name; u.username=username; u.role=role; u.subjects=subjs;
+    u.name=name; u.username=username; u.role=role; u.subjects=subjs; u.staffTitle=staffTitle;
     if (password) u.password=password;
     userFbKey = u._fbKey || username;
     // عيّن المحاضر للمواد المختارة بـ username الثابت
@@ -5042,7 +5049,7 @@ async function saveUser() {
       if(authResult.reused) showToast('✅ تم ربط حساب الدخول الموجود دون تغيير كلمة مروره');
     }
     catch(error){ console.error('Create auth account error',error); return showToast('⚠️ تعذر إنشاء أو ربط حساب الدخول الآمن'); }
-    const nu={id:username,_fbKey:userFbKey,name,username,role,subjects:subjs,authProvider:'firebase'};
+    const nu={id:username,_fbKey:userFbKey,name,username,role,staffTitle,subjects:subjs,authProvider:'firebase'};
     users.push(nu);
     if (role==='lecturer'){
       subjs.forEach(si=>{ if(subjects[si]) subjects[si].lecturerUserId=username; });
@@ -5055,7 +5062,7 @@ async function saveUser() {
     // 1. احفظ ملف المستخدم المرتبط بحساب Firebase Authentication
     const existingUser = users.find(u=>u.username===username)||{};
     const linkedSubjectKeys=subjs.map(si=>subjects[si]?._fbKey).filter(Boolean);
-    await fbRef('users/'+userFbKey).update({name,username,role,subjects:linkedSubjectKeys,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+    await fbRef('users/'+userFbKey).update({name,username,role,staffTitle,subjects:linkedSubjectKeys,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
     if(role==='lecturer') await fbRef('lecturerDirectory/'+username).set({name,updatedAt:new Date().toISOString()});
     else await fbRef('lecturerDirectory/'+username).remove();
 
@@ -8829,6 +8836,6 @@ async function cleanDuplicateStudents(){
 <script src="email-campaigns-ui.js?v=20261111-draft"></script>
 <link rel="stylesheet" href="lecturer-grading-gate.css?v=20261102">
 <script src="lecturer-grading-gate.js?v=20261102"></script>
+<script src="staff-audit.js?v=20261118"></script>
 </body>
 </html>
-

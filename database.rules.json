@@ -250,6 +250,16 @@
     },
     "lecturerProductivity": {
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+    "staffActivityLogs": {
+      ".indexOn": [
+        "actorUid",
+        "createdAt"
+      ],
+      "$entry": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin' && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['actorUid','actorName','actorUsername','action','source','createdAt','recordedAt']) && newData.child('actorUid').val() === auth.uid && newData.child('actorName').val() === root.child('users').child(auth.uid).child('name').val() && newData.child('actorUsername').val() === root.child('users').child(auth.uid).child('username').val() && newData.child('source').val() === 'firebase' && newData.child('recordedAt').val() === now"
+      }
     }
   }
 }
