@@ -582,6 +582,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
       <div class="page" id="page-professionalprogress"><div id="professionalProgressAdminContent"><div class="card card-accent"><div class="card-title">📊 تقدم المتدربين</div><div class="alert alert-info">جاري تحميل بيانات المتابعة...</div></div></div></div>
       <div class="page" id="page-graduationprojects"><div id="graduationProjectsAdminContent"><div class="card card-accent"><div class="card-title">🎓 مشاريع التخرج</div><div class="alert alert-info">جاري تحميل المشاريع...</div></div></div></div>
       <div class="page" id="page-coursework"><div id="academicCourseworkContent"></div></div>
+      <div class="page" id="page-discussionreview"><div id="adminDiscussionContent"></div></div>
 
       <!-- BATCH-CENTRIC ACADEMIC PLANS -->
       <div class="page" id="page-batchplans">
@@ -2668,6 +2669,7 @@ const navConfig = {
     {id:'cards',icon:'🪪',label:'بطاقات الطلاب'},
     {id:'users',icon:'👥',label:'المستخدمون'},
     {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
+    {id:'discussionreview',icon:'💬',label:'رصد المناقشات'},
     {id:'reports',icon:'📋',label:'التقارير'},
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
     {id:'batchplans',icon:'🧩',label:'خطط الدفعات والمقررات'},
@@ -2722,6 +2724,7 @@ const adminNavGroups=[
     {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
     {id:'exams',icon:'📝',label:'الاختبارات'},
     {id:'coursework',icon:'📝',label:'المحاضرات والواجبات'},
+    {id:'discussionreview',icon:'💬',label:'رصد المناقشات'},
     {id:'evaluations',icon:'📈',label:'التقييم'},
     {id:'batchplans',icon:'🧩',label:'الخطط الدراسية'},
     {id:'graduationprojects',icon:'🎓',label:'مشاريع التخرج'}
@@ -2778,6 +2781,7 @@ const pageTitles={
   lecturerperformance:'أداء المحاضرين',
   revenue:'الإيرادات وأهداف المنتجات',
   coursework:'المحاضرات والواجبات',
+  discussionreview:'رصد المناقشات',
   performance:'الأداء والتقدم',dashboard:'لوحة التحكم',subjects:'المواد الدراسية',students:'قائمة الطلاب',academicadvisor:'المرشد الأكاديمي',
   'student-profile':'سجل الطالب',cards:'بطاقات الطلاب',users:'المحاضرون والمستخدمون',
   grades:'إدخال الدرجات',reports:'التقارير الأكاديمية',programs:'البرامج والمسارات والدفعات',professionalprogram:'محتوى ومسارات البرنامج المهني',professionalprogress:'تقدم متدربي البرنامج المهني', batchplans:'الخطط الدراسية', graduationprojects:'مشاريع التخرج', alerts:'الطلبات والتنبيهات', schedule:'الجدول الأكاديمي', exams:'الاختبارات', evaluations:'التقييم ورضا الطلاب', semesters:'الفصول الدراسية', productivity:'الساعات الإنتاجية للمحاضرين',
@@ -2847,6 +2851,7 @@ function refreshPage(p) {
   if (p==='schedule') renderScheduleAdmin();
   if (p==='exams') renderExamSchedulesAdmin();
   if (p==='coursework')renderAcademicCoursework();
+  if (p==='discussionreview')renderAdminDiscussions();
   if (p==='evaluations') loadExamEvaluationAnalytics();
   if (p==='semesters') renderSemestersPage();
   if (p==='alerts') renderAlertsPage();
@@ -8780,6 +8785,8 @@ async function cleanDuplicateStudents(){
 
 </script>
 <script src="coursework-ui.js?v=20261116-upload-time"></script>
+<link rel="stylesheet" href="admin-discussions.css?v=20261118">
+<script src="admin-discussions.js?v=20261118"></script>
 <script src="zoom-attendance-admin.js?v=20261116-recording-alerts"></script>
 <script src="student-status-ui.js?v=20261006-status"></script>
 <script src="performance.js?v=20261006-meetings"></script>
