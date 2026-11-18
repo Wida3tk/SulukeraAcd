@@ -3061,7 +3061,9 @@ function renderAdminDashboard(){
   const activeBatches=batches.filter(item=>item.studentCount>0);
   const assignedSections=subjects.filter(subject=>subject.lecturerUserId).length;
   const attentionCount=actions.reduce((sum,item)=>sum+Number(item.count||0),0);
-  const activeSemester=Object.values(semestersData||{}).find(semester=>semester.status==='active');
+  const todayForSemester=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
+  const activeSemesterList=Object.values(semestersData||{}).filter(semester=>semester.status==='active');
+  const activeSemester=activeSemesterList.find(semester=>semester.startDate&&semester.endDate&&semester.startDate<=todayForSemester&&semester.endDate>=todayForSemester)||activeSemesterList.filter(semester=>!semester.endDate||semester.endDate>=todayForSemester).sort((x,y)=>String(x.startDate||'').localeCompare(String(y.startDate||'')))[0]||activeSemesterList[0];
   const topStats=[
     {label:'الطلاب النشطون',value:activeStudents.length,sub:'باستثناء الحسابات المنسحبة',color:'#0D40FC'},
     {label:'الدفعات النشطة',value:activeBatches.length,sub:'دفعات تضم طلابًا مسجلين',color:'#16a085'},
@@ -8902,7 +8904,7 @@ async function cleanDuplicateStudents(){
 <script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>
 <script src="evaluation-dashboard.js?v=20261008-dimensions"></script>
 <script src="admin-roles.js?v=20261118-color"></script>
-<script src="admin-smart.js?v=20261119-smart"></script>
+<script src="admin-smart.js?v=20261119-current"></script>
 <script src="admin-shell.js?v=20261119-nav"></script>
 <link rel="stylesheet" href="graduation-project.css?v=20261018-attendance-import">
 <script src="graduation-project-model.js?v=20261021-six-members"></script>
