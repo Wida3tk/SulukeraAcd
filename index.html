@@ -5127,8 +5127,10 @@ async function saveUser() {
     const linkedSubjectKeys=subjs.map(si=>subjects[si]?._fbKey).filter(Boolean);
     await fbRef('users/'+userFbKey).update({name,username,role,staffTitle,adminProfile:adminProfileValue==='full'?null:adminProfileValue,subjects:linkedSubjectKeys,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
     if(!isNewUser&&password) await applyStaffPassword(users.find(u=>u.username===username),password);
-    if(role==='lecturer') await fbRef('lecturerDirectory/'+username).set({name,updatedAt:new Date().toISOString()});
-    else await fbRef('lecturerDirectory/'+username).remove();
+    const directoryPathOk=!/[.#$\[\]\/]/.test(username);
+    if(role==='lecturer'&&directoryPathOk) await fbRef('lecturerDirectory/'+username).set({name,updatedAt:new Date().toISOString()});
+    else if(role==='lecturer') showToast('⚠️ اسم مستخدم المحاضر يحتوي نقطة أو رمزًا، فلن يظهر اسمه في صفحات الطلاب. يُفضّل اسم مستخدم بلا نقاط',9000);
+    else if(directoryPathOk) await fbRef('lecturerDirectory/'+username).remove();
 
     // 2. حدّث lecturerUserId لكل مادة مباشرة في Firebase (بدون إعادة كتابة كامل السجل)
     if(role==='lecturer'){
@@ -5163,7 +5165,7 @@ async function deleteUser(i) {
   const user=users[i];
   const updates={};
   updates['users/'+(user._fbKey||user.id||user.username)]=null;
-  if(user.username) updates['lecturerDirectory/'+user.username]=null;
+  if(user.username&&!/[.#$\[\]\/]/.test(user.username)) updates['lecturerDirectory/'+user.username]=null;
   subjects.forEach(s=>{
     if(s._fbKey && [user.username,user.id,user._fbKey].includes(s.lecturerUserId)){
       updates['subjects/'+s._fbKey+'/lecturerUserId']=null;
