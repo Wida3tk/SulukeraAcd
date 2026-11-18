@@ -327,6 +327,57 @@ async function adminChangeStudentPassword(request, env, auth) {
   if (!update.ok) fail("PASSWORD_UPDATE_FAILED", 502);
   return { updated: true };
 }
+async function adminSetStaffPassword(request, env, auth) {
+  requireRole(auth, "admin");
+  if (auth.profile.adminProfile && auth.profile.adminProfile !== "full")
+    fail("FORBIDDEN", 403);
+  const body = await bodyJson(request),
+    username = String(body.username || "")
+      .trim()
+      .toLowerCase(),
+    password = String(body.password || "");
+  if (!username || /^sul-\d+$/i.test(username) || password.length < 8)
+    fail("INVALID_PASSWORD_REQUEST");
+  const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(username),
+    ),
+    email = `${Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("")}@login.sulukera.invalid`,
+    token = await firebaseAdminToken(env),
+    headers = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+  const lookup = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:lookup`,
+    { method: "POST", headers, body: JSON.stringify({ email: [email] }) },
+  );
+  const found = lookup.ok ? await lookup.json() : {};
+  const existingUid = found.users?.[0]?.localId;
+  if (!existingUid) {
+    const create = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ email, password, emailVerified: true }),
+      },
+    );
+    const created = await create.json().catch(() => ({}));
+    if (!create.ok || !created.localId) fail("STAFF_AUTH_CREATE_FAILED", 502);
+    return { uid: created.localId, created: true, updated: true };
+  }
+  const update = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:update`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ localId: existingUid, password, emailVerified: true }),
+    },
+  );
+  if (!update.ok) fail("PASSWORD_UPDATE_FAILED", 502);
+  return { uid: existingUid, created: false, updated: true };
+}
 async function adminLookupAuthAccount(request, env, auth) {
   requireRole(auth, "admin", "academic_admin");
   const body = await bodyJson(request),
@@ -1189,6 +1240,8 @@ export default {
           request,
           await adminChangeStudentPassword(request, env, auth),
         );
+      if (path === "/admin/staff-password" && request.method === "POST")
+        return reply(request, await adminSetStaffPassword(request, env, auth));
       if (path === "/admin/auth-account-lookup" && request.method === "POST")
         return reply(request, await adminLookupAuthAccount(request, env, auth));
       if (path === "/admin/exams" && request.method === "GET")

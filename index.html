@@ -1223,6 +1223,19 @@ async function provisionFirebaseAuthAccount(username,password){
   if(!response.ok) throw new Error(result?.error?.message||'AUTH_ACCOUNT_CREATE_FAILED');
   return result.localId;
 }
+function authAccountErrorMessage(error){
+  const code=String(error?.message||error||'').split(':')[0].trim();
+  const known={
+    EMAIL_EXISTS:'اسم المستخدم مرتبط بحساب دخول سابق ولم يتمكن الخادم من ربطه. جرّبي اسم مستخدم مختلفًا',
+    WEAK_PASSWORD:'كلمة المرور ضعيفة، استخدمي 8 أحرف على الأقل',
+    PASSWORD_DOES_NOT_MEET_REQUIREMENTS:'كلمة المرور لا تطابق شروط الأمان (أحرف كبيرة وصغيرة وأرقام ورمز)',
+    OPERATION_NOT_ALLOWED:'تسجيل الدخول بكلمة مرور معطّل في إعدادات Firebase',
+    ADMIN_ONLY_OPERATION:'إنشاء الحسابات من المتصفح معطّل في إعدادات Firebase',
+    TOO_MANY_ATTEMPTS_TRY_LATER:'محاولات كثيرة، انتظري دقائق ثم أعيدي المحاولة',
+    INVALID_EMAIL:'اسم المستخدم يحتوي رموزًا غير مقبولة'
+  };
+  return (known[code]||'خطأ غير معروف')+` (${code||'—'})`;
+}
 async function provisionOrReuseFirebaseAuthAccount(username,password){
   try{return {uid:await provisionFirebaseAuthAccount(username,password),reused:false};}
   catch(error){
@@ -2561,7 +2574,7 @@ async function syncMissingSemesterEnrollments(studentIdx=null){
   return added;
 }
 function closeModal(id){document.getElementById(id).classList.remove('open');}
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function showToast(msg,ms=2800){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(showToast._t);showToast._t=setTimeout(()=>t.classList.remove("show"),ms);}
 function initGrades(){subjects.forEach((subj,si)=>{if(!grades[si])grades[si]={};subj.students.forEach(idx=>{if(!grades[si][idx])grades[si][idx]=makeEmptyGrade();});});}
 
 // ══════════════════════════════════════════════
@@ -4984,11 +4997,37 @@ function renderUsersTable() {
       <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${escapeHtml(u.staffTitle||roleNames[u.role]||u.role)}</span>${u.role==='admin'&&typeof adminProfile==='function'&&adminProfile(u)!=='full'?` <span class="badge badge-info">${escapeHtml(adminProfileLabel(u))}</span>`:''}</td>
       <td style="font-size:11px;color:var(--text-muted)">${mySubjs}</td>
       <td style="display:flex;gap:4px;">${u.username!=='admin'
-        ?`<button class="btn btn-sm" onclick="openUserModal(${origIdx})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteUser(${origIdx})">🗑️</button>`
+        ?`<button class="btn btn-sm" onclick="openUserModal(${origIdx})">✏️</button>${typeof adminProfile!=='function'||adminProfile()==='full'?`<button class="btn btn-sm" title="تعيين كلمة مرور" onclick="setStaffPassword(${origIdx})">🔑</button>`:''}<button class="btn btn-danger btn-sm" onclick="deleteUser(${origIdx})">🗑️</button>`
         :'<span style="font-size:11px;color:var(--text-muted)">محمي</span>'}</td></tr>`;
   }).join('');
 }
 
+async function applyStaffPassword(user,password){
+  if(!user?.username) throw new Error('USER_NOT_FOUND');
+  const result=await secureAdminExamRequest('/admin/staff-password',{method:'POST',body:JSON.stringify({username:user.username,password})});
+  if(result?.uid&&user._fbKey&&result.uid!==user._fbKey){
+    const snapshot=await fbRef('users/'+user._fbKey).get();
+    const record=snapshot.exists()?snapshot.val():{name:user.name,username:user.username,role:user.role,staffTitle:user.staffTitle||'',adminProfile:user.adminProfile||null,authProvider:'firebase',createdAt:new Date().toISOString()};
+    await fbRef('users/'+result.uid).set({...record,updatedAt:new Date().toISOString()});
+    await fbRef('users/'+user._fbKey).remove();
+    user._fbKey=result.uid;
+  }
+  await saveActivityLog({action:'تعيين كلمة مرور موظف',targetType:'user',targetKey:user._fbKey||'',targetLabel:user.name||user.username});
+  return result;
+}
+async function setStaffPassword(i){
+  if(typeof adminProfile==='function'&&adminProfile()!=='full') return showToast('⚠️ متاح للإدارة الكاملة فقط');
+  const user=users[i];
+  if(!user?.username) return showToast('⚠️ تعذر العثور على المستخدم');
+  const password=prompt(`كلمة المرور الجديدة لـ ${user.name} (8 أحرف على الأقل):`);
+  if(password===null) return;
+  if(password.length<8) return showToast('⚠️ كلمة المرور يجب ألا تقل عن 8 أحرف');
+  if(prompt('أعيدي كتابة كلمة المرور للتأكيد:')!==password) return showToast('⚠️ كلمتا المرور غير متطابقتين');
+  showLoader(true);
+  try{ await applyStaffPassword(user,password); renderUsersTable(); showToast(`✅ تم تعيين كلمة مرور ${user.name}`,5000); }
+  catch(error){ console.error('Set staff password error',error); showToast('⚠️ تعذر تعيين كلمة المرور: '+(/not found|404|Unexpected token/i.test(String(error?.message))?'الخادم لم يُحدّث بعد بهذه الميزة':String(error?.message||error)),9000); }
+  finally{ showLoader(false); }
+}
 function openUserModal(i=-1) {
   editingUserIdx=i;
   document.getElementById('userModalTitle').textContent=i>=0?'✏️ تعديل مستخدم':'👤 إضافة مستخدم';
@@ -5038,7 +5077,7 @@ async function saveUser() {
   if(editingUserIdx>=0&&users[editingUserIdx]?.username===currentUser?.username&&adminProfileValue!==(currentUser.adminProfile||'full')&&adminProfileValue!=='full') return showToast('⚠️ لا يمكن تقييد صلاحيات حسابك الحالي');
   const subjs=role==='lecturer'?Array.from(document.getElementById('userSubjects').selectedOptions).map(o=>parseInt(o.value)):[];
   if (!name||!username) return showToast('⚠️ أدخل الاسم واسم المستخدم');
-  if(editingUserIdx>=0&&password) return showToast('⚠️ تعديل كلمة المرور يتم من حساب المستخدم بعد تسجيل الدخول');
+  if(password&&password.length<8) return showToast('⚠️ كلمة المرور يجب ألا تقل عن 8 أحرف');
   if(users.some((u,i)=>i!==editingUserIdx&&u.username.toLowerCase()===username.toLowerCase()))
     return showToast('⚠️ اسم المستخدم مستخدم مسبقاً');
 
@@ -5048,7 +5087,7 @@ async function saveUser() {
   if (editingUserIdx>=0) {
     const u=users[editingUserIdx];
     u.name=name; u.username=username; u.role=role; u.subjects=subjs; u.staffTitle=staffTitle; u.adminProfile=adminProfileValue==='full'?null:adminProfileValue;
-    if (password) u.password=password;
+
     userFbKey = u._fbKey || username;
     // عيّن المحاضر للمواد المختارة بـ username الثابت
     if (role==='lecturer'){
@@ -5060,11 +5099,19 @@ async function saveUser() {
   } else {
     if (!password) return showToast('⚠️ أدخل كلمة المرور');
     try{
-      const authResult=await provisionOrReuseFirebaseAuthAccount(username,password);
+      const authResult=await secureAdminExamRequest('/admin/staff-password',{method:'POST',body:JSON.stringify({username,password})});
+      if(!authResult?.uid) throw new Error('STAFF_AUTH_CREATE_FAILED');
       userFbKey=authResult.uid;
-      if(authResult.reused) showToast('✅ تم ربط حساب الدخول الموجود دون تغيير كلمة مروره');
     }
-    catch(error){ console.error('Create auth account error',error); return showToast('⚠️ تعذر إنشاء أو ربط حساب الدخول الآمن'); }
+    catch(serverError){
+      console.warn('Staff password endpoint unavailable, using browser sign-up',serverError);
+      try{
+        const authResult=await provisionOrReuseFirebaseAuthAccount(username,password);
+        userFbKey=authResult.uid;
+        if(authResult.reused) showToast('⚠️ اسم المستخدم مرتبط بحساب دخول سابق، وكلمة المرور الجديدة لم تُطبق بعد. استخدمي 🔑 لتعيينها بعد تحديث الخادم',9000);
+      }
+      catch(error){ console.error('Create auth account error',error); return showToast('⚠️ تعذر إنشاء حساب الدخول: '+authAccountErrorMessage(error),9000); }
+    }
     const nu={id:username,_fbKey:userFbKey,name,username,role,staffTitle,subjects:subjs,authProvider:'firebase',adminProfile:adminProfileValue==='full'?null:adminProfileValue};
     users.push(nu);
     if (role==='lecturer'){
@@ -5079,6 +5126,7 @@ async function saveUser() {
     const existingUser = users.find(u=>u.username===username)||{};
     const linkedSubjectKeys=subjs.map(si=>subjects[si]?._fbKey).filter(Boolean);
     await fbRef('users/'+userFbKey).update({name,username,role,staffTitle,adminProfile:adminProfileValue==='full'?null:adminProfileValue,subjects:linkedSubjectKeys,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+    if(!isNewUser&&password) await applyStaffPassword(users.find(u=>u.username===username),password);
     if(role==='lecturer') await fbRef('lecturerDirectory/'+username).set({name,updatedAt:new Date().toISOString()});
     else await fbRef('lecturerDirectory/'+username).remove();
 
