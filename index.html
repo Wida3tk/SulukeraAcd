@@ -308,6 +308,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 <link rel="stylesheet" href="lecturer-survey.css?v=20261008-survey">
 <link rel="stylesheet" href="evaluation-dashboard.css?v=20261008-dimensions">
 <link rel="stylesheet" href="admin-shell.css?v=20261009-executive-navy">
+<link rel="stylesheet" href="admin-roles.css?v=20261118-roles">
 </head>
 <body>
 
@@ -1030,6 +1031,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
   <div class="form-row">
     <div class="form-group"><label>الاسم الكامل *</label><input type="text" id="userFullName"></div>
     <div class="form-group"><label>الدور</label><select id="userRole" onchange="toggleUserSubjectsField()"><option value="lecturer">👨‍🏫 محاضر</option><option value="finance">💰 مالية</option><option value="admin">🔐 إدارة</option></select></div>
+    <div class="form-group" id="userAdminProfileGroup" style="display:none"><label>نوع حساب الإدارة</label><select id="userAdminProfile"><option value="full">إدارة كاملة</option><option value="assistant">مساعد إداري</option><option value="executive">اطلاع فقط (المدير التنفيذي)</option></select></div>
   </div>
   <div class="form-group"><label>المسمى الوظيفي</label><input type="text" id="userStaffTitle" placeholder="مثال: خدمة العملاء - الإرشاد الأكاديمي"></div>
   <div class="form-group"><label>اسم المستخدم *</label><input type="text" id="userUsername"></div>
@@ -2624,7 +2626,7 @@ async function _finishLogin() {
   if(currentUser.role==='lecturer') void lecturerSurveyGate();
   document.getElementById('sidebarUserName').textContent=currentUser.name;
   const roleNames={admin:'مدير النظام',finance:'موظف المالية',lecturer:'عضو هيئة التدريس',student:'طالب'};
-  document.getElementById('sidebarUserRole').textContent=currentUser.staffTitle||roleNames[currentUser.role];
+  document.getElementById('sidebarUserRole').textContent=currentUser.staffTitle||(currentUser.role==='admin'&&typeof adminProfile==='function'&&adminProfile()!=='full'?adminProfileLabel(currentUser):roleNames[currentUser.role]);
   document.getElementById('loginUsername').value='';
   document.getElementById('loginPassword').value='';
   // Clear seed data and load from Firebase
@@ -2748,7 +2750,7 @@ function renderNav() {
   const menu=document.getElementById('navMenu');
   if(currentUser.role==='admin'){
     const remembered=localStorage.getItem('sulukera_admin_nav_group')||'followup';
-    menu.innerHTML=`${navItemMarkup({id:'dashboard',icon:'🏠',label:'لوحة التحكم'},true).replace('nav-item ','nav-item nav-dashboard ')}${adminNavGroups.map(group=>`<section class="nav-group ${group.id===remembered?'open':''}" data-nav-group="${group.id}"><button class="nav-group-head" onclick="toggleNavGroup('${group.id}')"><span class="nav-group-head-icon">${group.icon}</span><span>${group.label}</span><span class="nav-group-arrow">⌄</span></button><div class="nav-group-items">${group.items.map(item=>navItemMarkup(item)).join('')}</div></section>`).join('')}`;
+    menu.innerHTML=`${navItemMarkup({id:'dashboard',icon:'🏠',label:typeof adminDashboardLabel==='function'?adminDashboardLabel():'لوحة التحكم'},true).replace('nav-item ','nav-item nav-dashboard ')}${(typeof visibleAdminNavGroups==='function'?visibleAdminNavGroups():adminNavGroups).map(group=>`<section class="nav-group ${group.id===remembered?'open':''}" data-nav-group="${group.id}"><button class="nav-group-head" onclick="toggleNavGroup('${group.id}')"><span class="nav-group-head-icon">${group.icon}</span><span>${group.label}</span><span class="nav-group-arrow">⌄</span></button><div class="nav-group-items">${group.items.map(item=>navItemMarkup(item)).join('')}</div></section>`).join('')}`;
     return;
   }
   const lecturerProfessionalOnly=currentUser.role==='lecturer'&&professionalLecturerUnits().length>0&&getLecturerSubjects().length===0;
@@ -2788,6 +2790,7 @@ const pageTitles={
   settings:'الإعدادات',emailcampaigns:'الحملات البريدية',certificates:'الإفادات التجريبية',mygrades:'بياناتي ودرجاتي',lecturerexams:'نتائج الاختبارات',lecturercurrent:'المقررات الحالية',lecturerfinished:'المقررات المكتملة'
 };
 function navTo(pageId, el) {
+  if(typeof adminPageAllowed==='function'&&!adminPageAllowed(pageId)){showToast('⚠️ هذه الصفحة غير متاحة لهذا الحساب');pageId='dashboard';el=null;}
   const resolvedPageId=pageId;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const activeItem=el||document.querySelector(`.nav-item[data-page-id="${pageId}"]`);
@@ -2996,6 +2999,7 @@ function renderDashboard() {
 function renderAdminDashboard(){
   const page=document.getElementById('page-dashboard');
   if(!page) return;
+  if(typeof renderProfileDashboard==='function'&&renderProfileDashboard(page)) return;
   const batches=getAllKnownBatches().map(batch=>({
     batch,
     studentCount:students.filter(student=>sameBatchName(student.batch,batch)).length,
@@ -3021,9 +3025,11 @@ function renderAdminDashboard(){
   if(advisorFollowUps.length) actions.push({tone:'danger',title:'حالات تحتاج متابعة أكاديمية',count:advisorFollowUps.length,action:"navTo('academicadvisor',null)",detail:'راجِع الحالات المسجلة لدى المرشد الأكاديمي.'});
   if(incompleteStudents.length) actions.push({tone:'info',title:'بطاقات طلاب ناقصة البيانات',count:incompleteStudents.length,action:"navTo('students',null)",detail:'استكمل وسائل التواصل أو بيانات البرنامج والدفعة.'});
   if(unregisteredStudents.length) actions.push({tone:'info',title:'طلاب بلا مقررات مسندة',count:unregisteredStudents.length,action:"navTo('students',null)",detail:'أضف المقررات من سجل الطالب أو خطط الدفعات.'});
-  if(financeReview.length) actions.push({tone:'warn',title:'ملفات مالية تحتاج مراجعة',count:financeReview.length,action:"navTo('students',null)",detail:'تحتاج إدخالاً أو اعتماداً من موظف المالية.'});
+  // Finance is not managed in this system for now.
+  if(false&&financeReview.length) actions.push({tone:'warn',title:'ملفات مالية تحتاج مراجعة',count:financeReview.length,action:"navTo('students',null)",detail:'تحتاج إدخالاً أو اعتماداً من موظف المالية.'});
   if(unscheduledBatches.length) actions.push({tone:'warn',title:'دفعات بلا جدول أسبوعي',count:unscheduledBatches.length,action:"navTo('schedule',null)",detail:unscheduledBatches.map(item=>item.batch).join('، ')});
-  if(pendingGradeItems.length) actions.push({tone:'warn',title:'درجات مقررات تحتاج إلى استكمال',count:pendingGradeCount,action:"navTo('grades',null)",detail:'طلاب لهم محاضر مسند ولم تُحفظ درجة اختبارهم النهائي بعد.'});
+  // Lecturers are not grading in this period; restore by removing false&&.
+  if(false&&pendingGradeItems.length) actions.push({tone:'warn',title:'درجات مقررات تحتاج إلى استكمال',count:pendingGradeCount,action:"navTo('grades',null)",detail:'طلاب لهم محاضر مسند ولم تُحفظ درجة اختبارهم النهائي بعد.'});
   const slots=[...Object.values(scheduleData?.weekly||{})].filter(slot=>slot.active!==false).sort((a,b)=>(DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day))||String(a.timeStart||'').localeCompare(String(b.timeStart||'')));
   const todaySlots=slots.filter(slot=>slot.day===todayName);
   const publishedExams=Object.entries(examSchedulesData||{}).map(([key,value])=>({key,...value})).filter(exam=>exam.published!==false);
@@ -3050,9 +3056,9 @@ function renderAdminDashboard(){
     {label:'محاضرات اليوم',detail:todaySlots.length?todaySlots.slice(0,2).map(slot=>`${slot.timeStart||'—'} ${slot.subject||'—'}`).join(' · '):'لا توجد محاضرات مجدولة اليوم',value:todaySlots.length},
     {label:'اختبارات مفتوحة الآن',detail:openExams.length?openExams.slice(0,2).map(exam=>exam.subjectName||'اختبار').join(' · '):'لا توجد اختبارات مفتوحة الآن',value:openExams.length},
     {label:'طلبات قيد المراجعة',detail:pendingRequests.length?'تحتاج قرار الإدارة':'لا توجد طلبات معلقة',value:pendingRequests.length},
-    {label:'درجات بانتظار الرصد',detail:pendingGradeCount?'ضمن المقررات المسندة':'جميع الدرجات المطلوبة مكتملة',value:pendingGradeCount}
+    false&&{label:'درجات بانتظار الرصد',detail:pendingGradeCount?'ضمن المقررات المسندة':'جميع الدرجات المطلوبة مكتملة',value:pendingGradeCount}
   ];
-  const meaningfulTodayItems=todayItems.filter(item=>item.value>0);
+  const meaningfulTodayItems=todayItems.filter(item=>item&&item.value>0);
   page.innerHTML=`<div class="ops-dashboard">
     <header class="ops-header"><div><div class="ops-heading">لوحة العمليات الأكاديمية</div><div class="ops-subtitle">نظرة شاملة على النشاط الأكاديمي والتشغيلي والأولويات التي تحتاج إلى متابعة.</div>${activeSemester?.name?`<div class="ops-semester">● الفصل الحالي: ${escapeHtml(activeSemester.name)}</div>`:''}</div>
       <details class="ops-new-action"><summary>＋ إجراء جديد</summary><div class="ops-action-menu"><button onclick="openStudentModal()">إضافة طالب</button><button onclick="navTo('students',null)">إدارة الطلاب</button><button onclick="navTo('programs',null)">البرامج والدفعات</button><button onclick="navTo('subjects',null)">المواد الدراسية</button><button onclick="navTo('schedule',null)">الجدول الأكاديمي</button><button onclick="navTo('exams',null)">الاختبارات</button><button onclick="navTo('grades',null)">إدخال الدرجات</button></div></details>
@@ -3064,6 +3070,7 @@ function renderAdminDashboard(){
       </div>
       <div class="ops-card"><div class="ops-card-head"><div><div class="ops-card-title">اليوم في سلوكيرا</div><div class="ops-card-note">${escapeHtml(todayName)} · ${escapeHtml(todayIso)}</div></div></div>${meaningfulTodayItems.length?`<div class="ops-today">${meaningfulTodayItems.map(item=>`<div class="ops-today-item"><div><strong>${item.label}</strong><span style="display:block;margin-top:3px">${escapeHtml(item.detail)}</span></div><span class="ops-today-value">${item.value}</span></div>`).join('')}</div>`:'<div class="ops-empty">لا توجد محاضرات أو اختبارات مفتوحة أو إجراءات يومية معلقة حاليًا.</div>'}</div>
     </section>
+    ${typeof productivityCard==='function'?productivityCard({detailed:true}):''}
     <section class="ops-grid-secondary">
       <div class="ops-card"><div class="ops-card-head"><div><div class="ops-card-title">المشهد الأكاديمي</div><div class="ops-card-note">حالة الدفعات والربط الأكاديمي الحالي</div></div><button class="btn btn-sm" onclick="navTo('programs',null)">إدارة البرامج</button></div>
         ${batches.length?`<div class="ops-batches">${batches.map(item=>{const professional=normalizeBatchName(item.batch).startsWith('PRO-');return `<button class="ops-batch" onclick="navTo('students',null)"><span class="ops-batch-top"><span class="ops-batch-name">${escapeHtml(item.batch)}</span><span class="ops-batch-count">${item.studentCount}</span></span><span class="ops-batch-meta">${professional?`برنامج مهني · ${item.assignedCount} وحدات/مقررات مسندة`:`${item.sectionCount} شعب · ${item.assignedCount} مسندة لمحاضرين · ${item.scheduledCount} محاضرات أسبوعية`}</span></button>`}).join('')}</div>`:'<div class="ops-empty">لا توجد دفعات مسجلة حتى الآن.</div>'}
@@ -4974,7 +4981,7 @@ function renderUsersTable() {
       : u.role==='finance' ? 'صلاحيات مالية فقط' : 'جميع المقررات';
     return `<tr><td class="mono">${i+1}</td><td><strong>${u.name}</strong></td>
       <td class="mono" style="color:var(--primary)">${u.username}</td>
-      <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${escapeHtml(u.staffTitle||roleNames[u.role]||u.role)}</span></td>
+      <td><span class="badge ${roleClasses[u.role]||'badge-student'}">${escapeHtml(u.staffTitle||roleNames[u.role]||u.role)}</span>${u.role==='admin'&&typeof adminProfile==='function'&&adminProfile(u)!=='full'?` <span class="badge badge-info">${escapeHtml(adminProfileLabel(u))}</span>`:''}</td>
       <td style="font-size:11px;color:var(--text-muted)">${mySubjs}</td>
       <td style="display:flex;gap:4px;">${u.username!=='admin'
         ?`<button class="btn btn-sm" onclick="openUserModal(${origIdx})">✏️</button><button class="btn btn-danger btn-sm" onclick="deleteUser(${origIdx})">🗑️</button>`
@@ -4992,6 +4999,7 @@ function openUserModal(i=-1) {
   usernameField.readOnly=i>=0;
   document.getElementById('userPassword').value='';
   document.getElementById('userRole').value=i>=0?users[i].role:'lecturer';
+  const profileSelect=document.getElementById('userAdminProfile');if(profileSelect)profileSelect.value=i>=0&&users[i].role==='admin'&&['assistant','executive'].includes(users[i].adminProfile)?users[i].adminProfile:'full';
   const u = i>=0 ? users[i] : null;
   // حدد المقررات المرتبطة بالمحاضر من subjects مباشرة
   const structuredExists=subjects.some(s=>s.courseKey);
@@ -5016,6 +5024,7 @@ function toggleUserSubjectsField(){
   const select=document.getElementById('userSubjects');
   if(!group||!select) return;
   const isLecturer=role==='lecturer';
+  const profileGroup=document.getElementById('userAdminProfileGroup');if(profileGroup)profileGroup.style.display=role==='admin'?'block':'none';
   group.style.display=isLecturer?'block':'none';
   select.disabled=!isLecturer;
 }
@@ -5025,6 +5034,8 @@ async function saveUser() {
   const username=document.getElementById('userUsername').value.trim();
   const password=document.getElementById('userPassword').value;
   const role=document.getElementById('userRole').value;
+  const adminProfileValue=role==='admin'?(document.getElementById('userAdminProfile')?.value||'full'):null;
+  if(editingUserIdx>=0&&users[editingUserIdx]?.username===currentUser?.username&&adminProfileValue!==(currentUser.adminProfile||'full')&&adminProfileValue!=='full') return showToast('⚠️ لا يمكن تقييد صلاحيات حسابك الحالي');
   const subjs=role==='lecturer'?Array.from(document.getElementById('userSubjects').selectedOptions).map(o=>parseInt(o.value)):[];
   if (!name||!username) return showToast('⚠️ أدخل الاسم واسم المستخدم');
   if(editingUserIdx>=0&&password) return showToast('⚠️ تعديل كلمة المرور يتم من حساب المستخدم بعد تسجيل الدخول');
@@ -5036,7 +5047,7 @@ async function saveUser() {
 
   if (editingUserIdx>=0) {
     const u=users[editingUserIdx];
-    u.name=name; u.username=username; u.role=role; u.subjects=subjs; u.staffTitle=staffTitle;
+    u.name=name; u.username=username; u.role=role; u.subjects=subjs; u.staffTitle=staffTitle; u.adminProfile=adminProfileValue==='full'?null:adminProfileValue;
     if (password) u.password=password;
     userFbKey = u._fbKey || username;
     // عيّن المحاضر للمواد المختارة بـ username الثابت
@@ -5054,7 +5065,7 @@ async function saveUser() {
       if(authResult.reused) showToast('✅ تم ربط حساب الدخول الموجود دون تغيير كلمة مروره');
     }
     catch(error){ console.error('Create auth account error',error); return showToast('⚠️ تعذر إنشاء أو ربط حساب الدخول الآمن'); }
-    const nu={id:username,_fbKey:userFbKey,name,username,role,staffTitle,subjects:subjs,authProvider:'firebase'};
+    const nu={id:username,_fbKey:userFbKey,name,username,role,staffTitle,subjects:subjs,authProvider:'firebase',adminProfile:adminProfileValue==='full'?null:adminProfileValue};
     users.push(nu);
     if (role==='lecturer'){
       subjs.forEach(si=>{ if(subjects[si]) subjects[si].lecturerUserId=username; });
@@ -5067,7 +5078,7 @@ async function saveUser() {
     // 1. احفظ ملف المستخدم المرتبط بحساب Firebase Authentication
     const existingUser = users.find(u=>u.username===username)||{};
     const linkedSubjectKeys=subjs.map(si=>subjects[si]?._fbKey).filter(Boolean);
-    await fbRef('users/'+userFbKey).update({name,username,role,staffTitle,subjects:linkedSubjectKeys,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+    await fbRef('users/'+userFbKey).update({name,username,role,staffTitle,adminProfile:adminProfileValue==='full'?null:adminProfileValue,subjects:linkedSubjectKeys,authProvider:'firebase',createdAt:existingUser.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
     if(role==='lecturer') await fbRef('lecturerDirectory/'+username).set({name,updatedAt:new Date().toISOString()});
     else await fbRef('lecturerDirectory/'+username).remove();
 
@@ -8502,7 +8513,7 @@ function renderAlertsPage(){
         <div class="request-board">${requests.map(request=>`<article class="request-card">
           <header class="request-card-head"><div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong style="font-size:15px">${escapeHtml(request.student?getStudentFullName(request.student):'طالب غير مرتبط')}</strong><span class="badge badge-student">${escapeHtml(request.student?.batch||'—')}</span><span class="badge ${request.statusMeta.className}">${request.statusMeta.label}</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:5px">${escapeHtml(request.student?.id||'—')} · رُفع في ${request.createdAt?new Date(request.createdAt).toLocaleDateString('ar-SA'):'—'}</div></div><span class="request-type-badge">${getStudentRequestTypeLabel(request.type)}</span></header>
           <div class="request-card-body"><div><div style="font-size:15px;font-weight:900;margin-bottom:7px">${escapeHtml(request.title||'—')}</div><div style="font-size:12px;line-height:1.9;color:var(--text)">${escapeHtml(request.details||'—')}</div>${request.subjectName?`<div style="margin-top:8px"><span class="badge badge-info">الاختبار: ${escapeHtml(request.subjectName)}</span></div>`:''}${request.leaveStartDate?`<div style="margin-top:8px;color:var(--primary);font-weight:800">مدة الإجازة: ${escapeHtml(request.leaveStartDate)} — ${escapeHtml(request.leaveEndDate||request.leaveStartDate)}</div>`:request.returnDate?`<div style="margin-top:8px;color:${request.returnDate<=todayIso?'var(--danger)':'var(--primary)'};font-weight:800">تاريخ العودة/الاختبار: ${escapeHtml(request.returnDate)}${request.status==='approved'&&request.returnDate<=todayIso?' · يحتاج متابعة':''}</div>`:''}${request.professionalProgramId?(()=>{const affected=getProfessionalRequestAffectedExams(request);return `<div class="alert ${affected.length?'alert-warn':'alert-info'}" style="margin-top:10px">${affected.length?`يتقاطع الطلب مع: ${affected.map(exam=>`${escapeHtml(exam.title)} (${escapeHtml(exam.date)})`).join('، ')}`:'لا يوجد اختبار مهني مجدول داخل مدة الطلب حاليًا.'}</div>`;})():''}${request.lecturerNote?`<div class="alert alert-info" style="margin-top:10px">ملاحظة عضو هيئة التدريس: ${escapeHtml(request.lecturerNote)}</div>`:''}</div><div><label style="font-size:12px;font-weight:900;display:block;margin-bottom:7px;color:var(--primary-dark)">ملاحظات الإدارة للطالب</label><textarea class="request-admin-note" id="${getRequestAdminNoteInputId(request._fbKey)}" placeholder="اكتبي ملاحظات الإدارة التي ستظهر للطالب">${escapeHtml(request.adminNote||'')}</textarea>${request.reviewedAt?`<div style="font-size:10px;color:var(--text-muted);margin-top:6px">آخر مراجعة: ${new Date(request.reviewedAt).toLocaleDateString('ar-SA')}${request.reviewedBy?` · ${escapeHtml(request.reviewedBy)}`:''}</div>`:''}</div></div>
-          <footer class="request-card-actions">${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">👤 ملف الطالب</button>`:''}${request.type==='certificate_request'?`<button class="btn btn-primary btn-sm" onclick="openCertificateStudio('${request._fbKey}')">📄 تجهيز الإفادة التجريبية</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`:request.type==='grade_review'?(request.status==='awaiting_lecturer_review'?'<span class="badge badge-admin">بانتظار عضو هيئة التدريس</span>':request.status==='completed'?(request.resolvedDirectly?'<span class="badge badge-pass">تمت المعالجة من الإدارة</span>':'<span class="badge badge-pass">تم اعتماد المراجعة</span>'):`<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة للمحاضر</button><button class="btn btn-success btn-sm" onclick="markStudentRequestHandled('${request._fbKey}')">✓ تمت المعالجة</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):(request.type==='exam_postponement'||(request.type==='leave'&&request.professionalProgramId))?(request.status==='approved'?`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">${request.type==='leave'?'إنهاء الإجازة وفتح الاختبارات':'فتح الاختبارات'}</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">إلغاء الاستثناء</button>`:request.status==='completed'?`<span class="badge badge-pass">${request.resolvedDirectly?'تمت المعالجة من الإدارة':request.type==='leave'?'انتهت الإجازة':'تم فتح الاختبارات'}</span>`:`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">${request.type==='leave'?'اعتماد الإجازة':'قبول التأجيل'}</button><button class="btn btn-success btn-sm" onclick="markStudentRequestHandled('${request._fbKey}')">✓ تمت المعالجة</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-success btn-sm" onclick="markStudentRequestHandled('${request._fbKey}')">✓ تمت المعالجة</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}</footer>
+          <footer class="request-card-actions">${typeof requestAssignControl==='function'?requestAssignControl(request):''}${request.studentIdx>=0?`<button class="btn btn-sm" onclick="openStudentProfile(${request.studentIdx})">👤 ملف الطالب</button>`:''}${request.type==='certificate_request'?`<button class="btn btn-primary btn-sm" onclick="openCertificateStudio('${request._fbKey}')">📄 تجهيز الإفادة التجريبية</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`:request.type==='grade_review'?(request.status==='awaiting_lecturer_review'?'<span class="badge badge-admin">بانتظار عضو هيئة التدريس</span>':request.status==='completed'?(request.resolvedDirectly?'<span class="badge badge-pass">تمت المعالجة من الإدارة</span>':'<span class="badge badge-pass">تم اعتماد المراجعة</span>'):`<button class="btn btn-primary btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','awaiting_lecturer_review')">إحالة للمحاضر</button><button class="btn btn-success btn-sm" onclick="markStudentRequestHandled('${request._fbKey}')">✓ تمت المعالجة</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):(request.type==='exam_postponement'||(request.type==='leave'&&request.professionalProgramId))?(request.status==='approved'?`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','completed')">${request.type==='leave'?'إنهاء الإجازة وفتح الاختبارات':'فتح الاختبارات'}</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">إلغاء الاستثناء</button>`:request.status==='completed'?`<span class="badge badge-pass">${request.resolvedDirectly?'تمت المعالجة من الإدارة':request.type==='leave'?'انتهت الإجازة':'تم فتح الاختبارات'}</span>`:`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">${request.type==='leave'?'اعتماد الإجازة':'قبول التأجيل'}</button><button class="btn btn-success btn-sm" onclick="markStudentRequestHandled('${request._fbKey}')">✓ تمت المعالجة</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`):`<button class="btn btn-success btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','approved')">قبول</button><button class="btn btn-success btn-sm" onclick="markStudentRequestHandled('${request._fbKey}')">✓ تمت المعالجة</button><button class="btn btn-danger btn-sm" onclick="updateStudentRequestStatus('${request._fbKey}','rejected')">رفض</button>`}</footer>
         </article>`).join('')}</div>`;
     }
   }
@@ -8831,6 +8842,7 @@ async function cleanDuplicateStudents(){
 <script src="lecturer-survey-model.js?v=20261008-survey"></script>
 <script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>
 <script src="evaluation-dashboard.js?v=20261008-dimensions"></script>
+<script src="admin-roles.js?v=20261118-roles"></script>
 <script src="admin-shell.js?v=20261009-executive-navy"></script>
 <link rel="stylesheet" href="graduation-project.css?v=20261018-attendance-import">
 <script src="graduation-project-model.js?v=20261021-six-members"></script>
