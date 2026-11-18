@@ -6,6 +6,7 @@ const labels = [
   ['/admin/graduation-projects','إدارة مشاريع التخرج'], ['/admin/revenue','إدارة المالية'],
   ['/admin/professional','إدارة البرنامج المهني'],
   ['/admin/student-password','تغيير كلمة مرور طالب'],
+  ['/admin/staff-password','تعيين كلمة مرور موظف'],
   ['/admin/exams','إدارة الاختبارات'], ['/admin/exceptions','استثناء اختبار'],
   ['/admin/evaluations','إدارة تقييم المقررات'], ['/admin/zoom-attendance','إدارة الحضور'],
   ['/admin/recording','إدارة التسجيلات'], ['/admin/student-preview','معاينة حساب طالب'],
