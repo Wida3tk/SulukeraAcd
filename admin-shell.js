@@ -47,7 +47,7 @@
       ;
     }
     );   document.querySelectorAll('.nav-group').forEach(g=>{
-      const head=g.querySelector('.nav-group-head');head.querySelector('.nav-group-head-icon').innerHTML=icon(g.dataset.navGroup==='followup'?'performance':g.dataset.navGroup==='students'?'students':g.dataset.navGroup==='system'?'settings':'subjects');head.querySelector('.nav-group-head-icon+span').classList.add('nav-group-title');head.title=head.querySelector('.nav-group-title').textContent;const items=g.querySelector('.nav-group-items');items.id='admin-group-'+g.dataset.navGroup;head.setAttribute('aria-controls',items.id);if(!items.querySelector('.admin-group-inner')){
+      const head=g.querySelector('.nav-group-head');head.querySelector('.nav-group-head-icon').innerHTML=icon(({followup:'alerts',academic:'schedule',students:'students',grading:'subjects',performance:'performance',professional:'users',system:'settings'})[g.dataset.navGroup]||'subjects');head.querySelector('.nav-group-head-icon+span').classList.add('nav-group-title');head.title=head.querySelector('.nav-group-title').textContent;const items=g.querySelector('.nav-group-items');items.id='admin-group-'+g.dataset.navGroup;head.setAttribute('aria-controls',items.id);if(!items.querySelector('.admin-group-inner')){
         const inner=document.createElement('div');inner.className='admin-group-inner';while(items.firstChild)inner.append(items.firstChild);items.append(inner);
       }
     }
