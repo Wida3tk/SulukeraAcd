@@ -971,14 +971,14 @@ function showStudentView(){
   document.getElementById('topbarRole').textContent=professionalOnly?'🎓 متدرب':'👩‍🎓 طالب';
   document.title=professionalOnly?'بوابة المتدرب | سلوكيرا':'Student Information System (SIS) | نظام معلومات الطالب';
   configureAppTabs(professionalOnly?[
-    {id:'professional',label:'🚀 رحلتي المهنية'},
+    {id:'professional',label:'🚀 البرامج المباشرة'},
     {id:'professional-guide',label:'🧭 دليل البرنامج'},
 	    {id:'exams',label:'📝 الاختبارات'},
     {id:'requests',label:'📝 طلباتي'},
     {id:'account',label:'👤 حسابي'}
   ]:[
     {id:'home',label:'🏠 الرئيسية'},
-    ...(hasProfessionalProgram?[{id:'professional',label:'🚀 رحلتي المهنية'}]:[]),
+    ...(hasProfessionalProgram?[{id:'professional',label:'🚀 البرامج المباشرة'}]:[]),
     {id:'courses',label:'📚 مقرراتي'},
     {id:'grades',label:'📊 درجاتي'},
     {id:'transcript',label:'📄 كشف الدرجات'},
@@ -2119,7 +2119,7 @@ function showLecturerView(){
   document.getElementById('topbarRole').className = 'user-role role-lecturer';
   const professionalUnits=getProfessionalLecturerUnits(),academicSubjects=getLecturerSubjects(),professionalOnly=professionalUnits.length>0&&!academicSubjects.length;
   const tabs=professionalOnly
-    ? [{id:'professional-teaching',label:'🚀 مساري المهني'},{id:'evaluation',label:'⭐ التقييم'},{id:'lecturer-requests',label:'📝 طلباتي'}]
+    ? [{id:'professional-teaching',label:'🚀 البرامج المباشرة'},{id:'evaluation',label:'⭐ التقييم'},{id:'lecturer-requests',label:'📝 طلباتي'}]
     : [
       { id:'home', label:'🏠 الرئيسية' },
       { id:'courses', label:'📚 المقررات' },
@@ -2128,7 +2128,7 @@ function showLecturerView(){
       { id:'evaluation', label:'⭐ التقييم' },
       { id:'lecturer-requests', label:'📝 طلباتي' },
       { id:'schedule', label:'📅 الجدول الأسبوعي' },
-      ...(professionalUnits.length?[{id:'professional-teaching',label:'🚀 مساري المهني'}]:[])
+      ...(professionalUnits.length?[{id:'professional-teaching',label:'🚀 البرامج المباشرة'}]:[])
     ];
   if(currentUser.data.graduationProjectIds?.length)tabs.unshift({id:'graduation-supervision',label:'🎓 الإشراف على المشاريع'});
   configureAppTabs(tabs);
@@ -2157,7 +2157,7 @@ function openProfessionalLecturerResource(encodedUrl,encodedTitle){const url=dec
 function renderProfessionalLecturerPortal(){
   const units=getProfessionalLecturerUnits();
   if(!units.length){document.getElementById('mainContent').innerHTML='<div class="card"><div class="empty">لا توجد وحدة مهنية مسندة إلى حسابك حاليًا.</div></div>';return;}
-	  document.getElementById('mainContent').innerHTML=`<div class="pro-shell"><section class="pro-hero"><div class="pro-hero-grid"><div><div class="pro-kicker">لوحة مقدم الوحدة</div><h1>مساري في البرنامج المهني</h1><p>تابع لقاءات وحدتك، مشاركات المتدربين، والحضور من مكان واحد.</p></div><div class="pro-account-avatar">🎓</div></div></section>${units.map(item=>{const enrolled=getProfessionalEnrollmentRows(item.trackKey),sessions=professionalUnitSessions(item.unit),questions=item.unit.discussionQuestions||{};return `<section class="pro-lecturer-unit"><div class="pro-track-head"><div><div class="card-title">${escapeHtml(item.unit.title)}</div><div style="font-size:11px;color:var(--muted)">${escapeHtml(item.track.title||'مسار الممارس OBM-P')}</div></div><span class="pro-status">${enrolled.length} متدرب</span></div>
+	  document.getElementById('mainContent').innerHTML=`<div class="pro-shell"><section class="pro-hero"><div class="pro-hero-grid"><div><div class="pro-kicker">لوحة مقدم الوحدة</div><h1>البرامج المباشرة</h1><p>تابع لقاءات وحدتك، مشاركات المتدربين، والحضور من مكان واحد.</p></div><div class="pro-account-avatar">🎓</div></div></section>${units.map(item=>{const enrolled=getProfessionalEnrollmentRows(item.trackKey),sessions=professionalUnitSessions(item.unit),questions=item.unit.discussionQuestions||{};return `<section class="pro-lecturer-unit"><div class="pro-track-head"><div><div class="card-title">${escapeHtml(item.unit.title)}</div><div style="font-size:11px;color:var(--muted)">${escapeHtml(item.track.title||'مسار الممارس OBM-P')}</div></div><span class="pro-status">${enrolled.length} متدرب</span></div>
     <div class="pro-lecturer-sessions">${sessions.map(session=>{const pdf=professionalSafeUrl(session.pdfUrl),recording=professionalSafeUrl(session.recordingUrl),zoom=professionalSafeUrl(session.zoomUrl);return `<article class="pro-lecturer-session"><div class="pro-lecturer-session-head"><span class="pro-session-index">${session.order}</span><div><strong>${escapeHtml(session.title||`اللقاء ${session.order}`)}</strong><div style="font-size:10px;color:var(--muted);margin-top:4px">${escapeHtml(professionalDateLabel(professionalSessionValue(session),true))}</div></div></div><div class="pro-lecturer-session-actions">${pdf?`<button class="btn-out" onclick="openProfessionalLecturerResource('${encodeURIComponent(pdf)}','${encodeURIComponent(session.title||'ملف اللقاء')}')">📄 مشاهدة الملف</button>`:''}${recording?`<button class="btn-out" onclick="openProfessionalLecturerResource('${encodeURIComponent(recording)}','${encodeURIComponent(session.title||'تسجيل اللقاء')}')">▶️ مشاهدة التسجيل</button>`:''}${zoom?`<a class="btn-out" href="${escapeHtml(zoom)}" target="_blank" rel="noopener">🎥 دخول اللقاء</a>`:''}${!pdf&&!recording&&!zoom?'<span class="pro-status">المحتوى قريبًا</span>':''}</div>${professionalSheetResources(session)}</article>`;}).join('')}</div>
     <div class="pro-lecturer-discussion"><div class="pro-discussion-head"><span class="pro-discussion-icon">💬</span><div><div style="font-size:16px;font-weight:950;color:#112e69">مناقشات الوحدة</div><div style="font-size:11px;color:var(--muted);margin-top:3px">الأسئلة المنشورة التي تظهر للمتدربين.</div></div></div><div class="pro-lecturer-questions">${['q1','q2'].map((key,index)=>questions[key]?`<div class="pro-lecturer-question"><span class="pro-question-number">${index+1}</span><div class="pro-question-text">${professionalQuestionHtml(questions[key])}</div></div>`:'').join('')||'<div class="empty">لم تُنشر أسئلة لهذه الوحدة بعد.</div>'}</div></div>
     <div class="pro-trainee-grid">${enrolled.length?enrolled.map(row=>{const student=dbData.students?.[row.studentKey]||{},studentProgress=professionalStudentNode(dbData.professionalProgress,row.studentKey,student)?.[PROFESSIONAL_PROGRAM_ID]?.units?.[item.id]||{},studentDiscussions=professionalStudentNode(dbData.professionalDiscussions,row.studentKey,student),discussion=studentDiscussions?.[PROFESSIONAL_PROGRAM_ID]?.[item.id]||{},studentReviews=professionalStudentNode(dbData.professionalDiscussionReviews,row.studentKey,student),review=studentReviews?.[PROFESSIONAL_PROGRAM_ID]?.[item.id]||{},sessionRecords=studentProgress.sessions||{},attendanceValues=sessions.map(session=>{const record=sessionRecords[session.key]||{};if(Number.isFinite(Number(record.attendancePercent)))return Number(record.attendancePercent);if(record.attended===true||record.present===true)return 100;return 0;}),attendance=Math.max(0,Math.min(100,Math.round(attendanceValues.reduce((sum,value)=>sum+value,0)/5))),recordedAttendance=sessions.filter(session=>Number.isFinite(Number((sessionRecords[session.key]||{}).attendancePercent))).length,hasDiscussion=!!(discussion.q1||discussion.q2);return `<article class="pro-trainee-card"><div class="pro-trainee-head"><div><strong style="font-size:15px;color:#102d69">${escapeHtml(getStudentDisplayName(student))}</strong><div style="font-size:10px;color:var(--muted);margin-top:4px">${escapeHtml(student.id||row.studentKey)}</div></div><div class="pro-attendance"><strong>${attendance}%</strong><span style="font-size:9px;color:var(--muted)">الحضور التراكمي · ${recordedAttendance}/5 مرصود</span><div class="pro-attendance-bar"><span style="width:${attendance}%"></span></div></div></div><div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><strong style="font-size:12px;color:#233d72">المشاركة</strong><span class="pro-status ${hasDiscussion?'done':''}">${hasDiscussion?'تم الإرسال':'لم يرسل بعد'}</span></div>${discussion.q1?`<div class="pro-trainee-answer"><b>الإجابة الأولى</b><br>${escapeHtml(discussion.q1)}</div>`:''}${discussion.q2?`<div class="pro-trainee-answer"><b>الإجابة الثانية</b><br>${escapeHtml(discussion.q2)}</div>`:''}${!hasDiscussion?'<div class="empty" style="padding:16px;margin-top:10px">لا توجد مشاركة حتى الآن.</div>':''}<div class="pro-trainee-review"><div style="font-size:11px;font-weight:850;color:#53627d;margin-bottom:7px">تعليقك للمتدرب</div><textarea id="professional_review_${row.studentKey}_${item.id}" placeholder="اكتب ملاحظتك هنا...">${escapeHtml(review.comment||'')}</textarea><div class="pro-trainee-review-actions"><select id="professional_review_status_${row.studentKey}_${item.id}"><option value="passed" ${review.status==='passed'?'selected':''}>تمت المراجعة</option><option value="needs_followup" ${review.status==='needs_followup'?'selected':''}>بحاجة متابعة</option></select><button class="btn" onclick="saveProfessionalLecturerReview('${row.studentKey}','${item.id}')">حفظ</button></div></div></article>`;}).join(''):'<div class="empty">لا يوجد متدربون نشطون في هذا المسار.</div>'}</div></section>`;}).join('')}<section class="card"><div class="card-title">📊 نتائج ومحاولات الاختبار النهائي</div><div id="professionalFinalExamLecturerResults" class="empty" style="margin-top:12px">جاري تحميل النتائج والتقييم...</div></section></div>`;
@@ -3165,7 +3165,7 @@ window.addEventListener('load', initFB);
 <link rel="stylesheet" href="professional-exam-experience.css?v=20261014">
 <script src="professional-exam-experience.js?v=20261014"></script>
 <link rel="stylesheet" href="professional-exam-results.css?v=20261014">
-<script src="professional-exam-results-ui.js?v=20261104"></script>
+<script src="professional-exam-results-ui.js?v=20261118"></script>
 <link rel="stylesheet" href="platform-announcement.css?v=20261028-centered">
 <script src="platform-announcement.js?v=20261028-corrected"></script>
 <link rel="stylesheet" href="lecturer-grading-gate.css?v=20261102">
