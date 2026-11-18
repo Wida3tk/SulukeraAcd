@@ -41,7 +41,19 @@
     const phase=offset<0?'before':date>semester.endDate?'after':date>=examWeekStart?'exams':'teaching';
     return {totalWeeks,teachingWeeks,examWeekStart,week,phase,daysToExamWeek:diffDays(date,examWeekStart),daysLeft:diffDays(date,semester.endDate)};
   }
-  function semesterFor(date){return activeSemesters().find(s=>date>=s.startDate&&date<=s.endDate)||null;}
+  function currentSemesters(date=todayIso()){
+    return activeSemesters().filter(s=>s.endDate>=date&&diffDays(date,s.startDate)<=14);
+  }
+  function semesterGroups(date=todayIso()){
+    const groups=new Map();
+    for(const s of currentSemesters(date)){
+      const key=`${s.startDate}|${s.endDate}|${s.examWeekStart||''}`;
+      if(!groups.has(key))groups.set(key,{...s,members:[]});
+      groups.get(key).members.push(s);
+    }
+    return [...groups.values()].map(g=>({...g,batchesLabel:[...new Set(g.members.flatMap(m=>m.batches||[]))].join('، '),name:g.members.length>1?'الفصل الحالي':g.name}));
+  }
+  function semesterFor(date){return currentSemesters(date).find(s=>date>=s.startDate&&date<=s.endDate)||activeSemesters().find(s=>date>=s.startDate&&date<=s.endDate)||null;}
   function semesterLabel(semester,date=todayIso()){
     if(!semester)return '';
     const st=semesterStructure(semester,date);
@@ -62,11 +74,11 @@
     return (!start||iso>=start)&&(!end||iso<=end);
   }
   function scheduleBannerHtml(){
-    const semesters=activeSemesters();
-    if(!semesters.length)return '<div class="alert alert-warn" style="margin-bottom:1rem">لا يوجد فصل نشط. حددي الفصل من صفحة الفصول الدراسية.</div>';
+    const semesters=semesterGroups();
+    if(!semesters.length)return '<div class="alert alert-warn" style="margin-bottom:1rem">لا يوجد فصل حالي. حددي تواريخ الفصل من صفحة الفصول الدراسية.</div>';
     return semesters.map(semester=>{
       const st=semesterStructure(semester),pct=Math.min(100,Math.max(0,Math.round(diffDays(semester.startDate,todayIso())/Math.max(1,diffDays(semester.startDate,semester.endDate))*100)));
-      return `<div class="sm-banner"><div class="sm-banner-main"><strong>${esc(semester.name||'الفصل الحالي')}</strong><span>${esc(fmtDate(semester.startDate,{day:'numeric',month:'long',year:'numeric'}))} — ${esc(fmtDate(semester.endDate,{day:'numeric',month:'long',year:'numeric'}))}</span></div><div class="sm-banner-phase sm-phase-${st.phase}">${esc(semesterLabel(semester))}</div><div class="sm-banner-bar"><span style="width:${pct}%"></span><i style="right:${Math.round(diffDays(semester.startDate,st.examWeekStart)/Math.max(1,diffDays(semester.startDate,semester.endDate))*100)}%" title="بداية أسبوع الاختبارات"></i></div></div>`;
+      return `<div class="sm-banner"><div class="sm-banner-main"><strong>${esc(semester.name||'الفصل الحالي')}${semester.batchesLabel?` · ${esc(semester.batchesLabel)}`:''}</strong><span>${esc(fmtDate(semester.startDate,{day:'numeric',month:'long',year:'numeric'}))} — ${esc(fmtDate(semester.endDate,{day:'numeric',month:'long',year:'numeric'}))}</span></div><div class="sm-banner-phase sm-phase-${st.phase}">${esc(semesterLabel(semester))}</div><div class="sm-banner-bar"><span style="width:${pct}%"></span><i style="right:${Math.round(diffDays(semester.startDate,st.examWeekStart)/Math.max(1,diffDays(semester.startDate,semester.endDate))*100)}%" title="بداية أسبوع الاختبارات"></i></div></div>`;
     }).join('');
   }
   function scheduleCalendarHtml(){
@@ -111,59 +123,64 @@
     return (V(()=>subjects)||[]).filter(subject=>subject._fbKey&&keys.has(subject._fbKey));
   }
   function buildSmartAlerts(){
-    const today=todayIso(),alerts=[];
-    const examRows=cache.exams,lessons=cache.lessons;
-    for(const semester of activeSemesters()){
+    const today=todayIso(),examRows=cache.exams,lessons=cache.lessons;
+    const bucket={};
+    const add=(type,item,level)=>{(bucket[type]||(bucket[type]={items:[],levels:new Set(),meta:{}})).items.push(item);bucket[type].levels.add(level);return bucket[type];};
+    for(const semester of currentSemesters(today)){
       const st=semesterStructure(semester,today);
-      if(st.phase==='after'||st.phase==='before')continue;
+      if(st.phase!=='teaching'&&st.phase!=='exams')continue;
       const list=semesterSubjects(semester);
-      const schedules=Object.entries(V(()=>examSchedulesData)||{}).map(([key,value])=>({key,...value})).filter(exam=>exam.date&&exam.date>=semester.startDate&&exam.date<=addDays(semester.endDate,7));
-      // exam scheduling reminder: from the start of the last teaching week
+      const schedules=Object.entries(V(()=>examSchedulesData)||{}).map(([key,value])=>({key,...value})).filter(exam=>exam.date&&exam.date>=semester.startDate&&exam.date<=addDays(semester.endDate,7)&&(semester.subjects||[]).includes(exam.subjectKey));
       if(st.daysToExamWeek<=7){
-        const missing=list.filter(subject=>!schedules.some(exam=>exam.subjectKey===subject._fbKey));
-        if(missing.length)alerts.push({level:st.phase==='exams'?'high':'medium',icon:'calendar',title:st.phase==='exams'?`أسبوع الاختبارات بدأ و${missing.length} ${missing.length===1?'مقرر بلا':'مقررات بلا'} موعد اختبار`:`جدولي الاختبارات: أسبوع الاختبارات يبدأ ${fmtDate(st.examWeekStart)} (${st.daysToExamWeek===0?'اليوم':st.daysToExamWeek===1?'غدًا':st.daysToExamWeek===2?'بعد يومين':`بعد ${st.daysToExamWeek} أيام`})`,items:missing.map(subject=>`${subject.name} — ${subject.batch||''}`),action:"navTo('exams',null)",actionLabel:'جدولة الاختبارات'});
+        for(const subject of list.filter(subject=>!schedules.some(exam=>exam.subjectKey===subject._fbKey))){
+          const b=add('unscheduledExam',{sort:0,text:`${subject.name} — ${subject.batch||''}`},st.phase==='exams'?'high':'medium');
+          b.meta.phase=st.phase==='exams'?'exams':(b.meta.phase||'teaching');b.meta.examWeekStart=st.examWeekStart;b.meta.days=st.daysToExamWeek;
+        }
       }
-      // exams scheduled but questions not uploaded / not published
       if(examRows){
-        const noQuestions=[],drafts=[];
         for(const exam of schedules){
           if(exam.date<today)continue;
           const days=diffDays(today,exam.date);
           if(days>10&&st.daysToExamWeek>7)continue;
           const row=examRows.find(item=>item.schedule_key===exam.key);
-          if(!row||!Number(row.question_count))noQuestions.push({exam,days});
-          if(exam.published===false)drafts.push(exam);
+          if(!row||!Number(row.question_count))add('noQuestions',{sort:days,text:`${exam.subjectName||''} — ${exam.batch||''} · ${fmtDate(exam.date)}${days===0?' (اليوم)':days===1?' (غدًا)':days===2?' (بعد يومين)':` (بعد ${days} أيام)`}`},days<=3?'high':'medium');
+          if(exam.published===false)add('draftExam',{sort:days,text:`${exam.subjectName||''} — ${exam.batch||''} · ${fmtDate(exam.date)}`},'low');
         }
-        if(noQuestions.length)alerts.push({level:noQuestions.some(item=>item.days<=3)?'high':'medium',icon:'file',title:`${noQuestions.length} ${noQuestions.length===1?'اختبار مجدول بدون أسئلة مرفوعة':'اختبارات مجدولة بدون أسئلة مرفوعة'}`,items:noQuestions.sort((a,b)=>a.days-b.days).map(({exam,days})=>`${exam.subjectName||''} — ${exam.batch||''} · ${fmtDate(exam.date)}${days===0?' (اليوم)':days===1?' (غدًا)':days===2?' (بعد يومين)':` (بعد ${days} أيام)`}`),action:"navTo('exams',null)",actionLabel:'رفع الأسئلة'});
-        if(drafts.length)alerts.push({level:'low',icon:'eye',title:`${drafts.length} ${drafts.length===1?'موعد اختبار مسودة غير ظاهر':'مواعيد اختبارات مسودة غير ظاهرة'} للطلاب`,items:drafts.map(exam=>`${exam.subjectName||''} — ${exam.batch||''} · ${fmtDate(exam.date)}`),action:"navTo('exams',null)",actionLabel:'مراجعة'});
       }
-      // homework per teaching week
       if(lessons&&st.phase==='teaching'){
         const dueWeek=Math.min(st.teachingWeeks,st.week+(diffDays(addDays(semester.startDate,7*st.week),today)>=-2?1:0));
-        const missing=[],unpublished=[];
         for(const subject of list){
           for(let week=1;week<=Math.min(4,dueWeek);week++){
             const lesson=lessons.find(item=>item.subject_key===subject._fbKey&&Number(item.week)===week);
-            if(!lesson)missing.push({subject,week});
-            else if(lesson.status&&lesson.status!=='published')unpublished.push({subject,week});
+            const label=`الأسبوع ${week}: ${subject.name} — ${subject.batch||''}`;
+            if(!lesson){const b=add('missingHomework',{sort:week,text:`${label}${week<st.week?' (متأخر)':week===st.week?' (هذا الأسبوع)':' (الأسبوع القادم)'}`},week<st.week?'high':'medium');b.meta.dueWeek=Math.max(b.meta.dueWeek||0,dueWeek);}
+            else if(lesson.status&&lesson.status!=='published')add('unpublishedHomework',{sort:week,text:label},'low');
           }
         }
-        if(missing.length)alerts.push({level:missing.some(item=>item.week<st.week)?'high':'medium',icon:'book',title:`${missing.length} ${missing.length===1?'واجب غير مرفوع':'واجبات غير مرفوعة'} حتى الأسبوع ${dueWeek}`,items:missing.sort((a,b)=>a.week-b.week).map(({subject,week})=>`الأسبوع ${week}: ${subject.name} — ${subject.batch||''}${week<st.week?' (متأخر)':week===st.week?' (هذا الأسبوع)':' (الأسبوع القادم)'}`),action:"navTo('coursework',null)",actionLabel:'رفع الواجبات'});
-        if(unpublished.length)alerts.push({level:'low',icon:'eye',title:`${unpublished.length} ${unpublished.length===1?'واجب مرفوع وغير منشور':'واجبات مرفوعة وغير منشورة'}`,items:unpublished.map(({subject,week})=>`الأسبوع ${week}: ${subject.name} — ${subject.batch||''}`),action:"navTo('coursework',null)",actionLabel:'نشر'});
       }
-      // schedule gaps
-      const slots=Object.values(V(()=>scheduleData)?.weekly||{}).filter(slot=>slot.active!==false&&!slot.archivedAt&&slot.semesterKey===semester.key);
-      const unscheduled=list.filter(subject=>!slots.some(slot=>slot.subjectKey===subject._fbKey));
-      if(st.phase==='teaching'&&unscheduled.length)alerts.push({level:'medium',icon:'calendar',title:`${unscheduled.length} ${unscheduled.length===1?'مقرر بلا محاضرة':'مقررات بلا محاضرات'} في الجدول الأسبوعي`,items:unscheduled.map(subject=>`${subject.name} — ${subject.batch||''}`),action:"navTo('schedule',null)",actionLabel:'فتح الجدول'});
+      if(st.phase==='teaching'){
+        const slots=Object.values(V(()=>scheduleData)?.weekly||{}).filter(slot=>slot.active!==false&&!slot.archivedAt&&slot.semesterKey===semester.key);
+        for(const subject of list.filter(subject=>!slots.some(slot=>slot.subjectKey===subject._fbKey)))add('noLecture',{sort:0,text:`${subject.name} — ${subject.batch||''}`},'medium');
+      }
     }
+    const plural=(n,one,many)=>`${n} ${n===1?one:many}`;
+    const level=b=>b.levels.has('high')?'high':b.levels.has('medium')?'medium':'low';
+    const when=d=>d===0?'اليوم':d===1?'غدًا':d===2?'بعد يومين':`بعد ${d} أيام`;
+    const defs={
+      unscheduledExam:b=>({icon:'calendar',title:b.meta.phase==='exams'?`أسبوع الاختبارات بدأ و${plural(b.items.length,'مقرر بلا','مقررات بلا')} موعد اختبار`:`جدولي الاختبارات: أسبوع الاختبارات يبدأ ${fmtDate(b.meta.examWeekStart)} (${when(b.meta.days)})`,action:"navTo('exams',null)",actionLabel:'جدولة الاختبارات'}),
+      noQuestions:b=>({icon:'file',title:plural(b.items.length,'اختبار مجدول بدون أسئلة مرفوعة','اختبارات مجدولة بدون أسئلة مرفوعة'),action:"navTo('exams',null)",actionLabel:'رفع الأسئلة'}),
+      draftExam:b=>({icon:'eye',title:`${plural(b.items.length,'موعد اختبار مسودة غير ظاهر','مواعيد اختبارات مسودة غير ظاهرة')} للطلاب`,action:"navTo('exams',null)",actionLabel:'مراجعة'}),
+      missingHomework:b=>({icon:'book',title:`${plural(b.items.length,'واجب غير مرفوع','واجبات غير مرفوعة')} حتى الأسبوع ${b.meta.dueWeek}`,action:"navTo('coursework',null)",actionLabel:'رفع الواجبات'}),
+      unpublishedHomework:b=>({icon:'eye',title:plural(b.items.length,'واجب مرفوع وغير منشور','واجبات مرفوعة وغير منشورة'),action:"navTo('coursework',null)",actionLabel:'نشر'}),
+      noLecture:b=>({icon:'calendar',title:`${plural(b.items.length,'مقرر بلا محاضرة','مقررات بلا محاضرات')} في الجدول الأسبوعي`,action:"navTo('schedule',null)",actionLabel:'فتح الجدول'})
+    };
     const order={high:0,medium:1,low:2};
-    return alerts.sort((a,b)=>order[a.level]-order[b.level]);
+    return Object.entries(bucket).map(([type,b])=>({level:level(b),...defs[type](b),items:b.items.sort((x,y)=>x.sort-y.sort||x.text.localeCompare(y.text,'ar')).map(item=>item.text)})).sort((a,b)=>order[a.level]-order[b.level]);
   }
   const ICON_PATHS={calendar:'M4 6h16v14H4zM4 10h16M9 3v4M15 3v4',file:'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',book:'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5',eye:'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6',check:'M20 6 9 17l-5-5',spark:'M12 3v4M12 17v4M3 12h4M17 12h4'};
   const svg=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON_PATHS[name]||ICON_PATHS.spark}"/></svg>`;
   function smartAlertsInner(){
-    const semesters=activeSemesters();
-    const head=semesters.map(semester=>`<span class="sm-chip sm-phase-${semesterStructure(semester).phase}">${esc(semester.name||'الفصل الحالي')}: ${esc(semesterLabel(semester))}</span>`).join('');
+    const head=semesterGroups().map(semester=>`<span class="sm-chip sm-phase-${semesterStructure(semester).phase}">${esc(semester.name||'الفصل الحالي')}${semester.batchesLabel?` (${esc(semester.batchesLabel)})`:''}: ${esc(semesterLabel(semester))}</span>`).join('');
     if(!cache.loadedAt)return `${head}<div class="sm-loading">جاري فحص الواجبات والاختبارات…</div>`;
     const alerts=buildSmartAlerts();
     const list=alerts.length?alerts.map(alert=>`<details class="sm-alert sm-${alert.level}" ${alert.level==='high'?'open':''}><summary><span class="sm-alert-ic">${svg(alert.icon)}</span><span class="sm-alert-title">${esc(alert.title)}</span><button class="btn btn-sm" onclick="event.preventDefault();${alert.action}">${esc(alert.actionLabel)}</button></summary><ul>${alert.items.slice(0,12).map(item=>`<li>${esc(item)}</li>`).join('')}${alert.items.length>12?`<li>و${alert.items.length-12} أخرى</li>`:''}</ul></details>`).join(''):`<div class="sm-allgood"><span class="sm-alert-ic">${svg('check')}</span>كل شيء في مكانه: الواجبات والاختبارات والجدول جاهزة حتى الآن.</div>`;
