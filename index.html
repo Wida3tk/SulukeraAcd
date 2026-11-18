@@ -308,7 +308,7 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 <link rel="stylesheet" href="lecturer-survey.css?v=20261008-survey">
 <link rel="stylesheet" href="evaluation-dashboard.css?v=20261008-dimensions">
 <link rel="stylesheet" href="admin-shell.css?v=20261009-executive-navy">
-<link rel="stylesheet" href="admin-roles.css?v=20261118-color">
+<link rel="stylesheet" href="admin-roles.css?v=20261119-smart">
 </head>
 <body>
 
@@ -694,7 +694,8 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
             <button class="btn btn-sm" id="scheduleArchiveTab" onclick="switchScheduleTermView('archive')">فصول منتهية</button>
           </div>
           <div id="scheduleCurrentView">
-          <div class="alert alert-info" style="margin-bottom:1rem"><strong>الفصل الحالي:</strong> من 04 أكتوبر 2026 إلى 05 نوفمبر 2026. الجداول الظاهرة هنا فقط هي الجداول النشطة لهذا الفصل.</div>
+          <div id="scheduleSemesterBanner"></div>
+          <div id="scheduleWeekCalendar"></div>
           <div class="card card-accent">
             <div class="card-title">📅 إدارة الجدول الأسبوعي</div>
             <div class="alert alert-info">أضف المحاضرات الأسبوعية — ستظهر للطلاب والمحاضرين في student.html</div>
@@ -2717,39 +2718,43 @@ const navConfig = {
 };
 const EXAM_API_BASE='https://sulukera-exams.ro7e-entaa.workers.dev';
 const adminNavGroups=[
-  {id:'followup',icon:'🔎',label:'الرئيسية والمتابعة',items:[
-    {id:'performance',icon:'📊',label:'الأداء والتقدم'},
-    {id:'lecturerperformance',icon:'🎯',label:'أداء المحاضرين'},
-    {id:'revenue',icon:'💰',label:'الإيرادات وأهداف المنتجات'},
+  {id:'followup',icon:'🔎',label:'المتابعة اليومية',items:[
     {id:'alerts',icon:'🔔',label:'الطلبات والتنبيهات'},
     {id:'academicadvisor',icon:'🧭',label:'المرشد الأكاديمي'},
     {id:'productivity',icon:'⏱️',label:'الساعات الإنتاجية'}
   ]},
-  {id:'students',icon:'👩‍🎓',label:'الطلاب والسجلات',items:[
-    {id:'studentpreview',icon:'👁️',label:'معاينة تجربة الطالب'},
+  {id:'academic',icon:'📚',label:'الفصل الحالي',items:[
+    {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
+    {id:'coursework',icon:'📝',label:'المحاضرات والواجبات'},
+    {id:'exams',icon:'📝',label:'الاختبارات'},
+    {id:'discussionreview',icon:'💬',label:'رصد المناقشات'},
+    {id:'graduationprojects',icon:'🎓',label:'مشاريع التخرج'}
+  ]},
+  {id:'students',icon:'👩‍🎓',label:'الطلاب',items:[
     {id:'students',icon:'👩‍🎓',label:'قائمة الطلاب'},
     {id:'cards',icon:'🪪',label:'بطاقات الطلاب'},
-    {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
-    {id:'reports',icon:'📋',label:'التقارير الأكاديمية'},
+    {id:'studentpreview',icon:'👁️',label:'معاينة تجربة الطالب'},
     {id:'certificates',icon:'📄',label:'الإفادات التجريبية'}
   ]},
-  {id:'academic',icon:'📚',label:'الدراسة والاختبارات',items:[
-    {id:'subjects',icon:'📖',label:'المواد الدراسية'},
-    {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
-    {id:'schedule',icon:'📅',label:'الجدول الأكاديمي'},
-    {id:'exams',icon:'📝',label:'الاختبارات'},
-    {id:'coursework',icon:'📝',label:'المحاضرات والواجبات'},
-    {id:'discussionreview',icon:'💬',label:'رصد المناقشات'},
-    {id:'evaluations',icon:'📈',label:'التقييم'},
-    {id:'batchplans',icon:'🧩',label:'الخطط الدراسية'},
-    {id:'graduationprojects',icon:'🎓',label:'مشاريع التخرج'}
+  {id:'grading',icon:'✏️',label:'الدرجات والتقارير',items:[
+    {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
+    {id:'reports',icon:'📋',label:'التقارير الأكاديمية'},
+    {id:'evaluations',icon:'📈',label:'التقييم'}
+  ]},
+  {id:'performance',icon:'📊',label:'الأداء',items:[
+    {id:'performance',icon:'📊',label:'الأداء والتقدم'},
+    {id:'lecturerperformance',icon:'🎯',label:'أداء المحاضرين'},
+    {id:'revenue',icon:'💰',label:'الإيرادات وأهداف المنتجات'}
   ]},
   {id:'professional',icon:'🚀',label:'البرامج المباشرة',items:[
     {id:'professionalstudents',icon:'👥',label:'طلاب البرامج المباشرة'},
     {id:'professionalprogress',icon:'📊',label:'تقدم المتدربين'},
     {id:'professionalprogram',icon:'🧱',label:'المحتوى والمسارات'}
   ]},
-  {id:'system',icon:'🏛️',label:'الهيكل والنظام',items:[
+  {id:'system',icon:'🏛️',label:'الإعداد والنظام',items:[
+    {id:'semesters',icon:'🗓️',label:'الفصول الدراسية'},
+    {id:'subjects',icon:'📖',label:'المواد الدراسية'},
+    {id:'batchplans',icon:'🧩',label:'الخطط الدراسية'},
     {id:'programs',icon:'🏫',label:'البرامج والمسارات'},
     {id:'users',icon:'👥',label:'المحاضرون والمستخدمون'},
     {id:'emailcampaigns',icon:'✉️',label:'الحملات البريدية'},
@@ -3077,6 +3082,7 @@ function renderAdminDashboard(){
       <details class="ops-new-action"><summary>＋ إجراء جديد</summary><div class="ops-action-menu"><button onclick="openStudentModal()">إضافة طالب</button><button onclick="navTo('students',null)">إدارة الطلاب</button><button onclick="navTo('programs',null)">البرامج والدفعات</button><button onclick="navTo('subjects',null)">المواد الدراسية</button><button onclick="navTo('schedule',null)">الجدول الأكاديمي</button><button onclick="navTo('exams',null)">الاختبارات</button><button onclick="navTo('grades',null)">إدخال الدرجات</button></div></details>
     </header>
     <section class="ops-kpis">${topStats.map(stat=>`<div class="ops-kpi" style="--ops-color:${stat.color}"><div class="ops-kpi-label">${stat.label}</div><div class="ops-kpi-value">${stat.value}</div><div class="ops-kpi-sub">${stat.sub}</div></div>`).join('')}</section>
+    ${typeof smartAlertsCard==='function'?smartAlertsCard():''}
     <section class="ops-grid-main">
       <div class="ops-card"><div class="ops-card-head"><div><div class="ops-card-title">الأولويات والمتابعة</div><div class="ops-card-note">الإجراءات التي تحتاج قرارًا أو متابعة من الإدارة</div></div>${actions.length?`<span class="badge badge-warn">${actions.length} فئات</span>`:''}</div>
         ${actions.length?`<div class="ops-priority-list">${actions.slice(0,6).map(item=>{const [tone,soft]=toneStyle(item.tone);return `<button class="ops-priority" style="--ops-tone:${tone};--ops-soft:${soft}" onclick="${item.action}"><span class="ops-priority-count">${item.count}</span><span><span class="ops-priority-title">${escapeHtml(item.title)}</span><span class="ops-priority-detail">${escapeHtml(item.detail)}</span></span><span class="ops-priority-arrow">‹</span></button>`}).join('')}${actions.length>6?`<div class="ops-card-note" style="text-align:center;padding-top:4px">وهناك ${actions.length-6} فئات إضافية تظهر في صفحاتها المختصة.</div>`:''}</div>`:'<div class="ops-empty">لا توجد إجراءات معلقة تحتاج تدخل الإدارة حاليًا.</div>'}
@@ -7254,6 +7260,7 @@ async function renderScheduleAdmin(){
   }
   renderWeeklySlots();
   renderWeeklyPreview();
+  if(typeof renderScheduleCalendar==='function') renderScheduleCalendar();
   renderArchivedSchedules();
   renderUnitsList();
 }
@@ -7334,6 +7341,7 @@ async function addScheduleSlot(){
   cancelScheduleSlotEdit();
   renderWeeklySlots();
   renderWeeklyPreview();
+  if(typeof renderScheduleCalendar==='function') renderScheduleCalendar();
   showToast(wasEditing?'✅ تم حفظ تعديل المحاضرة':'✅ تم إضافة المحاضرة');
 }
 
@@ -7370,7 +7378,7 @@ function renderWeeklySlots(){
   el.innerHTML=slots.sort(([,a],[,b])=>DAYS_AR.indexOf(a.day)-DAYS_AR.indexOf(b.day)||a.timeStart?.localeCompare(b.timeStart)).map(([key,s])=>`
     <div class="slot-item">
       <div style="display:flex;align-items:center;gap:8px;flex:1;">
-        <div class="slot-color" style="background:${s.color||'var(--primary)'}"></div>
+        <div class="slot-color" style="background:${typeof batchColor==='function'?batchColor(s.batch):(s.color||'var(--primary)')}"></div>
         <div>
           <div style="font-size:13px;font-weight:700">${s.subject}</div>
           <div style="font-size:11px;color:var(--muted)">${s.batch||'جدول عام'} · ${s.day} · ${s.timeStart}–${s.timeEnd}${s.room?' · رابط المحاضرة مضاف':''}</div>
@@ -7388,6 +7396,7 @@ async function deleteSlot(key){
   await fbRef('schedule/weekly/'+key).remove();
   renderWeeklySlots();
   renderWeeklyPreview();
+  if(typeof renderScheduleCalendar==='function') renderScheduleCalendar();
   showToast('✅ تم الحذف');
 }
 
@@ -7409,7 +7418,7 @@ function renderWeeklyPreview(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
       ${batches.map((batch,batchIndex)=>{
         const batchSlots=orderedSlots.filter(slot=>(slot.batch||'جدول عام')===batch);
-        const accent=SLOT_COLORS[batchIndex%SLOT_COLORS.length];
+        const accent=typeof batchColor==='function'?batchColor(batch):SLOT_COLORS[batchIndex%SLOT_COLORS.length];
         return `<div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;background:white;box-shadow:var(--shadow)">
           <div style="background:${accent};color:white;padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
             <strong>${escapeHtml(batch)}</strong><span style="font-size:11px;opacity:.9">${batchSlots.length} محاضرات</span>
@@ -8893,7 +8902,8 @@ async function cleanDuplicateStudents(){
 <script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>
 <script src="evaluation-dashboard.js?v=20261008-dimensions"></script>
 <script src="admin-roles.js?v=20261118-color"></script>
-<script src="admin-shell.js?v=20261009-executive-navy"></script>
+<script src="admin-smart.js?v=20261119-smart"></script>
+<script src="admin-shell.js?v=20261119-nav"></script>
 <link rel="stylesheet" href="graduation-project.css?v=20261018-attendance-import">
 <script src="graduation-project-model.js?v=20261021-six-members"></script>
 <script src="graduation-attendance-import.js?v=20261018"></script>
