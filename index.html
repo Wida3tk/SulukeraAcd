@@ -307,8 +307,8 @@ select[id$="StatusFilter"]{padding:9px 12px;border:1.5px solid var(--border);bor
 <link rel="stylesheet" href="coursework.css?v=20261115-watch-progress">
 <link rel="stylesheet" href="lecturer-survey.css?v=20261008-survey">
 <link rel="stylesheet" href="evaluation-dashboard.css?v=20261008-dimensions">
-<link rel="stylesheet" href="admin-shell.css?v=20261009-executive-navy">
-<link rel="stylesheet" href="admin-roles.css?v=20261119-smart">
+<link rel="stylesheet" href="admin-shell.css?v=20261119-brand">
+<link rel="stylesheet" href="admin-roles.css?v=20261119-badges">
 </head>
 <body>
 
@@ -2736,15 +2736,9 @@ const adminNavGroups=[
     {id:'studentpreview',icon:'👁️',label:'معاينة تجربة الطالب'},
     {id:'certificates',icon:'📄',label:'الإفادات التجريبية'}
   ]},
-  {id:'grading',icon:'✏️',label:'الدرجات والتقارير',items:[
-    {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
-    {id:'reports',icon:'📋',label:'التقارير الأكاديمية'},
-    {id:'evaluations',icon:'📈',label:'التقييم'}
-  ]},
   {id:'performance',icon:'📊',label:'الأداء',items:[
     {id:'performance',icon:'📊',label:'الأداء والتقدم'},
-    {id:'lecturerperformance',icon:'🎯',label:'أداء المحاضرين'},
-    {id:'revenue',icon:'💰',label:'الإيرادات وأهداف المنتجات'}
+    {id:'lecturerperformance',icon:'🎯',label:'أداء المحاضرين'}
   ]},
   {id:'professional',icon:'🚀',label:'البرامج المباشرة',items:[
     {id:'professionalstudents',icon:'👥',label:'طلاب البرامج المباشرة'},
@@ -2759,12 +2753,19 @@ const adminNavGroups=[
     {id:'users',icon:'👥',label:'المحاضرون والمستخدمون'},
     {id:'emailcampaigns',icon:'✉️',label:'الحملات البريدية'},
     {id:'settings',icon:'⚙️',label:'الإعدادات'}
+  ]},
+  {id:'other',icon:'🗂️',label:'أدوات غير مستخدمة حاليًا',items:[
+    {id:'grades',icon:'✏️',label:'إدخال الدرجات'},
+    {id:'reports',icon:'📋',label:'التقارير الأكاديمية'},
+    {id:'evaluations',icon:'📈',label:'التقييم'},
+    {id:'revenue',icon:'💰',label:'الإيرادات وأهداف المنتجات'}
   ]}
 ];
 function navItemMarkup(item,isActive=false){
   return `<div class="nav-item ${isActive?'active':''}" data-page-id="${item.id}" onclick="navTo('${item.id}',this)"><span class="nav-icon">${item.icon}</span>${item.label}${item.id==='alerts'&&getPendingStudentRequestCount()?`<span class="nav-count-badge" id="studentRequestsNavBadge">${getPendingStudentRequestCount()}</span>`:''}</div>`;
 }
 function renderNav() {
+  if(typeof updateNavBadges==='function') setTimeout(updateNavBadges,0);
   const menu=document.getElementById('navMenu');
   if(currentUser.role==='admin'){
     const remembered=localStorage.getItem('sulukera_admin_nav_group')||'followup';
@@ -8904,8 +8905,8 @@ async function cleanDuplicateStudents(){
 <script src="lecturer-survey-ui.js?v=20261008-student-survey"></script>
 <script src="evaluation-dashboard.js?v=20261008-dimensions"></script>
 <script src="admin-roles.js?v=20261118-color"></script>
-<script src="admin-smart.js?v=20261119-current"></script>
-<script src="admin-shell.js?v=20261119-nav"></script>
+<script src="admin-smart.js?v=20261119-badges"></script>
+<script src="admin-shell.js?v=20261119-icons"></script>
 <link rel="stylesheet" href="graduation-project.css?v=20261018-attendance-import">
 <script src="graduation-project-model.js?v=20261021-six-members"></script>
 <script src="graduation-attendance-import.js?v=20261018"></script>
