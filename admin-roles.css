@@ -161,3 +161,6 @@ button.ar-kpi:hover,button.ar-kpi:focus-visible{transform:translateY(-2px);box-s
 .sm-allgood{display:flex;align-items:center;gap:10px;background:#E4F6EE;color:#0B6B4A;font-weight:600;border-radius:12px;padding:14px}
 .sm-allgood .sm-alert-ic{background:#15966A;color:#fff}
 @media (max-width:640px){.sm-banner{grid-template-columns:1fr}}
+/* sidebar work badges (orange = work to do, red = student requests) */
+.nav-smart-badge{background:#E08A00!important;box-shadow:0 3px 8px rgba(224,138,0,.35)!important}
+.nav-group-head .nav-group-count{margin-right:auto;margin-left:6px;min-width:20px;height:20px;font-size:10px}

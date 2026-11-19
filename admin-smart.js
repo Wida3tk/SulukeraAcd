@@ -175,7 +175,7 @@
       noLecture:b=>({icon:'calendar',title:`${plural(b.items.length,'مقرر بلا محاضرة','مقررات بلا محاضرات')} في الجدول الأسبوعي`,action:"navTo('schedule',null)",actionLabel:'فتح الجدول'})
     };
     const order={high:0,medium:1,low:2};
-    return Object.entries(bucket).map(([type,b])=>({level:level(b),...defs[type](b),items:b.items.sort((x,y)=>x.sort-y.sort||x.text.localeCompare(y.text,'ar')).map(item=>item.text)})).sort((a,b)=>order[a.level]-order[b.level]);
+    return Object.entries(bucket).map(([type,b])=>({kind:type,level:level(b),...defs[type](b),items:b.items.sort((x,y)=>x.sort-y.sort||x.text.localeCompare(y.text,'ar')).map(item=>item.text)})).sort((a,b)=>order[a.level]-order[b.level]);
   }
   const ICON_PATHS={calendar:'M4 6h16v14H4zM4 10h16M9 3v4M15 3v4',file:'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',book:'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5',eye:'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6',check:'M20 6 9 17l-5-5',spark:'M12 3v4M12 17v4M3 12h4M17 12h4'};
   const svg=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON_PATHS[name]||ICON_PATHS.spark}"/></svg>`;
@@ -188,10 +188,48 @@
   }
   function smartAlertsCard(){
     if(typeof adminProfile==='function'&&adminProfile()==='executive')return '';
-    setTimeout(()=>loadSmartData().then(()=>{const host=document.getElementById('smartAlertsBody');if(host)host.innerHTML=smartAlertsInner();}),0);
+    setTimeout(()=>loadSmartData().then(()=>{const host=document.getElementById('smartAlertsBody');if(host)host.innerHTML=smartAlertsInner();paintNavBadges();}),0);
     return `<section class="ops-card sm-card"><div class="ops-card-head"><div><div class="ops-card-title">تنبيهات ذكية</div><div class="ops-card-note">يفحص النظام هيكلة الفصل: الواجبات الأسبوعية، ومواعيد الاختبارات، ورفع الأسئلة</div></div><button class="btn btn-sm" onclick="refreshSmartAlerts()">تحديث</button></div><div id="smartAlertsBody">${smartAlertsInner()}</div></section>`;
   }
-  async function refreshSmartAlerts(){const host=document.getElementById('smartAlertsBody');if(host)host.innerHTML='<div class="sm-loading">جاري الفحص…</div>';await loadSmartData(true);if(host)host.innerHTML=smartAlertsInner();}
+  async function refreshSmartAlerts(){const host=document.getElementById('smartAlertsBody');if(host)host.innerHTML='<div class="sm-loading">جاري الفحص…</div>';await loadSmartData(true);if(host)host.innerHTML=smartAlertsInner();paintNavBadges();}
 
-  Object.assign(root,{batchColor,BATCH_PALETTE:PALETTE,semesterStructure,activeSemestersList:activeSemesters,renderScheduleCalendar,smartCalendarShift,smartAlertsCard,refreshSmartAlerts,buildSmartAlerts,loadSmartData,__smartCache:cache});
+  // ── sidebar badges: what needs work on each page
+  function navBadgeCounts(){
+    const counts={};
+    if(cache.loadedAt){
+      const by={};for(const alert of buildSmartAlerts())by[alert.kind]=(by[alert.kind]||0)+alert.items.length;
+      counts.coursework=by.missingHomework||0;
+      counts.exams=(by.unscheduledExam||0)+(by.noQuestions||0);
+      counts.schedule=by.noLecture||0;
+    }
+    const active=(V(()=>students)||[]).filter(student=>typeof SulukeraStudentAccount==='undefined'||SulukeraStudentAccount.isActive(student));
+    counts.cards=active.filter(st=>!st.email||!st.phone||!st.program||!st.track||!st.batch).length;
+    counts.academicadvisor=(V(()=>advisorCasesData)||[]).filter(item=>['review','follow_up','urgent'].includes(item.status)).length;
+    if(typeof lecturerHoursRows==='function'){const month=todayIso().slice(0,7);counts.productivity=lecturerHoursRows(month).filter(row=>!row.recorded).length;}
+    return counts;
+  }
+  const BADGE_TIPS={coursework:'واجبات غير مرفوعة',exams:'اختبارات بلا موعد أو بلا أسئلة',schedule:'مقررات بلا محاضرات',cards:'بطاقات ناقصة',academicadvisor:'حالات بحاجة متابعة',productivity:'محاضرون بلا ساعات هذا الشهر'};
+  function paintNavBadges(){
+    const menu=document.getElementById('navMenu');if(!menu)return;
+    const counts=navBadgeCounts();
+    menu.querySelectorAll('.nav-smart-badge').forEach(node=>node.remove());
+    for(const [id,count] of Object.entries(counts)){
+      if(!count)continue;
+      const item=menu.querySelector(`.nav-item[data-page-id="${id}"]`);if(!item)continue;
+      item.insertAdjacentHTML('beforeend',`<span class="nav-count-badge nav-smart-badge" title="${esc(BADGE_TIPS[id]||'')}">${count}</span>`);
+    }
+    menu.querySelectorAll('.nav-group').forEach(group=>{
+      const total=[...group.querySelectorAll('.nav-item .nav-count-badge')].reduce((sum,node)=>sum+(Number(node.textContent)||0),0);
+      const head=group.querySelector('.nav-group-head');if(!head||!total)return;
+      const arrow=head.querySelector('.nav-group-arrow');
+      const badge=`<span class="nav-count-badge nav-smart-badge nav-group-count">${total}</span>`;
+      arrow?arrow.insertAdjacentHTML('beforebegin',badge):head.insertAdjacentHTML('beforeend',badge);
+    });
+  }
+  function updateNavBadges(){
+    if(V(()=>currentUser)?.role!=='admin'||(typeof adminProfile==='function'&&adminProfile()==='executive'))return;
+    paintNavBadges();
+    if(!cache.loadedAt)loadSmartData().then(paintNavBadges).catch(()=>{});
+  }
+  Object.assign(root,{updateNavBadges,navBadgeCounts,batchColor,BATCH_PALETTE:PALETTE,semesterStructure,activeSemestersList:activeSemesters,renderScheduleCalendar,smartCalendarShift,smartAlertsCard,refreshSmartAlerts,buildSmartAlerts,loadSmartData,__smartCache:cache});
 })(globalThis);
