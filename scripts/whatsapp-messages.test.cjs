@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const ctx={};vm.createContext(ctx);vm.runInContext(fs.readFileSync('whatsapp-model.js','utf8'),ctx);const model=ctx.SulukeraWhatsApp;
+assert.equal(model.phone('٠٥٠ ١٢٣ ٤٥٦٧'),'966501234567');
+assert.equal(model.phone('+966 (50) 123-4567'),'966501234567');
+assert.equal(model.phone('00971501234567'),'971501234567');
+assert.equal(model.phone('0501234567','971'),'971501234567');
+for(const bad of ['123','05abc01234567','0501234567;0551234567','+9660501234567','555+12',''])assert.equal(model.phone(bad),'');
+const rows=[{key:'a',name:'عائشة',id:'S-1',phone:'966501234567',eligible:true},{key:'b',name:'رقم مشترك',phone:'966501234567',eligible:true},{key:'c',name:'مشروع',phone:'966502234567',eligible:false}];
+const queue=model.queue(rows,new Set(['a','b','c']),'أهلًا {الاسم}، رقمك {الرقم_الطلابي}\nرسالة & رابط');
+assert.equal(queue.length,1);assert.equal(queue[0].sharedNames.length,2);assert.equal(queue[0].status,'pending');assert.equal(queue[0].text,'أهلًا عائشة، رقمك S-1\nرسالة & رابط');const url=new URL(model.link(queue[0]));assert.equal(url.origin,'https://web.whatsapp.com');assert.equal(url.searchParams.get('text'),queue[0].text);assert.equal(url.searchParams.get('phone'),'966501234567');
+console.log('PASS WhatsApp model: Arabic/international numbers, rejected malformed phones, exact personalization/URL encoding, hard exclusions and shared-number deduplication.');
