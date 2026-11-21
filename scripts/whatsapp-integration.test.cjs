@@ -18,7 +18,7 @@ const {chromium}=require(require.resolve('playwright',{paths:['C:/Users/Maryam/.
   assert.equal(await page.locator('#appShell').isVisible(),false);
   await page.evaluate(()=>{
    currentUser={role:'admin',adminProfile:'full',authUid:'test',name:'إدارة تجريبية'};students=[{_fbKey:'fixture',id:'TEST',firstName:'طالبة',lastName:'تجريبية',batch:'Q2',phone:'0501234567',accountStatus:'active'}];subjects=[];semestersData={};packagesData=[];
-   secureAdminExamRequest=async()=>({projects:[]});saveActivityLog=async()=>{};
+   secureAdminExamRequest=async()=>({studentKeys:[]});saveActivityLog=async()=>{};
    document.getElementById('loginScreen').style.display='none';document.getElementById('appShell').style.display='block';renderNav();
   });
   await page.locator('[data-nav-group="students"] .nav-group-head').click();await page.locator('.nav-item[data-page-id="whatsappmessages"]').click();

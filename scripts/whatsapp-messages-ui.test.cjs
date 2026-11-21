@@ -12,7 +12,7 @@ const {chromium}=require(require.resolve('playwright',{paths:['C:/Users/Maryam/.
    window.students=[{_fbKey:'a',id:'S-1',name:'عائشة',phone:'0501234567',batch:'Q2'},{_fbKey:'b',name:'طالب مشاريع',phone:'0502234567',batch:'Q1'},{_fbKey:'c',name:'مرحلة مشاريع',phone:'0503234567',project:true,batch:'Q1'},{_fbKey:'d',name:'موقوف',phone:'0504234567',accountStatus:'suspended'},{_fbKey:'e',name:'جوال ناقص',phone:'123'},{_fbKey:'f',name:'رقم مشترك',phone:'+966501234567',batch:'Q2'},{_fbKey:'g',name:'طالب مستبعد',phone:'0505234567',batch:'Q2'},{_fbKey:'h',name:'طالب دولي',phone:'+971501234567',batch:'Q3'}];
    window.getStudentFullName=s=>s.name;window.escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
    window.SulukeraStudentAccount={isActive:s=>s.accountStatus!=='suspended'};window.SulukeraAcademicPolicy={projectStage:s=>!!s.project};window.showToast=()=>{};window.saveActivityLog=async entry=>logs.push(entry);window.refreshPage=()=>{};window.doLogout=async()=>{currentUser=null};
-   window.secureAdminExamRequest=async(path,options)=>{requests.push({path,options});if(projectCalls++===0)throw Error('offline');return {projects:[{students:[{student_key:'b',eligible:1}],groups:[]}]};};
+   window.secureAdminExamRequest=async(path,options)=>{requests.push({path,options});if(projectCalls++<2)throw Error('offline');return {studentKeys:['b']};};
   });
   await page.addScriptTag({path:'whatsapp-model.js'});await page.addScriptTag({path:'whatsapp-messages.js'});await page.evaluate(()=>{document.getElementById('page-whatsappmessages').classList.add('active');refreshPage('whatsappmessages');});
   await page.waitForSelector('#waRetry');await page.locator('#waSelectVisible').click();assert.equal(await page.locator('[data-wa-student]:checked').count(),0,'project exclusion fails closed');
@@ -27,7 +27,15 @@ const {chromium}=require(require.resolve('playwright',{paths:['C:/Users/Maryam/.
   await page.locator('#waSent').click();assert.ok((await page.locator('.wa-review').innerText()).includes('تأكيد إرسال: 1'));assert.equal(await page.evaluate(()=>logs.filter(l=>l.action.includes('تأكيد المستخدم')).length),1);
   await page.screenshot({path:'.tools/whatsapp-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.tools/whatsapp-mobile.png',fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no mobile page overflow');
   await page.locator('#waText').fill('رسالة معدّلة');assert.equal(await page.locator('#waOpen').count(),0,'editing invalidates approval');await page.locator('#waReview').click();await page.evaluate(()=>students.find(s=>s._fbKey==='a').phone='0509999999');await page.locator('[data-wa-index="0"]').click();await page.locator('#waOpen').click();assert.equal(await page.locator('#waOpen').count(),0,'stale recipient invalidates queue');
-  assert.ok((await page.evaluate(()=>requests)).every(r=>r.options.method==='GET'));await page.evaluate(()=>doLogout());assert.equal(await page.locator('#waMessagesContent').innerText(),'');await page.evaluate(()=>refreshPage('whatsappmessages'));assert.equal(await page.locator('#waMessagesContent').innerText(),'');assert.deepEqual(errors,[]);
+  assert.ok((await page.evaluate(()=>requests)).every(r=>r.options.method==='GET'));await page.evaluate(()=>doLogout());assert.equal(await page.locator('#waMessagesContent').innerText(),'');await page.evaluate(()=>refreshPage('whatsappmessages'));assert.equal(await page.locator('#waMessagesContent').innerText(),'');await page.evaluate(()=>{
+   currentUser={role:'admin',authUid:'new-session',name:'إدارة'};window.refreshed=0;window.retryCalls=0;
+   window.firebase={auth:()=>({currentUser:{getIdToken:async force=>{if(force)refreshed++;return 'fixture-token'}}})};
+   secureAdminExamRequest=async()=>{if(retryCalls++===0)throw Error('UNAUTHENTICATED');return {studentKeys:['b']}};
+   WhatsAppMessaging.render();return WhatsAppMessaging.loadProjects();
+  });
+  assert.equal(await page.evaluate(()=>refreshed),1);assert.equal(await page.evaluate(()=>retryCalls),2);assert.equal(await page.locator('#waRetry').count(),0);
+  await page.evaluate(()=>{secureAdminExamRequest=async()=>({projects:[]});return WhatsAppMessaging.loadProjects();});assert.equal(await page.locator('#waReview').isDisabled(),true,'malformed roster never silently removes exclusions');
+  await page.evaluate(()=>doLogout());assert.deepEqual(errors,[]);
   console.log('PASS WhatsApp UI: fail-closed projects, active/invalid filters, named exclusions, preview escaping, one manual popup, no auto-send, user-confirmed status, stale approval, mobile, logout and read-only API.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

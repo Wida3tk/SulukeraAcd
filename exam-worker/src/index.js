@@ -1,3 +1,4 @@
+import {whatsappProjectStudents} from './whatsapp-project-students.js';
 import {beginStaffAudit} from './staff-audit.js';
 import { evaluationMonthCutoff, evaluationCutoffWhere } from './evaluation-month.js';
 import { handleProfessionalRecordings, handleProfessionalRecordingMedia } from "./professional-recordings.js";
@@ -1174,6 +1175,7 @@ export default {
       const media = await handleProfessionalRecordingMedia(request,env,path,{corsHeaders});
       if(media)return media;
       const auth = await authenticate(request);
+      if(path==='/admin/whatsapp/project-students'&&request.method==='GET')return reply(request,await whatsappProjectStudents(env,auth));
       completeAudit=await beginStaffAudit(request,auth,async(key,entry)=>{
         const token=await firebaseAdminToken(env);
         const saved=await fetch(`${FIREBASE_DB}/staffActivityLogs/${key}.json`,{method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(entry)});

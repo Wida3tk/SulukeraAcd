@@ -26,14 +26,23 @@
   }
   async function loadProjects(){
     if(!session()||state.loading)return;
-    const owner=state.owner,epoch=++generation;state.epoch=epoch;state.loading=true;state.error='';render();
+    const owner=state.owner,epoch=++generation;state.epoch=epoch;state.loading=true;state.loaded=false;state.error='';invalidate();render();
     try{
-      const data=await secureAdminExamRequest('/admin/graduation-projects',{method:'GET'});
+      let data;
+      try{data=await secureAdminExamRequest('/admin/whatsapp/project-students',{method:'GET'});}
+      catch(firstError){
+        const authUser=typeof firebase!=='undefined'?firebase.auth().currentUser:null;
+        if(authUser?.getIdToken)await authUser.getIdToken(true);
+        if(!admin()||state.owner!==owner||state.epoch!==epoch)return;
+        data=await secureAdminExamRequest('/admin/whatsapp/project-students',{method:'GET'});
+      }
       if(!admin()||state.owner!==owner||state.epoch!==epoch)return;
-      const keys=new Set();
-      for(const p of data.projects||[]){for(const s of p.students||[])if(Number(s.eligible)===1)keys.add(s.student_key);for(const g of p.groups||[])for(const k of g.members||[])keys.add(k);}
-      state.projects=keys;state.loaded=true;
-    }catch{if(state.owner===owner&&state.epoch===epoch)state.error='تعذر التحقق من طلاب المشاريع. أعيدي المحاولة قبل تجهيز القائمة.';}
+      if(!Array.isArray(data?.studentKeys)||data.studentKeys.some(k=>typeof k!=='string'))throw Error('INVALID_PROJECT_ROSTER');
+      state.projects=new Set(data.studentKeys);state.loaded=true;
+    }catch(error){
+      console.warn('WhatsApp project roster could not be loaded',error?.message||'UNKNOWN_ERROR');
+      if(state.owner===owner&&state.epoch===epoch)state.error=/UNAUTHENTICATED|TOKEN|انتهت جلسة|auth\//i.test(error?.message||'')?'انتهت جلسة التحقق. سجّلي الخروج ثم الدخول مرة أخرى لتجهيز قائمة الطلاب.':'تعذر تحميل قائمة استبعاد طلاب المشاريع. تحققي من الاتصال ثم أعيدي المحاولة.';
+    }
     finally{if(state.owner===owner&&state.epoch===epoch){state.loading=false;render();}}
   }
   function render(){
