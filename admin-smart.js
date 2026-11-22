@@ -113,7 +113,7 @@
     cache.loading=(async()=>{
       const errors=[];
       try{cache.exams=(await secureAdminExamRequest('/admin/exams')).exams||[];}catch(error){cache.exams=null;errors.push('الاختبارات');console.warn('smart alerts exams',error);}
-      try{cache.lessons=typeof cwApi==='function'?((await cwApi(''))?.data?.lessons||[]):null;if(cache.lessons===null)errors.push('الواجبات');}catch(error){cache.lessons=null;errors.push('الواجبات');console.warn('smart alerts coursework',error);}
+      try{if(typeof cwApi!=='function')throw Error('COURSEWORK_API_UNAVAILABLE');const result=await cwApi('');if(!Array.isArray(result?.lessons))throw Error('INVALID_COURSEWORK_RESPONSE');cache.lessons=result.lessons;}catch(error){cache.lessons=null;errors.push('الواجبات');console.warn('smart alerts coursework',error);}
       cache.error=errors.length?`تعذر التحقق من: ${errors.join('، ')}`:'';cache.loadedAt=Date.now();cache.loading=null;return cache;
     })();
     return cache.loading;
@@ -153,7 +153,7 @@
           for(let week=1;week<=Math.min(4,dueWeek);week++){
             const lesson=lessons.find(item=>item.subject_key===subject._fbKey&&Number(item.week)===week);
             const label=`الأسبوع ${week}: ${subject.name} — ${subject.batch||''}`;
-            if(!lesson){const b=add('missingHomework',{sort:week,text:`${label}${week<st.week?' (متأخر)':week===st.week?' (هذا الأسبوع)':' (الأسبوع القادم)'}`},week<st.week?'high':'medium');b.meta.dueWeek=Math.max(b.meta.dueWeek||0,dueWeek);}
+            if(!lesson||Number(lesson.questionCount??lesson.questions?.length??0)<=0){const b=add('missingHomework',{sort:week,text:`${label}${week<st.week?' (متأخر)':week===st.week?' (هذا الأسبوع)':' (الأسبوع القادم)'}`},week<st.week?'high':'medium');b.meta.dueWeek=Math.max(b.meta.dueWeek||0,dueWeek);}
             else if(lesson.status&&lesson.status!=='published')add('unpublishedHomework',{sort:week,text:label},'low');
           }
         }
@@ -183,7 +183,7 @@
     const head=semesterGroups().map(semester=>`<span class="sm-chip sm-phase-${semesterStructure(semester).phase}">${esc(semester.name||'الفصل الحالي')}${semester.batchesLabel?` (${esc(semester.batchesLabel)})`:''}: ${esc(semesterLabel(semester))}</span>`).join('');
     if(!cache.loadedAt)return `${head}<div class="sm-loading">جاري فحص الواجبات والاختبارات…</div>`;
     const alerts=buildSmartAlerts();
-    const list=alerts.length?alerts.map(alert=>`<details class="sm-alert sm-${alert.level}" ${alert.level==='high'?'open':''}><summary><span class="sm-alert-ic">${svg(alert.icon)}</span><span class="sm-alert-title">${esc(alert.title)}</span><button class="btn btn-sm" onclick="event.preventDefault();${alert.action}">${esc(alert.actionLabel)}</button></summary><ul>${alert.items.slice(0,12).map(item=>`<li>${esc(item)}</li>`).join('')}${alert.items.length>12?`<li>و${alert.items.length-12} أخرى</li>`:''}</ul></details>`).join(''):`<div class="sm-allgood"><span class="sm-alert-ic">${svg('check')}</span>كل شيء في مكانه: الواجبات والاختبارات والجدول جاهزة حتى الآن.</div>`;
+    const list=alerts.length?alerts.map(alert=>`<details class="sm-alert sm-${alert.level}" ${alert.level==='high'?'open':''}><summary><span class="sm-alert-ic">${svg(alert.icon)}</span><span class="sm-alert-title">${esc(alert.title)}</span><button class="btn btn-sm" onclick="event.preventDefault();${alert.action}">${esc(alert.actionLabel)}</button></summary><ul>${alert.items.slice(0,12).map(item=>`<li>${esc(item)}</li>`).join('')}${alert.items.length>12?`<li>و${alert.items.length-12} أخرى</li>`:''}</ul></details>`).join(''):cache.error?'<div class="alert alert-warn">الفحص غير مكتمل؛ تعذر التحقق من بعض البيانات.</div>':`<div class="sm-allgood"><span class="sm-alert-ic">${svg('check')}</span>كل شيء في مكانه: الواجبات والاختبارات والجدول جاهزة حتى الآن.</div>`;
     return `${head}${list}${cache.error?`<div class="sm-note">${esc(cache.error)}</div>`:''}`;
   }
   function smartAlertsCard(){
