@@ -40,7 +40,7 @@ const {chromium}=require('playwright');
  await page.screenshot({path:'.tools/homework-questions-desktop.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- await page.evaluate(()=>{cwData.lessons[0].title='المحاضرة الأولى — تدخلات تغيير السلوك';cwReflection('l1');});
+ await page.evaluate(()=>{cwData.lessons[0].title='المحاضرة الأولى — تدخلات تغيير السلوك';cwData.lessons[0].opens_at='2026-10-04T15:00:00Z';cwData.lessons[0].recordedAttendanceQuestionsRequired=true;cwReflection('l1');});
  assert.equal(await page.locator('.cw-written-card').count(),3);
  assert.match(await page.locator('h2').innerText(),/واجب الحضور المسجل/);
  assert.match(await page.locator('.cw-recorded-notice').innerText(),/وإكمال الواجب الأساسي شرط أساسي/);
