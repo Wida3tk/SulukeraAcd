@@ -15,7 +15,7 @@ test('private recording tickets expire; starts neither expose file credentials n
  assert.equal(await handleAcademicRecordingMedia(new Request('https://test/other'),env,'/other',()=>({})),null);
  await assert.rejects(()=>startAcademicRecording(env,{recording_url:'https://other.example/video'}),/NOT_CONFIGURED/);
 });
-test('watch progress counts only unique visible continuous playback',async()=>{
+test('watch progress counts unique continuous playback in foreground and background',async()=>{
  const {db,DB}=database(),env={DB};await ensureAcademicRecordingSchema(env);
  db.prepare("INSERT INTO academic_recording_progress VALUES (?,?,?,?,?,0,0,0,'',?)").run('student','lesson','file','[]',100,'now');
  db.prepare('INSERT INTO academic_recording_runs VALUES (?,?,?,?,?,?,?,0,?,?,0)').run('run','student','lesson','file','',100,999999,0,1000);
@@ -25,5 +25,16 @@ test('watch progress counts only unique visible continuous playback',async()=>{
  progress=await checkpointAcademicRecording(env,'student',{runId:'run',sequence:3,position:60,playing:true,visible:true,seeking:true,rate:1},12000);
  assert.equal(progress.percent,10);
  progress=await checkpointAcademicRecording(env,'student',{runId:'run',sequence:4,position:61,playing:true,visible:false,seeking:false,rate:1},13000);
- assert.equal(progress.percent,10);
+ assert.equal(progress.percent,11);
+});
+
+test('minute-throttled hidden academic playback counts; paused movement does not',async()=>{
+ const {db,DB}=database(),env={DB};await ensureAcademicRecordingSchema(env);
+ db.prepare("INSERT INTO academic_recording_progress VALUES (?,?,?,?,?,0,0,0,'',?)").run('s','lesson','file','[]',1000,'now');
+ db.prepare('INSERT INTO academic_recording_runs VALUES (?,?,?,?,?,?,?,0,?,?,0)').run('hidden','s','lesson','file','',1000,999999,0,1000);
+ const report=(sequence,position,playing=true)=>({runId:'hidden',sequence,position,playing,visible:false,seeking:false,rate:1});
+ await checkpointAcademicRecording(env,'s',report(1,0),1000);
+ let p=await checkpointAcademicRecording(env,'s',report(2,60),61000);assert.equal(p.seconds,60);
+ p=await checkpointAcademicRecording(env,'s',report(3,65,false),66000);assert.equal(p.seconds,65);
+ p=await checkpointAcademicRecording(env,'s',report(4,70,false),71000);assert.equal(p.seconds,65);
 });

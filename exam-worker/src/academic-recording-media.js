@@ -1,3 +1,4 @@
+import {continuousPlaybackRange} from './recording-playback-policy.js';
 import '../../recording-watch-model.js';
 import {driveFile,checkedVideo,streamVideo} from './drive-recordings.js';
 const fail=(message,status=400)=>{const e=new Error(message);e.status=status;throw e;};
@@ -35,12 +36,12 @@ export async function checkpointAcademicRecording(env,studentKey,body,now=Date.n
   const run=await env.DB.prepare('SELECT * FROM academic_recording_runs WHERE id=? AND student_key=?').bind(String(body.runId||''),studentKey).first();if(!run||run.expires_at<now)fail('PLAYBACK_EXPIRED',403);
   if(sequence<=run.last_sequence)return academicRecordingProgress(env,studentKey,run.lesson_id);
   const progress=await env.DB.prepare('SELECT * FROM academic_recording_progress WHERE student_key=? AND lesson_id=?').bind(studentKey,run.lesson_id).first();if(!progress)fail('PROGRESS_NOT_FOUND',404);
-  const elapsed=(now-run.last_time)/1000,delta=position-run.last_position,end=Math.min(run.duration_seconds,position),ranges=JSON.parse(progress.ranges_json);
-  if(run.playing&&body.visible===true&&!body.seeking&&elapsed>0&&elapsed<=15&&delta>0&&delta<=elapsed*rate+.4)ranges.push([run.last_position,end]);
+  const end=Math.min(run.duration_seconds,position),ranges=JSON.parse(progress.ranges_json);
+  const watched=continuousPlaybackRange(run,body,now);if(watched)ranges.push(watched);
   const summary=globalThis.SulukeraWatch.summary(ranges,run.duration_seconds),nonce=crypto.randomUUID(),at=new Date(now).toISOString();
   const results=await env.DB.batch([
    env.DB.prepare('UPDATE academic_recording_progress SET ranges_json=?,watched_seconds=?,last_position=?,version=version+1,last_nonce=?,updated_at=? WHERE student_key=? AND lesson_id=? AND version=? AND EXISTS(SELECT 1 FROM academic_recording_runs WHERE id=? AND last_sequence=?)').bind(JSON.stringify(summary.ranges),summary.seconds,end,nonce,at,studentKey,run.lesson_id,progress.version,run.id,run.last_sequence),
-   env.DB.prepare('UPDATE academic_recording_runs SET last_sequence=?,last_position=?,last_time=?,playing=? WHERE id=? AND last_sequence=? AND EXISTS(SELECT 1 FROM academic_recording_progress WHERE student_key=? AND lesson_id=? AND last_nonce=?)').bind(sequence,end,now,body.playing&&body.visible?1:0,run.id,run.last_sequence,studentKey,run.lesson_id,nonce)
+   env.DB.prepare('UPDATE academic_recording_runs SET last_sequence=?,last_position=?,last_time=?,playing=? WHERE id=? AND last_sequence=? AND EXISTS(SELECT 1 FROM academic_recording_progress WHERE student_key=? AND lesson_id=? AND last_nonce=?)').bind(sequence,end,now,body.playing?1:0,run.id,run.last_sequence,studentKey,run.lesson_id,nonce)
   ]);
   if(results[0]?.meta?.changes)return {...await academicRecordingProgress(env,studentKey,run.lesson_id),lessonId:run.lesson_id};
  }
